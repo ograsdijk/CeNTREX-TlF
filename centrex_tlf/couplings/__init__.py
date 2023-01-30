@@ -1,27 +1,20 @@
-__version__ = "0.2.0"
-
-from . import branching
+from . import (
+    branching,
+    collapse,
+    coupling_matrix,
+    matrix_elements,
+    polarization,
+    transition,
+    utils,
+    utils_compact,
+)
 from .branching import *
-
-from . import collapse
 from .collapse import *
-
-from . import coupling_matrix
 from .coupling_matrix import *
-
-from . import polarization
-from .polarization import *
-
-from . import matrix_elements
 from .matrix_elements import *
-
-from . import transition
+from .polarization import *
 from .transition import *
-
-from . import utils
 from .utils import *
-
-from . import utils_compact
 from .utils_compact import *
 
 __all__ = branching.__all__.copy()
