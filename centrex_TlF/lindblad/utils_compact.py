@@ -1,20 +1,18 @@
+from typing import List, Union
+
 import numpy as np
+import numpy.typing as npt
+import sympy as smp
 
-__all__ = [""]
+from centrex_tlf import hamiltonian, states, transitions
 
-
-def delete_row_column_symbolic(arr, sl):
-    arr_copy = arr.copy()
-    sl = np.s_[sl.start : sl.stop - 1]
-    deleted = 0
-    for idx in range(sl.start, sl.stop):
-        arr_copy.row_del(idx - deleted)
-        arr_copy.col_del(idx - deleted)
-        deleted += 1
-    return arr_copy
+__all__ = ["compact_symbolic_hamiltonian_indices", "generate_qn_compact"]
 
 
-def compact_symbolic_hamiltonian_indices(hamiltonian, indices_compact):
+def compact_symbolic_hamiltonian_indices(
+    hamiltonian: smp.matrices.dense.MutableDenseMatrix,
+    indices_compact: npt.NDArray[np.int_],
+) -> smp.matrices.dense.MutableDenseMatrix:
     """compact a sympy hamiltonian by combining all indices in indices_compact
     into a single state
 
@@ -28,6 +26,7 @@ def compact_symbolic_hamiltonian_indices(hamiltonian, indices_compact):
     arr = hamiltonian.copy()
     diagonal = arr.diagonal()
     diagonal = [diagonal[idd] for idd in indices_compact]
+    # free_symbols = np.unique([val.free_symbols for val in diagonal])
     check_free_symbols = np.sum([len(val.free_symbols) for val in diagonal])
     assert (
         check_free_symbols == 0
@@ -55,3 +54,25 @@ def compact_symbolic_hamiltonian_indices(hamiltonian, indices_compact):
     # far enough away from the others
     arr[idx - deleted, idx - deleted] = np.mean(diagonal)
     return arr
+
+
+def generate_qn_compact(
+    transitions: List[
+        Union[transitions.OpticalTransition, transitions.MicrowaveTransition]
+    ],
+    H_reduced: hamiltonian.reduced_hamiltonian.ReducedHamiltonianTotal,
+):
+    J_transitions_ground = []
+    for transition in transitions:
+        J_transitions_ground.append(transition.J_ground)
+    J_compact = [
+        Ji
+        for Ji in np.unique([s.J for s in H_reduced.X_states_basis])  # type: ignore
+        if Ji not in J_transitions_ground
+    ]
+    qn_compact = [
+        states.QuantumSelector(J=Ji, electronic=states.ElectronicState.X)
+        for Ji in J_compact
+    ]
+
+    return qn_compact

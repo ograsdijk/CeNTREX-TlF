@@ -1,94 +1,59 @@
+from functools import lru_cache
+from typing import Tuple
+
 import numpy as np
-from centrex_TlF.couplings.utils_sqlite import (
-    retrieve_ED_ME_coupled_sqlite_single,
-    retrieve_ED_ME_coupled_sqlite_single_rme,
-)
-from centrex_TlF.hamiltonian.utils import sixj_f, threej_f
+import numpy.typing as npt
 
+from centrex_tlf import hamiltonian, states
 
-def calculate_ED_ME_mixed_state(
-    bra, ket, pol_vec=np.array([1, 1, 1]), reduced=False, normalize_pol=True
-):
-    """calculate electric dipole matrix elements between mixed states
-
-    Args:
-        bra (State): state object
-        ket (State): state object
-        pol_vec (np.ndarray, optional): polarization vector.
-                                        Defaults to np.array([1,1,1]).
-        reduced (bool, optional): [description]. Defaults to False.
-        normalize_pol (bool, optional): normalize the polarization vector to 1,
-                                        defaults to True.
-
-    Returns:
-        complex: matrix element between bra and ket
-    """
-    ME = 0
-    bra = bra.transform_to_omega_basis()
-    ket = ket.transform_to_omega_basis()
-
-    if normalize_pol:
-        pol_vec = np.asarray(pol_vec) / np.linalg.norm(pol_vec)
-
-    for amp_bra, basis_bra in bra.data:
-        for amp_ket, basis_ket in ket.data:
-            ME += (
-                amp_bra.conjugate()
-                * amp_ket
-                * ED_ME_coupled(basis_bra, basis_ket, pol_vec=pol_vec, rme_only=reduced)
-            )
-
-    return ME
+__all__ = ["generate_ED_ME_mixed_state", "ED_ME_coupled"]
 
 
 def generate_ED_ME_mixed_state(
-    bra, ket, pol_vec=np.array([1, 1, 1]), reduced=False, normalize_pol=True, con=None
-):
-    """calculate electric dipole matrix elements between mixed states
+    bra: states.State,
+    ket: states.State,
+    pol_vec: npt.NDArray[np.complex_] = np.array([1.0, 1.0, 1.0], dtype=np.complex_),
+    reduced: bool = False,
+    normalize_pol: bool = True,
+) -> complex:
+    ME = 0j
 
-    Args:
-        bra (State): state object
-        ket (State): state object
-        pol_vec (np.ndarray, optional): polarization vector.
-                                        Defaults to np.array([1,1,1]).
-        reduced (bool, optional): [description]. Defaults to False.
-        normalize_pol (bool, optional): normalize the polarization vector to 1,
-                                        defaults to True.
-
-    Returns:
-        complex: matrix element between bra and ket
-    """
-    if not con:
-        return calculate_ED_ME_mixed_state(bra, ket, pol_vec, reduced, normalize_pol)
-    ME = 0
-    bra = bra.transform_to_omega_basis()
-    ket = ket.transform_to_omega_basis()
+    # Transform to Omega basis if required. For the X state the basis is Coupled and
+    # doesn't require to be transformed to the Omega basis, since Omega is 0.
+    if bra.largest.basis is states.Basis.CoupledP:
+        bra = bra.transform_to_omega_basis()
+    if ket.largest.basis is states.Basis.CoupledP:
+        ket = ket.transform_to_omega_basis()
 
     if normalize_pol:
-        pol_vec = np.asarray(pol_vec) / np.linalg.norm(pol_vec)
-
-    if reduced:
-        retrieve = retrieve_ED_ME_coupled_sqlite_single_rme
-    else:
-        retrieve = retrieve_ED_ME_coupled_sqlite_single
+        pol_vec /= np.linalg.norm(pol_vec)
 
     for amp_bra, basis_bra in bra.data:
         for amp_ket, basis_ket in ket.data:
             ME += (
                 amp_bra.conjugate()
                 * amp_ket
-                * retrieve(basis_bra, basis_ket, pol_vec=pol_vec, con=con)
+                * ED_ME_coupled(
+                    basis_bra, basis_ket, pol_vec=tuple(pol_vec), rme_only=reduced
+                )
             )
+
     return ME
 
 
-def ED_ME_coupled(bra, ket, pol_vec=np.array([1, 1, 1]), rme_only=False):
+@lru_cache(maxsize=int(1e6))
+def ED_ME_coupled(
+    bra: states.CoupledBasisState,
+    ket: states.CoupledBasisState,
+    pol_vec: Tuple[complex, complex, complex] = (1.0 + 0j, 1.0 + 0j, 1.0 + 0j),
+    rme_only: bool = False,
+) -> complex:
     """calculate electric dipole matrix elements between coupled basis states
 
     Args:
         bra (CoupledBasisState): coupled basis state object
         ket (CoupledBasisState): coupled basis state object
-        pol_vec (np.ndarray, optional): polarization vector.
+        pol_vec (Tuple[float, float, float]): polarization vector.
                                         Defaults to np.array([1,1,1]).
         rme_only (bool, optional): set True to return only reduced matrix
                                     element, otherwise angular component is
@@ -119,11 +84,11 @@ def ED_ME_coupled(bra, ket, pol_vec=np.array([1, 1, 1]), rme_only=False):
     ME = (
         (-1) ** (F1 + J + Fp + F1p + I1 + I2)
         * np.sqrt((2 * F + 1) * (2 * Fp + 1) * (2 * F1p + 1) * (2 * F1 + 1))
-        * sixj_f(F1p, Fp, I2, F, F1, 1)
-        * sixj_f(Jp, F1p, I1, F1, J, 1)
+        * hamiltonian.sixj_f(F1p, Fp, I2, F, F1, 1)
+        * hamiltonian.sixj_f(Jp, F1p, I1, F1, J, 1)
         * (-1) ** (J - Omega)
         * np.sqrt((2 * J + 1) * (2 * Jp + 1))
-        * threej_f(J, 1, Jp, -Omega, q, Omegap)
+        * hamiltonian.threej_f(J, 1, Jp, -Omega, q, Omegap)
         * float(np.abs(q) < 2)
     )
 
@@ -143,7 +108,7 @@ def ED_ME_coupled(bra, ket, pol_vec=np.array([1, 1, 1]), rme_only=False):
         ME = (
             ME
             * (-1) ** (F - mF)
-            * threej_f(F, 1, Fp, -mF, p, mFp)
+            * hamiltonian.threej_f(F, 1, Fp, -mF, p, mFp)
             * p_vec[p]
             * int(np.abs(p) <= 1)
         )

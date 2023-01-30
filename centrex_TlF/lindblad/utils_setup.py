@@ -1,112 +1,352 @@
 import logging
 from dataclasses import dataclass
+from typing import Any, Callable, List, Optional, Sequence, Union
 
 import numpy as np
-from centrex_TlF.couplings.collapse import collapse_matrices
-from centrex_TlF.couplings.coupling_matrix import (
-    generate_coupling_field,
-    generate_coupling_field_automatic,
-)
-from centrex_TlF.hamiltonian.generate_reduced_hamiltonian import (
-    generate_total_reduced_hamiltonian,
-)
-from centrex_TlF.lindblad.generate_hamiltonian import (
-    generate_total_symbolic_hamiltonian,
-)
-from centrex_TlF.lindblad.generate_julia_code import (
-    generate_preamble,
-    system_of_equations_to_lines,
-)
-from centrex_TlF.lindblad.generate_system_of_equations import (
-    generate_system_of_equations_symbolic,
-)
-from centrex_TlF.lindblad.utils_decay import (
-    add_decays_C_arrays,
-    add_levels_symbolic_hamiltonian,
-    add_states_QN,
-)
-from centrex_TlF.lindblad.utils_julia import (
-    generate_ode_fun_julia,
-    initialize_julia,
-    odeParameters,
-)
-from centrex_TlF.states.generate_states import (
-    generate_coupled_states_excited_B,
-    generate_coupled_states_ground_X,
-)
-from julia import Main
+import numpy.typing as npt
+import sympy as smp
 
-from centrex_TlF.states.utils import SystemParameters
+from centrex_tlf import couplings as couplings_tlf
+from centrex_tlf import hamiltonian, states
+from centrex_tlf.couplings.utils_compact import (
+    compact_coupling_field,
+    insert_levels_coupling_field,
+)
+from centrex_tlf.transitions import MicrowaveTransition, OpticalTransition
 
-__all__ = ["generate_OBE_system", "setup_OBE_system_julia", "load_OBESystem_julia"]
+from . import utils_decay as utils_decay
+from .generate_hamiltonian import generate_total_symbolic_hamiltonian
+from .generate_system_of_equations import generate_system_of_equations_symbolic
+from .utils_compact import generate_qn_compact
+
+__all__ = [
+    "generate_OBE_system",
+    "generate_OBE_system_transitions",
+    "setup_OBE_system",
+    "setup_OBE_system_transitions",
+    "OBESystem",
+]
 
 
 @dataclass
 class OBESystem:
-    ground: np.ndarray
-    excited: np.ndarray
-    QN: np.ndarray
-    H_int: np.ndarray
-    V_ref_int: np.ndarray
-    couplings: list
-    H_symbolic: np.ndarray
-    C_array: np.ndarray
-    system: np.ndarray
-    code_lines: list
-    full_output: bool = False
+    ground: Sequence[states.State]
+    excited: Sequence[states.State]
+    QN: Sequence[states.State]
+    H_int: npt.NDArray[np.complex_]
+    V_ref_int: npt.NDArray[np.complex_]
+    couplings: List[Any]
+    H_symbolic: smp.matrices.dense.MutableDenseMatrix
+    C_array: npt.NDArray[np.float_]
+    system: smp.matrices.dense.MutableDenseMatrix
     preamble: str = ""
-    QN_original: np.ndarray = None
-    decay_channels: np.ndarray = None
+    QN_original: Optional[Sequence[states.State]] = None
+    decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None
+    couplings_original: Optional[Sequence[List[Any]]] = None
+
+    def __repr__(self) -> str:
+        ground = [s.largest for s in self.ground]
+        ground = list(
+            np.unique(
+                [
+                    f"|{s.electronic_state.name}, J = {s.J}, "  # type: ignore
+                    f"P = {'+' if s.P == 1 else '-'}>"  # type: ignore
+                    for s in ground
+                ]
+            )
+        )
+        ground_str: str = ", ".join(ground)  # type: ignore
+        excited = [s.largest for s in self.excited]
+        excited = list(
+            np.unique(
+                [
+                    str(
+                        f"|{s.electronic_state.name}, J = {s.J}, "  # type: ignore
+                        f"F₁ = {smp.S(str(s.F1), rational=True)}, "  # type: ignore
+                        f"F = {s.F}, "  # type: ignore
+                        f"P = {'+' if s.P == 1 else '-'}>"  # type: ignore
+                    )
+                    for s in excited
+                ]
+            )
+        )
+        excited_str: str = ", ".join(excited)  # type: ignore
+        return f"OBESystem(ground=[{ground_str}], excited=[{excited_str}])"
 
 
-def load_OBESystem_julia(
-    obe_system: OBESystem,
-    ode_parameters: odeParameters,
-    system_parameters: SystemParameters,
-    verbose: bool = False,
-):
-    """Load an OBESystem into Julia that was stored or not loaded into Julia.
+def check_transitions_allowed(
+    transition_selectors: Sequence[couplings_tlf.TransitionSelector],
+) -> None:
+    """
+    Check if a sequence of TransitionSelectors are all allowed transitions
 
     Args:
-        obe_system (OBESystem): OBESystem object which contains all data to reconstruct
+        transition_selectors (Sequence[couplings_TlF.TransitionSelector]): Sequence of
+        TransitionSelectors a set of transitions.
 
-        ode_parameters (odeParameters): dataclass containing the ode parameters.
-                                        E.g. Ω, δ, vz, ..., etc.
-        system_parameters (SystemParameters): dataclass holding system parameters.
-                                            E.g. number of processes to use, Γ, states
-                                            in system.
-        verbose (bool, optional): Log status.
+    Raises:
+        AssertionError: error if any given transition is not allowed.
     """
+    for transition_selector in transition_selectors:
+        if transition_selector.ground_main is not None:
+            try:
+                couplings_tlf.utils.assert_transition_coupled_allowed(
+                    transition_selector.ground_main.largest,
+                    transition_selector.excited_main.largest,
+                    ΔmF_allowed=0
+                    if transition_selector.polarizations[0][2] != 0
+                    else 1,
+                )
+            except AssertionError as err:
+                raise AssertionError(
+                    f"{transition_selector.description} with polarization "
+                    f"{np.round(transition_selector.polarizations[0], 2)} => "
+                    f"{err.args[0]}"
+                )
+    return
 
+
+def generate_OBE_system(
+    X_states: Sequence[
+        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
+    ],
+    B_states: Sequence[
+        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
+    ],
+    transition_selectors: Sequence[couplings_tlf.TransitionSelector],
+    qn_compact: Optional[
+        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
+    ] = None,
+    decay_channels: Optional[
+        Union[Sequence[utils_decay.DecayChannel], utils_decay.DecayChannel]
+    ] = None,
+    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
+    X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
+    B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
+    nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
+    Jmin_X: Optional[int] = None,
+    Jmax_X: Optional[int] = None,
+    Jmin_B: Optional[int] = None,
+    Jmax_B: Optional[int] = None,
+    transform: Optional[npt.NDArray[np.complex_]] = None,
+    H_func_X: Optional[Callable] = None,
+    H_func_B: Optional[Callable] = None,
+    verbose: bool = False,
+    normalize_pol: bool = False,
+    Γ: float = hamiltonian.Γ,
+) -> OBESystem:
+    """Convenience function for generating the symbolic OBE system of equations.
+
+    Args:
+
+        X_states : X states to include in the OBE system
+        B_states : B states to include in the OBE system
+        transition_selectors (list): list of TransitionSelectors defining the
+                                    transitions used in the OBE system.
+        qn_compact (QuantumSelector): dataclass specifying a subset of states to
+                                        select based on the quantum numbers
+        decay_channels (DecayChannel): dataclass specifying the decay channel to
+                                        add
+        verbose (bool, optional): Log progress to INFO. Defaults to False.
+
+    Returns:
+        OBESystem: dataclass designed to hold the generated values
+                    ground, exxcited, QN, H_int, V_ref_int, couplings, H_symbolic,
+                    C_array, system, code_lines
+    """
+    # check if transitions are allowed before generating the hamiltonian
+    check_transitions_allowed(transition_selectors=transition_selectors)
+
+    QN_X_original = list(states.generate_coupled_states_X(X_states))
+    QN_B_original = list(states.generate_coupled_states_B(B_states))
+    QN_original = QN_X_original + QN_B_original
+    rtol = None
+    stol = 1e-3
     if verbose:
         logging.basicConfig(level=logging.INFO)
         logger = logging.getLogger(__name__)
         logger.setLevel(logging.INFO)
-        logger.info(
-            "load_OBESystem_julia: 1/2 -> Initializing Julia on "
-            f"{system_parameters.nprocs} cores"
-        )
-    initialize_julia(nprocs=system_parameters.nprocs)
+        logger.info("generate_OBE_system: 1/5 -> Generating the reduced Hamiltonian")
+    H_reduced = hamiltonian.generate_total_reduced_hamiltonian(
+        X_states_approx=QN_X_original,
+        B_states_approx=QN_B_original,
+        E=E,
+        B=B,
+        Jmin_X=Jmin_X,
+        Jmax_X=Jmax_X,
+        Jmin_B=Jmin_B,
+        Jmax_B=Jmax_B,
+        rtol=rtol,
+        stol=stol,
+        X_constants=X_constants,
+        B_constants=B_constants,
+        nuclear_spins=nuclear_spins,
+        transform=transform,
+        H_func_X=H_func_X,
+        H_func_B=H_func_B,
+    )
+    ground_states = H_reduced.X_states
+    excited_states = H_reduced.B_states
+    QN = H_reduced.QN
+    H_int = H_reduced.H_int
+
+    V_ref_int = H_reduced.V_ref_int
     if verbose:
         logger.info(
-            "load_OBESystem_julia: 2/2 -> Defining the ODE equation and parameters in"
-            " Julia"
+            "generate_OBE_system: 2/5 -> "
+            "Generating the couplings corresponding to the transitions"
         )
-    logging.basicConfig(level=logging.WARNING)
-    generate_ode_fun_julia(obe_system.preamble, obe_system.code_lines)
-    Main.eval(f"@everywhere Γ = {system_parameters.Γ}")
-    ode_parameters.generate_p_julia()
+    couplings = []
+    for transition in transition_selectors:
+        if transition.ground_main is not None and transition.excited_main is not None:
+            couplings.append(
+                couplings_tlf.generate_coupling_field(
+                    transition.ground_main,
+                    transition.excited_main,
+                    transition.ground,
+                    transition.excited,
+                    QN_original,
+                    H_int,
+                    QN,
+                    V_ref_int,
+                    pol_vecs=transition.polarizations,
+                    pol_main=transition.polarizations[0],
+                    normalize_pol=normalize_pol,
+                )
+            )
+        else:
+            couplings.append(
+                couplings_tlf.generate_coupling_field_automatic(
+                    transition.ground,
+                    transition.excited,
+                    QN_original,
+                    H_int,
+                    QN,
+                    V_ref_int,
+                    pol_vecs=transition.polarizations,
+                )
+            )
+
+    if verbose:
+        logger.info("generate_OBE_system: 3/5 -> Generating the symbolic Hamiltonian")
+    if qn_compact is not None:
+        H_symbolic, QN_compact = generate_total_symbolic_hamiltonian(
+            QN, H_int, couplings, transition_selectors, qn_compact=qn_compact
+        )
+        couplings_compact = [
+            compact_coupling_field(coupling, QN, qn_compact) for coupling in couplings
+        ]
+    else:
+        H_symbolic = generate_total_symbolic_hamiltonian(
+            QN, H_int, couplings, transition_selectors
+        )
+
+    if verbose:
+        logger.info("generate_OBE_system: 4/5 -> Generating the collapse matrices")
+    C_array = couplings_tlf.collapse_matrices(
+        QN,
+        ground_states,
+        excited_states,
+        gamma=Γ,
+        qn_compact=qn_compact,
+    )
+
+    if decay_channels is not None:
+        if isinstance(decay_channels, list):
+            _decay_channels = decay_channels
+        elif not isinstance(decay_channels, (tuple, list, np.ndarray)):
+            _decay_channels = [decay_channels]
+        elif isinstance(decay_channels, (tuple, np.ndarray)):
+            _decay_channels = list(decay_channels)
+        else:
+            raise AssertionError(
+                f"decay_channels is type f{type(decay_channels)}; supply a list, tuple"
+                " or np.ndarray"
+            )
+
+        indices = utils_decay.get_insert_level_indices(
+            _decay_channels, QN, excited_states
+        )
+        couplings = [
+            insert_levels_coupling_field(coupling, indices_insert=indices)
+            for coupling in couplings
+        ]
+        QN = utils_decay.add_states_QN(_decay_channels, QN, indices)
+
+        if qn_compact is not None:
+            indices, H_symbolic = utils_decay.add_levels_symbolic_hamiltonian(
+                H_symbolic, _decay_channels, QN_compact, excited_states
+            )
+            QN_compact = utils_decay.add_states_QN(_decay_channels, QN_compact, indices)
+            C_array = utils_decay.add_decays_C_arrays(
+                _decay_channels, indices, QN_compact, C_array, Γ
+            )
+
+            couplings_compact = [
+                insert_levels_coupling_field(coupling, indices_insert=indices)
+                for coupling in couplings_compact
+            ]
+        else:
+            indices, H_symbolic = utils_decay.add_levels_symbolic_hamiltonian(
+                H_symbolic, _decay_channels, QN, excited_states
+            )
+            C_array = utils_decay.add_decays_C_arrays(
+                _decay_channels, indices, QN, C_array, Γ
+            )
+
+    if verbose:
+        logger.info(
+            "generate_OBE_system: 5/5 -> Transforming the Hamiltonian and collapse "
+            "matrices into a symbolic system of equations"
+        )
+    system = generate_system_of_equations_symbolic(H_symbolic, C_array, fast=True)
+    obe_system = OBESystem(
+        QN=QN_compact if qn_compact is not None else QN,
+        ground=ground_states,
+        excited=excited_states,
+        couplings=couplings if qn_compact is None else couplings_compact,
+        H_symbolic=H_symbolic,
+        H_int=H_int,
+        V_ref_int=V_ref_int,
+        C_array=C_array,
+        system=system,
+        QN_original=None if qn_compact is None else QN,
+        decay_channels=_decay_channels if decay_channels else None,
+        couplings_original=None if qn_compact is None else couplings,
+    )
+    return obe_system
 
 
-def generate_OBE_system(
-    system_parameters, transitions, qn_compact=None, decay_channels=None, verbose=False
-):
+def generate_OBE_system_transitions(
+    transitions: Sequence[Union[OpticalTransition, MicrowaveTransition]],
+    transition_selectors: Sequence[couplings_tlf.TransitionSelector],
+    qn_compact: Optional[
+        Union[states.QuantumSelector, Sequence[states.QuantumSelector], bool]
+    ] = None,
+    decay_channels: Optional[
+        Union[Sequence[utils_decay.DecayChannel], utils_decay.DecayChannel]
+    ] = None,
+    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
+    Γ: float = hamiltonian.Γ,
+    X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
+    B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
+    nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
+    Jmin_X: Optional[int] = None,
+    Jmax_X: Optional[int] = None,
+    Jmin_B: Optional[int] = None,
+    Jmax_B: Optional[int] = None,
+    transform: Optional[npt.NDArray[np.complex_]] = None,
+    H_func_X: Optional[Callable] = None,
+    H_func_B: Optional[Callable] = None,
+    verbose: bool = False,
+    normalize_pol: bool = False,
+) -> OBESystem:
     """Convenience function for generating the symbolic OBE system of equations
     and Julia code.
 
     Args:
-        system_parameters (SystemParameters): dataclass holding system parameters
-
         transitions (list): list of TransitionSelectors defining the transitions
                             used in the OBE system.
         qn_compact (QuantumSelector): dataclass specifying a subset of states to
@@ -120,161 +360,207 @@ def generate_OBE_system(
                     ground, exxcited, QN, H_int, V_ref_int, couplings, H_symbolic,
                     C_array, system, code_lines
     """
-    # values above and below of excited J states to include in hamiltonian
-    # to take into account excited state mixing
-    # default input None does min(J)-1 and max(J)+1
-    Jmin = None
-    Jmax = None
     rtol = None
+    stol = 1e-3
+
+    # check if transitions are allowed before generating the hamiltonian
+    check_transitions_allowed(transition_selectors=transition_selectors)
+
     if verbose:
         logging.basicConfig(level=logging.INFO)
         logger = logging.getLogger(__name__)
         logger.setLevel(logging.INFO)
-        logger.info("generate_OBE_system: 1/6 -> Generating the reduced Hamiltonian")
-    (
-        ground_states,
-        excited_states,
-        QN,
-        H_int,
-        V_ref_int,
-    ) = generate_total_reduced_hamiltonian(
-        ground_states_approx=generate_coupled_states_ground_X(system_parameters.ground),
-        excited_states_approx=generate_coupled_states_excited_B(
-            system_parameters.excited
-        ),
-        Jmin=Jmin,
-        Jmax=Jmax,
+        logger.info("generate_OBE_system: 1/5 -> Generating the reduced Hamiltonian")
+    H_reduced = hamiltonian.generate_reduced_hamiltonian_transitions(
+        transitions=transitions,
+        E=E,
+        B=B,
         rtol=rtol,
+        stol=stol,
+        Jmin_X=Jmin_X,
+        Jmax_X=Jmax_X,
+        Jmin_B=Jmin_B,
+        Jmax_B=Jmax_B,
+        Xconstants=X_constants,
+        Bconstants=B_constants,
+        nuclear_spins=nuclear_spins,
+        # transform=transform,
+        # H_func_X=H_func_X,
+        # H_func_B=H_func_B,
     )
+
+    if H_reduced.QN_basis is None:
+        raise TypeError("H_reduced.QN_basis is None")
+
+    if qn_compact is True:
+        qn_compact = generate_qn_compact(transitions, H_reduced)
+
+    ground_states = H_reduced.X_states
+    excited_states = H_reduced.B_states
+    QN = H_reduced.QN
+    H_int = H_reduced.H_int
+
+    V_ref_int = H_reduced.V_ref_int
     if verbose:
         logger.info(
-            "generate_OBE_system: 2/6 -> "
+            "generate_OBE_system: 2/5 -> "
             "Generating the couplings corresponding to the transitions"
         )
     couplings = []
-    for transition in transitions:
-        if transition.ground_main is not None and transition.excited_main is not None:
+    for transition_selector in transition_selectors:
+        if (
+            transition_selector.ground_main is not None
+            and transition_selector.excited_main is not None
+        ):
             couplings.append(
-                generate_coupling_field(
-                    transition.ground_main,
-                    transition.excited_main,
-                    transition.ground,
-                    transition.excited,
+                couplings_tlf.generate_coupling_field(
+                    transition_selector.ground_main,
+                    transition_selector.excited_main,
+                    transition_selector.ground,
+                    transition_selector.excited,
+                    H_reduced.QN_basis,
                     H_int,
                     QN,
                     V_ref_int,
-                    pol_vec=transition.polarizations,
-                    pol_main=transition.polarizations[0],
-                    nprocs=system_parameters.nprocs,
+                    pol_vecs=transition_selector.polarizations,
+                    pol_main=transition_selector.polarizations[0],
+                    normalize_pol=normalize_pol,
                 )
             )
         else:
             couplings.append(
-                generate_coupling_field_automatic(
-                    transition.ground,
-                    transition.excited,
+                couplings_tlf.generate_coupling_field_automatic(
+                    transition_selector.ground,
+                    transition_selector.excited,
+                    H_reduced.QN_basis,
                     H_int,
                     QN,
                     V_ref_int,
-                    pol_vec=transition.polarizations,
-                    nprocs=system_parameters.nprocs,
+                    pol_vecs=transition_selector.polarizations,
                 )
             )
 
     if verbose:
-        logger.info("generate_OBE_system: 3/6 -> Generating the symbolic Hamiltonian")
+        logger.info("generate_OBE_system: 3/5 -> Generating the symbolic Hamiltonian")
     if qn_compact is not None:
         H_symbolic, QN_compact = generate_total_symbolic_hamiltonian(
-            QN, H_int, couplings, transitions, qn_compact=qn_compact
+            QN, H_int, couplings, transition_selectors, qn_compact=qn_compact  # type: ignore
         )
+        couplings_compact = [
+            compact_coupling_field(coupling, QN, qn_compact) for coupling in couplings
+        ]
     else:
         H_symbolic = generate_total_symbolic_hamiltonian(
-            QN, H_int, couplings, transitions
+            QN, H_int, couplings, transition_selectors
         )
 
     if verbose:
-        logger.info("generate_OBE_system: 4/6 -> Generating the collapse matrices")
-    C_array = collapse_matrices(
-        QN,
-        ground_states,
-        excited_states,
-        gamma=system_parameters.Γ,
-        qn_compact=qn_compact,
+        logger.info("generate_OBE_system: 4/5 -> Generating the collapse matrices")
+    C_array = couplings_tlf.collapse_matrices(
+        QN, ground_states, excited_states, gamma=Γ, qn_compact=qn_compact  # type: ignore
     )
-
     if decay_channels is not None:
-        if not isinstance(decay_channels, (list, np.ndarray)):
-            decay_channels = np.ndarray(decay_channels)
-        if qn_compact is not None:
-            indices, H_symbolic = add_levels_symbolic_hamiltonian(
-                H_symbolic, decay_channels, QN_compact, excited_states
-            )
-            QN_compact = add_states_QN(decay_channels, QN_compact, indices)
-            C_array = add_decays_C_arrays(
-                decay_channels, indices, QN_compact, C_array, system_parameters.Γ
-            )
+        if isinstance(decay_channels, list):
+            _decay_channels = decay_channels
+        elif not isinstance(decay_channels, (tuple, list, np.ndarray)):
+            _decay_channels = [decay_channels]
+        elif isinstance(decay_channels, (tuple, np.ndarray)):
+            _decay_channels = list(decay_channels)
         else:
-            indices, H_symbolic = add_levels_symbolic_hamiltonian(
-                H_symbolic, decay_channels, QN, excited_states
+            raise AssertionError(
+                f"decay_channels is type f{type(decay_channels)}; supply a list, tuple"
+                " or np.ndarray"
             )
-            QN = add_states_QN(decay_channels, QN_compact, indices)
-            C_array = add_decays_C_arrays(
-                decay_channels, indices, QN, C_array, system_parameters.Γ
+
+        indices = utils_decay.get_insert_level_indices(
+            _decay_channels, QN, excited_states
+        )
+        couplings = [
+            insert_levels_coupling_field(coupling, indices_insert=indices)
+            for coupling in couplings
+        ]
+        QN = utils_decay.add_states_QN(_decay_channels, QN, indices)
+
+        if qn_compact is not None:
+            indices, H_symbolic = utils_decay.add_levels_symbolic_hamiltonian(
+                H_symbolic, _decay_channels, QN_compact, excited_states
             )
+            QN_compact = utils_decay.add_states_QN(_decay_channels, QN_compact, indices)
+            C_array = utils_decay.add_decays_C_arrays(
+                _decay_channels, indices, QN_compact, C_array, Γ
+            )
+
+            couplings_compact = [
+                insert_levels_coupling_field(coupling, indices_insert=indices)
+                for coupling in couplings_compact
+            ]
+        else:
+            indices, H_symbolic = utils_decay.add_levels_symbolic_hamiltonian(
+                H_symbolic, _decay_channels, QN, excited_states
+            )
+            C_array = utils_decay.add_decays_C_arrays(
+                _decay_channels, indices, QN, C_array, Γ
+            )
+
     if verbose:
         logger.info(
-            "generate_OBE_system: 5/6 -> Transforming the Hamiltonian and collapse "
+            "generate_OBE_system: 5/5 -> Transforming the Hamiltonian and collapse "
             "matrices into a symbolic system of equations"
         )
-    system = generate_system_of_equations_symbolic(
-        H_symbolic, C_array, progress=False, fast=True
-    )
-    if verbose:
-        logger.info(
-            "generate_OBE_system: 6/6 -> Generating Julia code representing the system "
-            "of equations"
-        )
         logging.basicConfig(level=logging.WARNING)
-    code_lines = system_of_equations_to_lines(system, nprocs=system_parameters.nprocs)
-    if qn_compact is not None:
-        QN_original = QN
-        QN = QN_compact
-    else:
-        QN_original = None
+    system = generate_system_of_equations_symbolic(H_symbolic, C_array, fast=True)
+
     obe_system = OBESystem(
-        QN=QN,
+        QN=QN_compact if qn_compact is not None else QN,
         ground=ground_states,
         excited=excited_states,
-        couplings=couplings,
+        couplings=couplings_compact if qn_compact is not None else couplings,
         H_symbolic=H_symbolic,
         H_int=H_int,
         V_ref_int=V_ref_int,
         C_array=C_array,
         system=system,
-        code_lines=code_lines,
-        QN_original=QN_original,
-        decay_channels=decay_channels,
+        QN_original=None if qn_compact is None else QN,
+        decay_channels=_decay_channels if decay_channels else None,
+        couplings_original=None if qn_compact is None else couplings,
     )
     return obe_system
 
 
-def setup_OBE_system_julia(
-    system_parameters,
-    ode_parameters,
-    transitions,
-    qn_compact=None,
-    full_output=False,
-    decay_channels=None,
-    verbose=False,
+def setup_OBE_system(
+    X_states: Sequence[
+        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
+    ],
+    B_states: Sequence[
+        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
+    ],
+    transitions: Sequence[couplings_tlf.TransitionSelector],
+    qn_compact: Optional[
+        Union[Sequence[states.QuantumSelector], states.QuantumSelector]
+    ] = None,
+    decay_channels: Optional[
+        Union[Sequence[utils_decay.DecayChannel], utils_decay.DecayChannel]
+    ] = None,
+    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
+    X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
+    B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
+    nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
+    Jmin_X: Optional[int] = None,
+    Jmax_X: Optional[int] = None,
+    Jmin_B: Optional[int] = None,
+    Jmax_B: Optional[int] = None,
+    transform: Optional[npt.NDArray[np.complex_]] = None,
+    H_func_X: Optional[Callable] = None,
+    H_func_B: Optional[Callable] = None,
+    verbose: bool = False,
+    normalize_pol: bool = False,
 ):
-    """Convenience function for generating the OBE system and initializing it in
-    Julia
+    """Convenience function for generating the OBE system
 
     Args:
-        system_parameters (SystemParameters): dataclass holding the system
-                                                parameters, e.g. Γ,
-                                                (laser) ground states,
-                                                (laser) excited states
+        X_states : X states to include in the OBE system
+        B_states : B states to include in the OBE system
         ode_parameters (odeParameters): dataclass containing the ode parameters.
                                         e.g. Ω, δ, vz, ..., etc.
         transitions (TransitionSelector): object containing all information
@@ -286,6 +572,8 @@ def setup_OBE_system_julia(
         full_output (bool, optional): Returns all matrices, states etc. if True,
                                         Returns only QN if False.
                                         Defaults to False.
+        decay_channels (DecayChannel): dataclass specifying the decay channel to
+                                        add
         verbose (bool, optional): Log progress to INFO. Defaults to False.
 
     Returns:
@@ -297,37 +585,100 @@ def setup_OBE_system_julia(
                         H_symbolic, C_array, system, code_lines, preamble
     """
     obe_system = generate_OBE_system(
-        system_parameters,
+        X_states,
+        B_states,
         transitions,
         qn_compact=qn_compact,
         decay_channels=decay_channels,
+        E=E,
+        B=B,
+        X_constants=X_constants,
+        B_constants=B_constants,
+        nuclear_spins=nuclear_spins,
+        Jmin_X=Jmin_X,
+        Jmax_X=Jmax_X,
+        Jmin_B=Jmin_B,
+        Jmax_B=Jmax_B,
+        transform=transform,
+        H_func_X=H_func_X,
+        H_func_B=H_func_B,
         verbose=verbose,
+        normalize_pol=normalize_pol,
     )
-    obe_system.full_output = full_output
-    if verbose:
-        logging.basicConfig(level=logging.INFO)
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.INFO)
-        logger.info("setup_OBE_system_julia: 1/3 -> Generating the preamble")
-    obe_system.preamble = generate_preamble(ode_parameters, transitions)
+    return obe_system
 
-    if verbose:
-        logger.info(
-            "setup_OBE_system_julia: 2/3 -> Initializing Julia on "
-            f"{system_parameters.nprocs} cores"
-        )
-    initialize_julia(nprocs=system_parameters.nprocs)
 
-    if verbose:
-        logger.info(
-            "setup_OBE_system_julia: 3/3 -> Defining the ODE equation and parameters in"
-            " Julia"
-        )
-        logging.basicConfig(level=logging.WARNING)
-    generate_ode_fun_julia(obe_system.preamble, obe_system.code_lines)
-    Main.eval(f"@everywhere Γ = {system_parameters.Γ}")
-    ode_parameters.generate_p_julia()
-    if not full_output:
-        return obe_system.QN
-    else:
-        return obe_system
+def setup_OBE_system_transitions(
+    transitions: Sequence[Union[OpticalTransition, MicrowaveTransition]],
+    transition_selectors: Sequence[couplings_tlf.TransitionSelector],
+    qn_compact: Optional[
+        Union[Sequence[states.QuantumSelector], states.QuantumSelector, bool]
+    ] = None,
+    decay_channels: Optional[
+        Union[Sequence[utils_decay.DecayChannel], utils_decay.DecayChannel]
+    ] = None,
+    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
+    X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
+    B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
+    nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
+    Jmin_X: Optional[int] = None,
+    Jmax_X: Optional[int] = None,
+    Jmin_B: Optional[int] = None,
+    Jmax_B: Optional[int] = None,
+    transform: Optional[npt.NDArray[np.complex_]] = None,
+    H_func_X: Optional[Callable] = None,
+    H_func_B: Optional[Callable] = None,
+    verbose: bool = False,
+    normalize_pol: bool = False,
+    Γ: float = hamiltonian.Γ,
+):
+    """Convenience function for generating the OBE system
+
+    Args:
+        ode_parameters (odeParameters): dataclass containing the ode parameters.
+                                        e.g. Ω, δ, vz, ..., etc.
+        transitions (Sequence[TransitionSelector]): Sequence containing all transition
+                                            information required to generate
+                                            the coupling matrices and symbolic matrix
+                                            for each transition
+        qn_compact (QuantumSelector): dataclass specifying a subset of states to
+                                        select based on the quantum numbers
+        full_output (bool, optional): Returns all matrices, states etc. if True,
+                                        Returns only QN if False.
+                                        Defaults to False.
+        decay_channels (DecayChannel): dataclass specifying the decay channel to
+                                        add
+        verbose (bool, optional): Log progress to INFO. Defaults to False.
+
+    Returns:
+        full_output == True:
+            list: list of states in system
+        full_output == False:
+            OBESystem: dataclass designed to hold the generated values
+                        ground, exxcited, QN, H_int, V_ref_int, couplings,
+                        H_symbolic, C_array, system, code_lines, preamble
+    """
+    obe_system = generate_OBE_system_transitions(
+        transitions=transitions,
+        transition_selectors=transition_selectors,
+        qn_compact=qn_compact,
+        decay_channels=decay_channels,
+        E=E,
+        B=B,
+        Γ=Γ,
+        X_constants=X_constants,
+        B_constants=B_constants,
+        nuclear_spins=nuclear_spins,
+        Jmin_X=Jmin_X,
+        Jmax_X=Jmax_X,
+        Jmin_B=Jmin_B,
+        Jmax_B=Jmax_B,
+        transform=transform,
+        H_func_X=H_func_X,
+        H_func_B=H_func_B,
+        verbose=verbose,
+        normalize_pol=normalize_pol,
+    )
+
+    return obe_system

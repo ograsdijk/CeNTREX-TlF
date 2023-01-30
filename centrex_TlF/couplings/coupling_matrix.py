@@ -1,37 +1,34 @@
-import multiprocessing
-import sqlite3
-from pathlib import Path
+from dataclasses import dataclass
+from typing import Sequence, Union, cast
 
 import numpy as np
-from centrex_TlF.couplings.matrix_elements import (
-    calculate_ED_ME_mixed_state,
-    generate_ED_ME_mixed_state,
-)
-from centrex_TlF.couplings.utils import generate_D, select_main_states
-from centrex_TlF.couplings.utils_multiprocessing import multi_coupling_matrix
-from centrex_TlF.couplings.utils_sqlite import check_states_in_ED_ME_coupled
-from centrex_TlF.states.utils import check_approx_state_exact_state, find_exact_states
-from centrex_TlF.transitions.utils import assert_transition_coupled_allowed
+import numpy.typing as npt
+import pandas as pd
+
+from centrex_tlf import states
+from centrex_tlf.states.states import CoupledBasisState
+
+from .matrix_elements import generate_ED_ME_mixed_state
+from .utils import assert_transition_coupled_allowed, select_main_states
 
 __all__ = [
-    "calculate_coupling_matrix",
-    "generate_coupling_field",
     "generate_coupling_matrix",
-    "calculate_coupling_field",
+    "generate_coupling_field",
     "generate_coupling_field_automatic",
-    "calculate_coupling_field_automatic",
+    "CouplingFields",
+    "CouplingField",
+    "generate_coupling_dataframe",
 ]
 
 
 def generate_coupling_matrix(
-    QN,
-    ground_states,
-    excited_states,
-    pol_vec=np.array([0, 0, 1]),
-    reduced=False,
-    normalize_pol=True,
-    nprocs=1,
-):
+    QN: Sequence[states.State],
+    ground_states: Sequence[states.State],
+    excited_states: Sequence[states.State],
+    pol_vec: npt.NDArray[np.complex_] = np.array([0.0, 0.0, 1.0], dtype=np.complex_),
+    reduced: bool = False,
+    normalize_pol: bool = True,
+) -> npt.NDArray[np.complex_]:
     """generate optical coupling matrix for given ground and excited states
     Checks if couplings are already pre-cached, otherwise falls back to
     calculate_coupling_matrix.
@@ -40,411 +37,318 @@ def generate_coupling_matrix(
         QN (list): list of basis states
         ground_states (list): list of ground states coupling to excited states
         excited_states (list): list of excited states
-        pol_vec (np.ndarray, optional): polarization vector. Defaults to
+        pol_vec (np.ndarray): polarization vector. Defaults to
                                         np.array([0,0,1]).
         reduced (bool, optional): [description]. Defaults to False.
         normalize_pol (bool, optional): Normalize the polarization vector.
                                         Defaults to True.
-        nrpocs (int): # processes to use for multiprocessing
 
     Returns:
         np.ndarray: optical coupling matrix
     """
     assert isinstance(QN, list), "QN required to be of type list"
 
-    # check if states are pre-cached
-    Jg = np.unique(
-        [s[1].J for state in QN for s in state if s[1].electronic_state == "X"]
-    )
-    Je = np.unique(
-        [s[1].J for state in QN for s in state if s[1].electronic_state == "B"]
-    )
-    pre_cached = check_states_in_ED_ME_coupled(Jg, Je, pol_vec)
+    H = np.zeros((len(QN), len(QN)), dtype=complex)
 
-    if pre_cached:
-        # connect to sqlite3 database on file, not used when multiprocessing
-        path = Path(__file__).parent.parent / "pre_calculated"
-        db = path / "matrix_elements.db"
+    # start looping over ground and excited states
+    for ground_state in ground_states:
+        i = QN.index(ground_state)
+        for excited_state in excited_states:
+            j = QN.index(excited_state)
 
-        con = sqlite3.connect(db)
-        cur = con.cursor()
-        cur.execute("PRAGMA synchronous = OFF")
-        cur.execute("PRAGMA journal_mode = MEMORY")
-        # initialize the coupling matrix
-        H = np.zeros((len(QN), len(QN)), dtype=complex)
-
-        # start looping over ground and excited states
-        for ground_state in ground_states:
-            i = QN.index(ground_state)
-            for excited_state in excited_states:
-                j = QN.index(excited_state)
-
-                # calculate matrix element and add it to the Hamiltonian
-                H[i, j] = generate_ED_ME_mixed_state(
-                    ground_state,
-                    excited_state,
-                    pol_vec=pol_vec,
-                    reduced=reduced,
-                    normalize_pol=normalize_pol,
-                    con=con,
-                )
-        con.close()
-        H = H + H.conj().T
-        return H
-    else:
-        return calculate_coupling_matrix(
-            QN, ground_states, excited_states, pol_vec, reduced, nprocs
-        )
-
-
-def calculate_coupling_matrix(
-    QN,
-    ground_states,
-    excited_states,
-    pol_vec=np.array([0, 0, 1]),
-    reduced=False,
-    normalize_pol=True,
-    nprocs=1,
-):
-    """calculate optical coupling matrix for given ground and excited states
-
-    Args:
-        QN (list): list of basis states
-        ground_states (list): list of ground states coupling to excited states
-        excited_states (list): list of excited states
-        pol_vec (np.ndarray, optional): polarization vector. Defaults to
-                                        np.array([0,0,1]).
-        reduced (bool, optional): [description]. Defaults to False.
-        normalize_pol (bool, optional): Normalize the polarization vector.
-                                        Defaults to True.
-        nrpocs (int): # processes to use for multiprocessing
-
-    Returns:
-        np.ndarray: optical coupling matrix
-    """
-    assert isinstance(QN, list), "QN required to be of type list"
-
-    if nprocs > 1:
-        with multiprocessing.Pool(nprocs) as pool:
-            result = pool.starmap(
-                multi_coupling_matrix,
-                [(QN, gs, excited_states, pol_vec, reduced) for gs in ground_states],
+            # calculate matrix element and add it to the Hamiltonian
+            H[i, j] = generate_ED_ME_mixed_state(
+                excited_state,
+                ground_state,
+                pol_vec=pol_vec,
+                reduced=reduced,
+                normalize_pol=normalize_pol,
             )
-        H = np.sum(result, axis=0)
-    else:
-        # initialize the coupling matrix
-        H = np.zeros((len(QN), len(QN)), dtype=complex)
 
-        # start looping over ground and excited states
-        for ground_state in ground_states:
-            i = QN.index(ground_state)
-            for excited_state in excited_states:
-                j = QN.index(excited_state)
-
-                # calculate matrix element and add it to the Hamiltonian
-                H[i, j] = calculate_ED_ME_mixed_state(
-                    ground_state,
-                    excited_state,
-                    pol_vec=pol_vec,
-                    reduced=reduced,
-                    normalize_pol=normalize_pol,
-                )
-
-    # make H hermitian
+            # make H hermitian
     H = H + H.conj().T
 
     return H
 
 
-def generate_coupling_field(
-    ground_main_approx,
-    excited_main_approx,
-    ground_states_approx,
-    excited_states_approx,
-    H_rot,
-    QN,
-    V_ref,
-    pol_main=np.array([0, 0, 1]),
-    pol_vec=[],
-    relative_coupling=1e-3,
-    absolute_coupling=1e-6,
-    nprocs=2,
-):
-    ground_states = find_exact_states(ground_states_approx, H_rot, QN, V_ref=V_ref)
-    excited_states = find_exact_states(excited_states_approx, H_rot, QN, V_ref=V_ref)
-    ground_main = find_exact_states([ground_main_approx], H_rot, QN, V_ref=V_ref)[0]
-    excited_main = find_exact_states([excited_main_approx], H_rot, QN, V_ref=V_ref)[0]
+@dataclass
+class CouplingField:
+    polarization: npt.NDArray[np.complex_]
+    field: npt.NDArray[np.complex_]
 
-    check_approx_state_exact_state(ground_main_approx, ground_main)
-    check_approx_state_exact_state(excited_main_approx, excited_main)
-    ME_main = generate_ED_ME_mixed_state(excited_main, ground_main, pol_vec=pol_main)
 
-    assert_transition_coupled_allowed(
-        ground_main.find_largest_component(),
-        excited_main.find_largest_component(),
-        ΔmF_allowed=0 if pol_main[2] != 0 else 1,
-    )
-    # assert_msg = f"main coupling element small, {ME_main:.2e}" + \
-    #               ", check states and/or polarization"
-    # assert np.abs(ME_main) > 1e-2, assert_msg
+@dataclass
+class CouplingFields:
+    ground_main: states.State
+    excited_main: states.State
+    main_coupling: complex
+    ground_states: Sequence[states.State]
+    excited_states: Sequence[states.State]
+    fields: Sequence[CouplingField]
 
-    couplings = {
-        "ground main": ground_main,
-        "excited main": excited_main,
-        "main coupling": ME_main,
-        "ground states": ground_states,
-        "excited states": excited_states,
-        "D": generate_D(H_rot, QN, ground_main, excited_main, excited_states),
-        "fields": [],
-    }
-
-    for pol in pol_vec:
-        coupling = generate_coupling_matrix(
-            QN, ground_states, excited_states, pol_vec=pol, reduced=False, nprocs=nprocs
+    def __repr__(self):
+        gs = self.ground_main.largest
+        es = self.excited_main.largest
+        gs_str = gs.state_string_custom(["electronic", "J", "F1", "F", "mF", "P", "Ω"])
+        es_str = es.state_string_custom(["electronic", "J", "F1", "F", "mF", "P", "Ω"])
+        return (
+            f"CouplingFields(ground_main={gs_str},"
+            f" excited_main={es_str},"
+            f" main_coupling={self.main_coupling:.2e}"
         )
 
-        coupling[np.abs(coupling) < relative_coupling * np.max(np.abs(coupling))] = 0
-        coupling[np.abs(coupling) < absolute_coupling] = 0
-        d = {"pol": pol, "field": coupling}
-        couplings["fields"].append(d)
-    return couplings
 
-
-def calculate_coupling_field(
-    ground_main_approx,
-    excited_main_approx,
-    ground_states_approx,
-    excited_states_approx,
-    H_rot,
-    QN,
-    V_ref,
-    pol_main=np.array([0, 0, 1]),
-    pol_vec=[],
-    relative_coupling=1e-3,
-    absolute_coupling=1e-6,
-    nprocs=2,
-):
-    ground_states = find_exact_states(ground_states_approx, H_rot, QN, V_ref=V_ref)
-    excited_states = find_exact_states(excited_states_approx, H_rot, QN, V_ref=V_ref)
-    ground_main = find_exact_states([ground_main_approx], H_rot, QN, V_ref=V_ref)[0]
-    excited_main = find_exact_states([excited_main_approx], H_rot, QN, V_ref=V_ref)[0]
-
-    check_approx_state_exact_state(ground_main_approx, ground_main)
-    check_approx_state_exact_state(excited_main_approx, excited_main)
-    ME_main = calculate_ED_ME_mixed_state(excited_main, ground_main, pol_vec=pol_main)
-    assert_transition_coupled_allowed(
-        ground_main.find_largest_component(),
-        excited_main.find_largest_component(),
-        ΔmF_allowed=0 if pol_main[2] != 0 else 1,
-    )
-    # assert_msg = f"main coupling element small, {ME_main:.2e}" + \
-    #               ", check states and/or polarization"
-    # assert np.abs(ME_main) > 1e-2, assert_msg
-
-    couplings = {
-        "ground main": ground_main,
-        "excited main": excited_main,
-        "main coupling": ME_main,
-        "ground states": ground_states,
-        "excited states": excited_states,
-        "D": generate_D(H_rot, QN, ground_main, excited_main, excited_states),
-        "fields": [],
-    }
-
-    for pol in pol_vec:
-        coupling = calculate_coupling_matrix(
-            QN, ground_states, excited_states, pol_vec=pol, reduced=False, nprocs=nprocs
+def _generate_coupling_dataframe(
+    field: CouplingField, states_list: Sequence[states.State]
+) -> pd.DataFrame:
+    indices = np.nonzero(np.triu(field.field))
+    ground_states = []
+    excited_states = []
+    couplings = []
+    for idx, idy in zip(*indices):
+        gs = states_list[idx].largest.state_string_custom(
+            ["electronic", "J", "F1", "F", "mF"]
         )
+        es = states_list[idy].largest.state_string_custom(
+            ["electronic", "J", "F1", "F", "mF"]
+        )
+        ground_states.append(gs)
+        excited_states.append(es)
+        couplings.append(field.field[idx, idy])
 
-        coupling[np.abs(coupling) < relative_coupling * np.max(np.abs(coupling))] = 0
-        coupling[np.abs(coupling) < absolute_coupling] = 0
-        d = {"pol": pol, "field": coupling}
-        couplings["fields"].append(d)
-
-    return couplings
+    data = {"ground": ground_states, "excited": excited_states, "couplings": couplings}
+    return pd.DataFrame(data)
 
 
-# automatically generate main coupling
-
-
-def generate_coupling_field_automatic(
-    ground_states_approx,
-    excited_states_approx,
-    H_rot,
-    QN,
-    V_ref,
-    pol_vec=[],
-    relative_coupling=1e-3,
-    absolute_coupling=1e-6,
-    nprocs=2,
-):
-    """Generate the coupling fields for a transition for one or multiple
-    polarizations. Uses pre-cached values where possible.
+def generate_coupling_dataframe(
+    fields: CouplingFields, states_list: Sequence[states.State]
+) -> Sequence[pd.DataFrame]:
+    """
+    Generate a list of pandas DataFrames with the non-zero couplings between states
+    listed for each separate CouplingField input
 
     Args:
-        ground_states_approx (list): list of approximate ground states
-        excited_states_approx (list): list of approximate excited states
-        H_rot (np.ndarray): System hamiltonian in the rotational frame
-        QN (list): list of states in the system
-        V_ref ([type]): [description]
-        pol_vec (list, optional): list of polarizations. Defaults to [].
-        relative_coupling (float, optional): minimum relative coupling, set
-                                            smaller coupling to zero.
-                                            Defaults to 1e-3.
-        absolute_coupling (float, optional): minimum absolute coupling, set
-                                            smaller couplings to zero.
-                                            Defaults to 1e-6.
-        nprocs (int, optional): number of processes to employ. Defaults to 2.
+        fields (CouplingFields): coupling fields for a given transitions, with one for
+        each polarization
+        states_list (Sequence[states.State]): states involved in the system
 
     Returns:
-        dictionary: dictionary with the coupling field information.
-                    Dict entries:
-                        ground main: main ground state
-                        excited main: main excited state
-                        main coupling: coupling strenght between main_ground
-                                        and main_excited
-                        ground_states: ground states in coupling
-                        excited states: excited_states in coupling
-                        fields: list of dictionaries, one for each polarization,
-                                containing the polarization and coupling field
+        Sequence[pd.DataFrame]: list of DataFrames with non-zero couplings
     """
-    assert len(pol_vec) != 0, "define polarization vectors for transitions"
-    pol_main = pol_vec[0]
-    ground_main_approx, excited_main_approx = select_main_states(
-        ground_states_approx, excited_states_approx, pol_main
+    dfs = []
+    for field in fields.fields:
+        dfs.append(_generate_coupling_dataframe(field, states_list))
+    return dfs
+
+
+def generate_coupling_field(
+    ground_main_approx: states.State,
+    excited_main_approx: states.State,
+    ground_states_approx: Union[
+        Sequence[states.State], Sequence[states.CoupledBasisState]
+    ],
+    excited_states_approx: Union[
+        Sequence[states.State], Sequence[states.CoupledBasisState]
+    ],
+    QN_basis: Union[Sequence[states.State], Sequence[states.CoupledBasisState]],
+    H_rot: npt.NDArray[np.complex_],
+    QN: Sequence[states.State],
+    V_ref: npt.NDArray[np.complex_],
+    pol_main: npt.NDArray[np.complex_] = np.array([0, 0, 1], dtype=np.complex_),
+    pol_vecs: Sequence[npt.NDArray[np.complex_]] = [],
+    relative_coupling: float = 1e-3,
+    absolute_coupling: float = 1e-6,
+    normalize_pol: bool = True,
+) -> CouplingFields:
+    assert isinstance(
+        pol_main, np.ndarray
+    ), "supply a Sequence of np.ndarrays with dtype np.complex_ for pol_vecs"
+    assert isinstance(
+        pol_vecs[0], np.ndarray
+    ), "supply a Sequence of np.ndarrays with dtype np.complex_ for pol_vecs"
+    if not np.issubdtype(pol_main.dtype, np.complex_):
+        pol_main.astype(np.complex_)
+    if not np.issubdtype(pol_vecs[0].dtype, np.complex_):
+        pol_vecs = [pol.astype(np.complex_) for pol in pol_vecs]
+
+    _ground_states_approx: Sequence[states.State]
+    _excited_states_approx: Sequence[states.State]
+    _QN_basis: Sequence[states.State]
+
+    if isinstance(ground_states_approx[0], CoupledBasisState):
+        ground_states_approx = cast(Sequence[CoupledBasisState], ground_states_approx)
+        _ground_states_approx = states.states.basisstate_to_state_list(
+            ground_states_approx
+        )
+    else:
+        _ground_states_approx = cast(Sequence[states.State], ground_states_approx)
+
+    if isinstance(excited_states_approx[0], CoupledBasisState):
+        excited_states_approx = cast(Sequence[CoupledBasisState], excited_states_approx)
+        _excited_states_approx = states.states.basisstate_to_state_list(
+            excited_states_approx
+        )
+    else:
+        _excited_states_approx = cast(Sequence[states.State], excited_states_approx)
+
+    if isinstance(QN_basis[0], CoupledBasisState):
+        QN_basis = cast(Sequence[CoupledBasisState], QN_basis)
+        _QN_basis = states.states.basisstate_to_state_list(QN_basis)
+    else:
+        _QN_basis = cast(Sequence[states.State], QN_basis)
+
+    ground_states = states.find_exact_states(
+        _ground_states_approx, _QN_basis, QN, H_rot, V_ref=V_ref
+    )
+    excited_states = states.find_exact_states(
+        _excited_states_approx, _QN_basis, QN, H_rot, V_ref=V_ref
+    )
+    ground_main = states.find_exact_states(
+        [ground_main_approx], _QN_basis, QN, H_rot, V_ref=V_ref
+    )[0]
+    excited_main = states.find_exact_states(
+        [excited_main_approx], _QN_basis, QN, H_rot, V_ref=V_ref
+    )[0]
+
+    states.check_approx_state_exact_state(ground_main_approx, ground_main)
+    states.check_approx_state_exact_state(excited_main_approx, excited_main)
+    ME_main = generate_ED_ME_mixed_state(
+        excited_main,
+        ground_main,
+        pol_vec=np.asarray(pol_main, dtype=np.complex_),
+        normalize_pol=normalize_pol,
     )
 
-    ground_states = find_exact_states(ground_states_approx, H_rot, QN, V_ref=V_ref)
-    excited_states = find_exact_states(excited_states_approx, H_rot, QN, V_ref=V_ref)
-    ground_main = find_exact_states([ground_main_approx], H_rot, QN, V_ref=V_ref)[0]
-    excited_main = find_exact_states([excited_main_approx], H_rot, QN, V_ref=V_ref)[0]
+    _ground_main: CoupledBasisState = ground_main.largest  # type: ignore
+    _excited_main: CoupledBasisState = excited_main.largest  # type: ignore
 
-    check_approx_state_exact_state(ground_main_approx, ground_main)
-    check_approx_state_exact_state(excited_main_approx, excited_main)
-    ME_main = generate_ED_ME_mixed_state(excited_main, ground_main, pol_vec=pol_main)
     assert_transition_coupled_allowed(
-        ground_main.find_largest_component(),
-        excited_main.find_largest_component(),
-        ΔmF_allowed=0 if pol_main[2] != 0 else 1,
+        _ground_main, _excited_main, ΔmF_allowed=0 if pol_main[2] != 0 else 1
     )
-    # assert_msg = f"main coupling element small, {ME_main:.2e}" + \
-    #               ", check states and/or polarization"
-    # assert np.abs(ME_main) > 1e-2, assert_msg
 
-    couplings = {
-        "ground main": ground_main,
-        "excited main": excited_main,
-        "main coupling": ME_main,
-        "ground states": ground_states,
-        "excited states": excited_states,
-        "fields": [],
-    }
-
-    for pol in pol_vec:
+    couplings = []
+    for pol in pol_vecs:
         coupling = generate_coupling_matrix(
             QN,
             ground_states,
             excited_states,
             pol_vec=pol,
             reduced=False,
-            normalize_pol=True,
-            nprocs=nprocs,
+            normalize_pol=normalize_pol,
         )
+        if normalize_pol:
+            pol = pol.copy() / np.linalg.norm(pol)
 
         coupling[np.abs(coupling) < relative_coupling * np.max(np.abs(coupling))] = 0
         coupling[np.abs(coupling) < absolute_coupling] = 0
-        d = {"pol": pol, "field": coupling}
-        couplings["fields"].append(d)
-    return couplings
+        couplings.append(CouplingField(polarization=pol, field=coupling))
+    return CouplingFields(
+        ground_main, excited_main, ME_main, ground_states, excited_states, couplings
+    )
 
 
-def calculate_coupling_field_automatic(
-    ground_states_approx,
-    excited_states_approx,
-    H_rot,
-    QN,
-    V_ref,
-    pol_vec=[],
-    relative_coupling=1e-3,
-    absolute_coupling=1e-6,
-    nprocs=2,
-):
+def generate_coupling_field_automatic(
+    ground_states_approx: Union[
+        Sequence[states.State],
+        Sequence[states.CoupledBasisState],
+        Sequence[states.UncoupledBasisState],
+    ],
+    excited_states_approx: Union[
+        Sequence[states.State],
+        Sequence[states.CoupledBasisState],
+        Sequence[states.UncoupledBasisState],
+    ],
+    QN_basis: Union[
+        Sequence[states.State],
+        Sequence[states.CoupledBasisState],
+        Sequence[states.UncoupledBasisState],
+    ],
+    H_rot: npt.NDArray[np.complex_],
+    QN: Sequence[states.State],
+    V_ref: npt.NDArray[np.complex_],
+    pol_vecs: Sequence[npt.NDArray[np.complex_]],
+    relative_coupling: float = 1e-3,
+    absolute_coupling: float = 1e-6,
+    normalize_pol: bool = True,
+) -> CouplingFields:
     """Calculate the coupling fields for a transition for one or multiple
     polarizations.
 
     Args:
         ground_states_approx (list): list of approximate ground states
         excited_states_approx (list): list of approximate excited states
+        QN_basis (Sequence[states.State]): Sequence of States the H_rot was constructed
+                                            from
         H_rot (np.ndarray): System hamiltonian in the rotational frame
         QN (list): list of states in the system
         V_ref ([type]): [description]
-        pol_vec (list, optional): list of polarizations. Defaults to [].
-        relative_coupling (float, optional): minimum relative coupling, set
+        pol_vec (list): list of polarizations.
+        relative_coupling (float): minimum relative coupling, set
                                             smaller coupling to zero.
                                             Defaults to 1e-3.
-        absolute_coupling (float, optional): minimum absolute coupling, set
+        absolute_coupling (float): minimum absolute coupling, set
                                             smaller couplings to zero.
                                             Defaults to 1e-6.
-        nprocs (int, optional): number of processes to employ. Defaults to 2.
 
     Returns:
-        dictionary: dictionary with the coupling field information.
-                    Dict entries:
-                        ground main: main ground state
-                        excited main: main excited state
-                        main coupling: coupling strenght between main_ground
+        dictionary: CouplingFields dataclass with the coupling information.
+                    Attributes:
+                        ground_main: main ground state
+                        excited_main: main excited state
+                        main_coupling: coupling strenght between main_ground
                                         and main_excited
                         ground_states: ground states in coupling
-                        excited states: excited_states in coupling
-                        fields: list of dictionaries, one for each polarization,
-                                containing the polarization and coupling field
+                        excited_states: excited_states in coupling
+                        fields: list of CouplingField dataclasses, one for each
+                                polarization, containing the polarization and coupling
+                                field
     """
-    assert len(pol_vec) != 0, "define polarization vectors for transitions"
-    pol_main = pol_vec[0]
-    ground_main_approx, excited_main_approx = select_main_states(
-        ground_states_approx, excited_states_approx, pol_main
-    )
-    ground_states = find_exact_states(ground_states_approx, H_rot, QN, V_ref=V_ref)
-    excited_states = find_exact_states(excited_states_approx, H_rot, QN, V_ref=V_ref)
-    ground_main = find_exact_states([ground_main_approx], H_rot, QN, V_ref=V_ref)[0]
-    excited_main = find_exact_states([excited_main_approx], H_rot, QN, V_ref=V_ref)[0]
+    assert isinstance(
+        pol_vecs[0], np.ndarray
+    ), "supply a Sequence of np.ndarrays with dtype np.float_ for pol_vecs"
 
-    check_approx_state_exact_state(ground_main_approx, ground_main)
-    check_approx_state_exact_state(excited_main_approx, excited_main)
-    assert_transition_coupled_allowed(
-        ground_main.find_largest_component(),
-        excited_main.find_largest_component(),
-        ΔmF_allowed=0 if pol_main[2] != 0 else 1,
-    )
-    ME_main = calculate_ED_ME_mixed_state(excited_main, ground_main, pol_vec=pol_main)
+    _ground_states_approx: Sequence[states.State]
+    _excited_states_approx: Sequence[states.State]
+    _QN_basis: Sequence[states.State]
 
-    # assert_msg = f"main coupling element small, {ME_main:.2e}" + \
-    #               ", check states and/or polarization"
-    # assert np.abs(ME_main) > 1e-2, assert_msg
-
-    couplings = {
-        "ground main": ground_main,
-        "excited main": excited_main,
-        "main coupling": ME_main,
-        "ground states": ground_states,
-        "excited states": excited_states,
-        "fields": [],
-    }
-
-    for pol in pol_vec:
-        coupling = calculate_coupling_matrix(
-            QN,
-            ground_states,
-            excited_states,
-            pol_vec=pol,
-            reduced=False,
-            normalize_pol=True,
-            nprocs=nprocs,
+    if isinstance(ground_states_approx[0], CoupledBasisState):
+        ground_states_approx = cast(Sequence[CoupledBasisState], ground_states_approx)
+        _ground_states_approx = states.states.basisstate_to_state_list(
+            ground_states_approx
         )
+    else:
+        _ground_states_approx = cast(Sequence[states.State], ground_states_approx)
 
-        coupling[np.abs(coupling) < relative_coupling * np.max(np.abs(coupling))] = 0
-        coupling[np.abs(coupling) < absolute_coupling] = 0
-        d = {"pol": pol, "field": coupling}
-        couplings["fields"].append(d)
+    if isinstance(excited_states_approx[0], CoupledBasisState):
+        excited_states_approx = cast(Sequence[CoupledBasisState], excited_states_approx)
+        _excited_states_approx = states.states.basisstate_to_state_list(
+            excited_states_approx
+        )
+    else:
+        _excited_states_approx = cast(Sequence[states.State], excited_states_approx)
 
-    return couplings
+    if isinstance(QN_basis[0], CoupledBasisState):
+        QN_basis = cast(Sequence[CoupledBasisState], QN_basis)
+        _QN_basis = states.states.basisstate_to_state_list(QN_basis)
+    else:
+        _QN_basis = cast(Sequence[states.State], QN_basis)
+
+    pol_main = pol_vecs[0]
+    ground_main_approx, excited_main_approx = select_main_states(
+        _ground_states_approx, _excited_states_approx, pol_main
+    )
+    return generate_coupling_field(
+        ground_main_approx=ground_main_approx,
+        excited_main_approx=excited_main_approx,
+        ground_states_approx=_ground_states_approx,
+        excited_states_approx=_excited_states_approx,
+        QN_basis=_QN_basis,
+        H_rot=H_rot,
+        QN=QN,
+        V_ref=V_ref,
+        pol_main=pol_main,
+        pol_vecs=pol_vecs,
+        relative_coupling=relative_coupling,
+        absolute_coupling=absolute_coupling,
+        normalize_pol=normalize_pol,
+    )

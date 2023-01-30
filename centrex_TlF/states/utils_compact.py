@@ -1,9 +1,16 @@
+from typing import List, Sequence
+
 import numpy as np
+import numpy.typing as npt
 
-__all__ = [""]
+from .states import State
+
+__all__ = ["compact_QN_coupled_indices"]
 
 
-def compact_QN_coupled_indices(QN, indices_compact):
+def compact_QN_coupled_indices(
+    QN: Sequence[State], indices_compact: npt.NDArray[np.int_]
+) -> List[State]:
     """Compact the states given by indices in indices_compact
 
     Args:
@@ -16,7 +23,7 @@ def compact_QN_coupled_indices(QN, indices_compact):
     QNc = [QN[idx] for idx in indices_compact]
 
     def slc(s):
-        return s.find_largest_component()
+        return s.largest
 
     Js = np.unique([slc(s).J for s in QNc if slc(s).J is not None])
     F1s = np.unique([slc(s).F1 for s in QNc if slc(s).F1 is not None])
@@ -26,7 +33,7 @@ def compact_QN_coupled_indices(QN, indices_compact):
 
     QNcompact = [qn for idx, qn in enumerate(QN) if idx not in indices_compact[1:]]
 
-    state_rep = QNcompact[indices_compact[0]].find_largest_component()
+    state_rep = QNcompact[indices_compact[0]].largest
     if len(Js) != 1:
         state_rep.J = None
     if len(F1s) != 1:
