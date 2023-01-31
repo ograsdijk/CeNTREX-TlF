@@ -39,7 +39,6 @@ class OBESystem:
     H_symbolic: smp.matrices.dense.MutableDenseMatrix
     C_array: npt.NDArray[np.float_]
     system: smp.matrices.dense.MutableDenseMatrix
-    preamble: str = ""
     QN_original: Optional[Sequence[states.State]] = None
     decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None
     couplings_original: Optional[Sequence[List[Any]]] = None
@@ -153,7 +152,7 @@ def generate_OBE_system(
     Returns:
         OBESystem: dataclass designed to hold the generated values
                     ground, exxcited, QN, H_int, V_ref_int, couplings, H_symbolic,
-                    C_array, system, code_lines
+                    C_array, system
     """
     # check if transitions are allowed before generating the hamiltonian
     check_transitions_allowed(transition_selectors=transition_selectors)
@@ -358,7 +357,7 @@ def generate_OBE_system_transitions(
     Returns:
         OBESystem: dataclass designed to hold the generated values
                     ground, exxcited, QN, H_int, V_ref_int, couplings, H_symbolic,
-                    C_array, system, code_lines
+                    C_array, system
     """
     rtol = None
     stol = 1e-3
@@ -582,7 +581,7 @@ def setup_OBE_system(
         full_output == False:
             OBESystem: dataclass designed to hold the generated values
                         ground, exxcited, QN, H_int, V_ref_int, couplings,
-                        H_symbolic, C_array, system, code_lines, preamble
+                        H_symbolic, C_array, system
     """
     obe_system = generate_OBE_system(
         X_states,
@@ -657,7 +656,7 @@ def setup_OBE_system_transitions(
         full_output == False:
             OBESystem: dataclass designed to hold the generated values
                         ground, exxcited, QN, H_int, V_ref_int, couplings,
-                        H_symbolic, C_array, system, code_lines, preamble
+                        H_symbolic, C_array, system
     """
     obe_system = generate_OBE_system_transitions(
         transitions=transitions,
