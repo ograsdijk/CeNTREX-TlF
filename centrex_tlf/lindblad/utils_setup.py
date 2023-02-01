@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Sequence, Union
+from typing import Any, Callable, List, Optional, Sequence, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -41,7 +41,7 @@ class OBESystem:
     system: smp.matrices.dense.MutableDenseMatrix
     QN_original: Optional[Sequence[states.State]] = None
     decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None
-    couplings_original: Optional[Sequence[List[Any]]] = None
+    couplings_original: Optional[List[couplings_tlf.CouplingFields]] = None
 
     def __repr__(self) -> str:
         ground = [s.largest for s in self.ground]
@@ -87,11 +87,20 @@ def check_transitions_allowed(
         AssertionError: error if any given transition is not allowed.
     """
     for transition_selector in transition_selectors:
-        if transition_selector.ground_main is not None:
+        if (
+            transition_selector.ground_main is not None
+            and transition_selector.excited_main is not None
+        ):
             try:
                 couplings_tlf.utils.assert_transition_coupled_allowed(
-                    transition_selector.ground_main.largest,
-                    transition_selector.excited_main.largest,
+                    cast(
+                        states.CoupledBasisState,
+                        transition_selector.ground_main.largest,
+                    ),
+                    cast(
+                        states.CoupledBasisState,
+                        transition_selector.excited_main.largest,
+                    ),
                     ΔmF_allowed=0
                     if transition_selector.polarizations[0][2] != 0
                     else 1,
@@ -102,16 +111,16 @@ def check_transitions_allowed(
                     f"{np.round(transition_selector.polarizations[0], 2)} => "
                     f"{err.args[0]}"
                 )
+        else:
+            raise ValueError(
+                "Cannot check if transition is allowed; no main states selected"
+            )
     return
 
 
 def generate_OBE_system(
-    X_states: Sequence[
-        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
-    ],
-    B_states: Sequence[
-        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
-    ],
+    X_states: Union[states.QuantumSelector, Sequence[states.QuantumSelector]],
+    B_states: Union[states.QuantumSelector, Sequence[states.QuantumSelector]],
     transition_selectors: Sequence[couplings_tlf.TransitionSelector],
     qn_compact: Optional[
         Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
@@ -392,7 +401,11 @@ def generate_OBE_system_transitions(
         raise TypeError("H_reduced.QN_basis is None")
 
     if qn_compact is True:
-        qn_compact = generate_qn_compact(transitions, H_reduced)
+        _qn_compact = generate_qn_compact(transitions, H_reduced)
+    elif qn_compact is False:
+        _qn_compact = None
+    else:
+        _qn_compact = qn_compact
 
     ground_states = H_reduced.X_states
     excited_states = H_reduced.B_states
@@ -441,12 +454,12 @@ def generate_OBE_system_transitions(
 
     if verbose:
         logger.info("generate_OBE_system: 3/5 -> Generating the symbolic Hamiltonian")
-    if qn_compact is not None:
+    if _qn_compact is not None:
         H_symbolic, QN_compact = generate_total_symbolic_hamiltonian(
-            QN, H_int, couplings, transition_selectors, qn_compact=qn_compact  # type: ignore
+            QN, H_int, couplings, transition_selectors, qn_compact=_qn_compact
         )
         couplings_compact = [
-            compact_coupling_field(coupling, QN, qn_compact) for coupling in couplings
+            compact_coupling_field(coupling, QN, _qn_compact) for coupling in couplings
         ]
     else:
         H_symbolic = generate_total_symbolic_hamiltonian(
@@ -456,7 +469,7 @@ def generate_OBE_system_transitions(
     if verbose:
         logger.info("generate_OBE_system: 4/5 -> Generating the collapse matrices")
     C_array = couplings_tlf.collapse_matrices(
-        QN, ground_states, excited_states, gamma=Γ, qn_compact=qn_compact  # type: ignore
+        QN, ground_states, excited_states, gamma=Γ, qn_compact=_qn_compact
     )
     if decay_channels is not None:
         if isinstance(decay_channels, list):
@@ -480,7 +493,7 @@ def generate_OBE_system_transitions(
         ]
         QN = utils_decay.add_states_QN(_decay_channels, QN, indices)
 
-        if qn_compact is not None:
+        if _qn_compact is not None:
             indices, H_symbolic = utils_decay.add_levels_symbolic_hamiltonian(
                 H_symbolic, _decay_channels, QN_compact, excited_states
             )
@@ -510,29 +523,25 @@ def generate_OBE_system_transitions(
     system = generate_system_of_equations_symbolic(H_symbolic, C_array, fast=True)
 
     obe_system = OBESystem(
-        QN=QN_compact if qn_compact is not None else QN,
+        QN=QN_compact if _qn_compact is not None else QN,
         ground=ground_states,
         excited=excited_states,
-        couplings=couplings_compact if qn_compact is not None else couplings,
+        couplings=couplings_compact if _qn_compact is not None else couplings,
         H_symbolic=H_symbolic,
         H_int=H_int,
         V_ref_int=V_ref_int,
         C_array=C_array,
         system=system,
-        QN_original=None if qn_compact is None else QN,
+        QN_original=None if _qn_compact is None else QN,
         decay_channels=_decay_channels if decay_channels else None,
-        couplings_original=None if qn_compact is None else couplings,
+        couplings_original=None if _qn_compact is None else couplings,
     )
     return obe_system
 
 
 def setup_OBE_system(
-    X_states: Sequence[
-        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
-    ],
-    B_states: Sequence[
-        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
-    ],
+    X_states: Union[states.QuantumSelector, Sequence[states.QuantumSelector]],
+    B_states: Union[states.QuantumSelector, Sequence[states.QuantumSelector]],
     transitions: Sequence[couplings_tlf.TransitionSelector],
     qn_compact: Optional[
         Union[Sequence[states.QuantumSelector], states.QuantumSelector]

@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import Sequence, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -57,7 +57,7 @@ def compact_symbolic_hamiltonian_indices(
 
 
 def generate_qn_compact(
-    transitions: List[
+    transitions: Sequence[
         Union[transitions.OpticalTransition, transitions.MicrowaveTransition]
     ],
     H_reduced: hamiltonian.reduced_hamiltonian.ReducedHamiltonianTotal,
@@ -67,7 +67,7 @@ def generate_qn_compact(
         J_transitions_ground.append(transition.J_ground)
     J_compact = [
         Ji
-        for Ji in np.unique([s.J for s in H_reduced.X_states_basis])  # type: ignore
+        for Ji in np.unique([s.J for s in H_reduced.X_states_basis])
         if Ji not in J_transitions_ground
     ]
     qn_compact = [

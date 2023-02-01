@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Iterable
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -260,7 +260,7 @@ def generate_coupled_states_base(
 
 
 def generate_coupled_states_X(
-    qn_selector: Union[QuantumSelector, List[QuantumSelector], npt.NDArray[Any]],
+    qn_selector: Union[QuantumSelector, Sequence[QuantumSelector], npt.NDArray[Any]],
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
     basis: Basis = Basis.Coupled,
 ) -> List[CoupledBasisState]:
@@ -316,7 +316,7 @@ def check_B_basis(P, Ω):
 
 
 def generate_coupled_states_B(
-    qn_selector: Union[QuantumSelector, List[QuantumSelector], npt.NDArray[Any]],
+    qn_selector: Union[QuantumSelector, Sequence[QuantumSelector], npt.NDArray[Any]],
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
     basis: Optional[Basis] = None,
 ) -> List[CoupledBasisState]:

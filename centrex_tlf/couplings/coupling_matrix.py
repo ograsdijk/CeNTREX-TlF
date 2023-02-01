@@ -219,8 +219,8 @@ def generate_coupling_field(
         normalize_pol=normalize_pol,
     )
 
-    _ground_main: CoupledBasisState = ground_main.largest  # type: ignore
-    _excited_main: CoupledBasisState = excited_main.largest  # type: ignore
+    _ground_main = cast(CoupledBasisState, ground_main.largest)
+    _excited_main = cast(CoupledBasisState, excited_main.largest)
 
     assert_transition_coupled_allowed(
         _ground_main, _excited_main, ΔmF_allowed=0 if pol_main[2] != 0 else 1
