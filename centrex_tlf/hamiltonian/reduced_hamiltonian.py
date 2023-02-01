@@ -1,6 +1,6 @@
 import warnings
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from typing import Callable, List, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -404,16 +404,19 @@ def generate_total_reduced_hamiltonian(
     )
 
     if use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
-        _B_states_approx = get_unique_basisstates_from_states(
-            [qn.transform_to_omega_basis() for qn in B_states_approx]
+        _B_states_approx = cast(
+            Sequence[CoupledBasisState],
+            get_unique_basisstates_from_states(
+                [qn.transform_to_omega_basis() for qn in B_states_approx]
+            ),
         )
     else:
-        _B_states_approx = list(B_states_approx)
+        _B_states_approx = cast(List[CoupledBasisState], list(B_states_approx))
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         H_B_red = generate_reduced_B_hamiltonian(
-            _B_states_approx,  # type: ignore
+            _B_states_approx,
             E=E,
             B=B,
             rtol=rtol,

@@ -90,9 +90,7 @@ def compact_coupling_field(
     QN_compact = copy.deepcopy(QN)
     for qnc in qn_compact:
         indices_compact = states.get_indices_quantumnumbers(qnc, QN_compact)
-        QN_compact = states.compact_QN_coupled_indices(
-            QN_compact, indices_compact
-        )  # type: ignore
+        QN_compact = states.compact_QN_coupled_indices(QN_compact, indices_compact)
         fields = compact_coupling_field_indices(fields, indices_compact)
     return fields
 

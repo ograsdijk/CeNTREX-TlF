@@ -3,7 +3,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ## Extensions
-![CeNTREX-TlF-julia-extension version on PyPI](https://img.shields.io/badge/extension-julia-informational "CeNTREX-TlF-julia-extension on PyPI") [![CeNTREX-TlF version on PyPI](https://img.shields.io/pypi/v/centrex-tlf-julia-extension.svg "CeNTREX-TlF on PyPI")](https://pypi.python.org/pypi/centrex-tlf-julia-extension/)
+[![CeNTREX-TlF-julia-extension version on PyPI](https://img.shields.io/badge/extension-julia-informational "CeNTREX-TlF-julia-extension on PyPI")](https://github.com/ograsdijk/CeNTREX-TlF-julia-extension) [![CeNTREX-TlF version on PyPI](https://img.shields.io/pypi/v/centrex-tlf-julia-extension.svg "CeNTREX-TlF on PyPI")](https://pypi.python.org/pypi/centrex-tlf-julia-extension/)
 # CeNTREX-TlF
 Code for generating the CeNTREX TlF States, Hamiltonians, Transitions, Couplings and Lindblad equations.
 

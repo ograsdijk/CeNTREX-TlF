@@ -1,4 +1,4 @@
-from typing import List, Sequence, Tuple, Union
+from typing import List, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -137,9 +137,9 @@ def select_main_states(
     allowed_transitions = []
     indices_gnd_mF0 = []
     for ide, exc in enumerate(excited_states):
-        exc_basisstate: CoupledBasisState = exc.largest  # type: ignore
+        exc_basisstate = cast(CoupledBasisState, exc.largest)
         for idg, gnd in enumerate(ground_states):
-            gnd_basisstate: CoupledBasisState = gnd.largest  # type: ignore
+            gnd_basisstate = cast(CoupledBasisState, gnd.largest)
             if check_transition_coupled_allowed_polarization(
                 gnd_basisstate, exc_basisstate, ΔmF, return_err=False
             ):

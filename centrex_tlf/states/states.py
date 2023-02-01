@@ -897,7 +897,7 @@ class State:
             if np.abs(amp) > tol:
                 if probabilities:
                     amp = np.abs(amp) ** 2
-                if np.real(complex(amp)) > 0:  # type: ignore
+                if np.real(complex(amp)) > 0:
                     print("+", end="")
                 string = basis_state.print_quantum_numbers(printing=False)
                 string = "{:.4f}".format(complex(amp)) + " x " + string  # type: ignore
