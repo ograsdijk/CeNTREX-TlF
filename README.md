@@ -1,12 +1,19 @@
-# CeNTREX-TlF-Hamiltonian
+[![Python versions on PyPI](https://img.shields.io/pypi/pyversions/centrex-tlf.svg)](https://pypi.python.org/pypi/centrex-tlf/)
+[![CeNTREX-TlF version on PyPI](https://img.shields.io/pypi/v/centrex-tlf.svg "CeNTREX-TlF on PyPI")](https://pypi.python.org/pypi/centrex-tlf/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+## Extensions
+![CeNTREX-TlF-julia-extension version on PyPI](https://img.shields.io/badge/extension-julia-informational "CeNTREX-TlF-julia-extension on PyPI") [![CeNTREX-TlF version on PyPI](https://img.shields.io/pypi/v/centrex-tlf-julia-extension.svg "CeNTREX-TlF on PyPI")](https://pypi.python.org/pypi/centrex-tlf-julia-extension/)
+# CeNTREX-TlF
 Code for generating the CeNTREX TlF States, Hamiltonians, Transitions, Couplings and Lindblad equations.
 
-Consists of two modules:
+Consists of six modules:
 * `states`
 * `hamiltonian`
 * `transitions`
 * `couplings`
 * `lindblad`
+* `utils`
 
 `states` has code to generate states and the classes that describe the `CoupledBasisState`, `UncoupledBasisState` and `State`; where `State` holds multiple `CoupledBasisStates` or `UncoupledBasisStates` with different amplitudes, i.e. when superpositions arise.
 
