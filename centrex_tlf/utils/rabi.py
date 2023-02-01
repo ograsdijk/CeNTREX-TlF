@@ -1,4 +1,7 @@
+from typing import overload
+
 import numpy as np
+import numpy.typing as npt
 import scipy.constants as cst
 
 __all__ = [
@@ -13,7 +16,19 @@ __all__ = [
 ]
 
 
+@overload
 def intensity_to_electric_field(intensity: float) -> float:
+    ...
+
+
+@overload
+def intensity_to_electric_field(
+    intensity: npt.NDArray[np.float_],
+) -> npt.NDArray[np.float_]:
+    ...
+
+
+def intensity_to_electric_field(intensity):
     """
     Intensity in W/m^2 to electric field
 
@@ -26,7 +41,19 @@ def intensity_to_electric_field(intensity: float) -> float:
     return np.sqrt((2 / (cst.c * cst.epsilon_0)) * intensity)
 
 
+@overload
 def electric_field_to_rabi(electric_field: float, coupling: float, D: float) -> float:
+    ...
+
+
+@overload
+def electric_field_to_rabi(
+    electric_field: npt.NDArray[np.float_], coupling: float, D: float
+) -> npt.NDArray[np.float_]:
+    ...
+
+
+def electric_field_to_rabi(electric_field, coupling, D):
     """
     Rabi rate from an electric field an coupling strength, with the dipole moment D
     default value set to the X to B transition.
@@ -42,6 +69,35 @@ def electric_field_to_rabi(electric_field: float, coupling: float, D: float) -> 
     return electric_field * coupling * D / cst.hbar
 
 
+@overload
+def intensity_to_rabi(intensity: float, coupling: float, D: float) -> float:
+    ...
+
+
+@overload
+def intensity_to_rabi(
+    intensity: npt.NDArray[np.float_], coupling: float, D: float
+) -> npt.NDArray[np.float_]:
+    ...
+
+
+def intensity_to_rabi(intensity, coupling, D):
+    """
+    Rabi rate from an intensity
+
+    Args:
+        intensity (float): intensity [W/m^2]
+        coupling (float): coupling strength
+        D (float): dipole moment
+
+    Returns:
+        float: rabi rate
+    """
+    electric_field = intensity_to_electric_field(intensity)
+    rabi = electric_field_to_rabi(electric_field, coupling, D)
+    return rabi
+
+
 def power_to_rabi_gaussian_beam(
     power: float,
     coupling: float,
@@ -49,13 +105,24 @@ def power_to_rabi_gaussian_beam(
     sigma_y: float,
     D: float = 2.6675506e-30,
 ) -> float:
+    """
+    Rabi rate from laser power and coupling strength for the X to B TlF transition.n
+
+    Args:
+        power (float): power [W]
+        coupling (float): coupling strength
+        sigma_x (float): x standard deviation
+        sigma_y (float): y standard deviation
+        D (float, optional): Dipole moment. Defaults to 2.6675506e-30 for the X to B TLF
+                            transition.
+
+    Returns:
+        float: Rabi rate in rotational frequency [2π ⋅ Hz]
+    """
     intensity = power / (2 * np.pi * sigma_x * sigma_y)
 
-    electric_field = intensity_to_electric_field(intensity)
-    rabi_rate = electric_field_to_rabi(
-        electric_field=electric_field, coupling=coupling, D=D
-    )
-    return rabi_rate
+    rabi = intensity_to_rabi(intensity, coupling, D)
+    return rabi
 
 
 def power_to_rabi_gaussian_beam_microwave(
@@ -66,12 +133,14 @@ def power_to_rabi_gaussian_beam_microwave(
     D: float = 1.4103753e-29,
 ) -> float:
     """
-    Rabi rate from an electric field and coupling strength for the X to X microwave
+    Rabi rate from microwave power and coupling strength for the X to X microwave
     transition
 
     Args:
-        electric_field (float): electric field
+        power (float): power [W]
         coupling (float): coupling strength
+        sigma_x (float): x standard deviation
+        sigma_y (float): y standard deviation
         D (float, optional): Dipole moment. Defaults to 1.4103753e-29 for the X to X
                             TlF transition.
 
