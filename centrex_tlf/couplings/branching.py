@@ -78,7 +78,7 @@ def generate_br_dataframe(
             data = {"states": [f"|X, J = {Ji}>" for Ji in J_unique]}
         elif group_ground == "mF":
             mF_selectors = np.unique(
-                [(s.largest.J, s.largest.F1, s.largest.F) for s in ground_states],  # type: ignore
+                [(s.largest.J, s.largest.F1, s.largest.F) for s in ground_states],  # type: ignore # noqa: 203
                 axis=0,
             )
             indices_group = [

@@ -60,7 +60,9 @@ def compact_BR_array_indices(
     BR_sum = np.zeros(new_shape, "complex")
     BR_sum[indices_compact[0], :] = np.sum(BR_array, axis=0)[indices_compact].sum(
         axis=0
-    )[-new_shape[0] :]
+    )[
+        -new_shape[0] :  # noqa: 203
+    ]
     for id1, id2 in zip(*np.nonzero(BR_sum)):
         BR_new = np.zeros(new_shape, "complex")
         BR_new[id1, id2] = BR_sum[id1, id2]
