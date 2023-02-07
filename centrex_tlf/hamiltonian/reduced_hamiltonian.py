@@ -115,7 +115,9 @@ def generate_reduced_X_hamiltonian(
         E (npt.NDArray[np.float64], optional): Electric field in V/cm. Defaults to
                                                             np.array([0.0, 0.0, 0.0]).
         B (npt.NDArray[np.float64], optional): Magnetic field in G. Defaults to
-                                                            np.array([0.0, 0.0, 1e-3]).
+                                                np.array([0.0, 0.0, 1e-3]). If smaller
+                                                than 1e-5 some states become degenerate
+                                                again.
         rtol (Optional[float], optional): Remove components smaller than rtol in the
                                                         hamiltonian. Defaults to None.
         stol: (float): Remove superpositions with amplitude smaller than stol from each
@@ -196,7 +198,7 @@ def generate_reduced_X_hamiltonian(
 def generate_reduced_B_hamiltonian(
     B_states_approx: Sequence[CoupledBasisState],
     E: npt.NDArray[np.float64] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-6]),
+    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-5]),
     rtol: Optional[float] = None,
     stol: float = 1e-3,
     Jmin: Optional[int] = None,
@@ -216,9 +218,9 @@ def generate_reduced_B_hamiltonian(
     Args:
         B_states_approx (Sequence[CoupledBasisState]): States
         E (npt.NDArray[np.float64], optional): Electric field in V/cm. Defaults to
-                                                            np.array([0.0, 0.0, 0.0]).
+                                                np.array([0.0, 0.0, 0.0]).
         B (npt.NDArray[np.float64], optional): Magnetic field in G. Defaults to
-                                                            np.array([0.0, 0.0, 1e-3]).
+                                                np.array([0.0, 0.0, 1e-5]).
         rtol (Optional[float], optional): Remove components smaller than rtol in the
                                                         hamiltonian. Defaults to None.
         stol: (float): Remove superpositions with amplitude smaller than stol from each
@@ -323,7 +325,7 @@ def generate_total_reduced_hamiltonian(
     X_states_approx: Sequence[CoupledBasisState],
     B_states_approx: Sequence[CoupledBasisState],
     E: npt.NDArray[np.float64] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-6]),
+    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-5]),
     rtol: Optional[float] = None,
     stol: float = 1e-3,
     Jmin_X: Optional[int] = None,
@@ -352,7 +354,9 @@ def generate_total_reduced_hamiltonian(
         E (npt.NDArray[np.float64], optional): Electric field. Defaults to
                                                 np.array([0.0, 0.0, 0.0]).
         B (npt.NDArray[np.float64], optional): Magnetic field. Defaults to
-                                                np.array([0.0, 0.0, 1e-6]).
+                                                np.array([0.0, 0.0, 1e-5]). If smaller
+                                                than 1e-5 some X states become
+                                                degenerate again.
         rtol (Optional[float], optional): Tolerance for the Hamiltonian. Defaults to
                                             None.
         stol: (float): Remove superpositions with amplitude smaller than stol from each
@@ -469,7 +473,7 @@ def generate_total_reduced_hamiltonian(
 def generate_reduced_hamiltonian_transitions(
     transitions: Sequence[Union[OpticalTransition, MicrowaveTransition]],
     E: npt.NDArray[np.float64] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-6]),
+    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-5]),
     rtol: Optional[float] = None,
     stol: float = 1e-3,
     Jmin_X: Optional[int] = None,
