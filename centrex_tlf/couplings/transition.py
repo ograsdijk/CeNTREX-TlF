@@ -13,7 +13,7 @@ from centrex_tlf.transitions import (
 )
 
 from .polarization import Polarization
-from .utils import check_transition_coupled_allowed
+from .utils import check_transition_coupled_allowed, select_main_states
 
 __all__ = [
     "TransitionSelector",
@@ -102,6 +102,10 @@ def generate_transition_selectors(
             phase_modulation = False
         else:
             phase_modulation = phase_modulations[idt]
+        if ground_mains is None:
+            ground_main, excited_main = select_main_states(
+                ground_states_approx, excited_states_approx, polarization[0].vector
+            )
 
         transition_selectors.append(
             TransitionSelector(
@@ -114,8 +118,10 @@ def generate_transition_selectors(
                 Ω=smp.Symbol(f"Ω{idt}", complex=True),
                 δ=smp.Symbol(f"δ{idt}"),
                 description=transition.name,
-                ground_main=None if ground_mains is None else ground_mains[idt],
-                excited_main=None if excited_mains is None else excited_mains[idt],
+                ground_main=ground_main if ground_mains is None else ground_mains[idt],
+                excited_main=excited_main
+                if excited_mains is None
+                else excited_mains[idt],
                 phase_modulation=phase_modulation,
             )
         )
