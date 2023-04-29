@@ -8,7 +8,7 @@ import pandas as pd
 from centrex_tlf import states
 from centrex_tlf.states.states import CoupledBasisState
 
-from .matrix_elements import generate_ED_ME_mixed_state
+from .matrix_elements import calculate_ED_ME_mixed_state
 from .utils import assert_transition_coupled_allowed, select_main_states
 
 __all__ = [
@@ -57,7 +57,7 @@ def generate_coupling_matrix(
             j = QN.index(excited_state)
 
             # calculate matrix element and add it to the Hamiltonian
-            H[i, j] = generate_ED_ME_mixed_state(
+            H[i, j] = calculate_ED_ME_mixed_state(
                 excited_state,
                 ground_state,
                 pol_vec=pol_vec,
@@ -212,7 +212,7 @@ def generate_coupling_field(
 
     states.check_approx_state_exact_state(ground_main_approx, ground_main)
     states.check_approx_state_exact_state(excited_main_approx, excited_main)
-    ME_main = generate_ED_ME_mixed_state(
+    ME_main = calculate_ED_ME_mixed_state(
         excited_main,
         ground_main,
         pol_vec=np.asarray(pol_main, dtype=np.complex_),

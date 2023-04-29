@@ -6,10 +6,10 @@ import numpy.typing as npt
 
 from centrex_tlf import hamiltonian, states
 
-__all__ = ["generate_ED_ME_mixed_state", "ED_ME_coupled"]
+__all__ = ["calculate_ED_ME_mixed_state", "ED_ME_coupled"]
 
 
-def generate_ED_ME_mixed_state(
+def calculate_ED_ME_mixed_state(
     bra: states.State,
     ket: states.State,
     pol_vec: npt.NDArray[np.complex_] = np.array([1.0, 1.0, 1.0], dtype=np.complex_),

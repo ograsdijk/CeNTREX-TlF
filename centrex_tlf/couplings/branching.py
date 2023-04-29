@@ -6,7 +6,7 @@ import pandas as pd
 
 from centrex_tlf import states
 
-from .matrix_elements import generate_ED_ME_mixed_state
+from .matrix_elements import calculate_ED_ME_mixed_state
 
 __all__ = ["calculate_br", "generate_br_dataframe"]
 
@@ -20,7 +20,7 @@ def calculate_br(
     MEs = np.zeros((len(ground_states)), dtype=np.complex_)
 
     for idg, ground_state in enumerate(ground_states):
-        MEs[idg] = generate_ED_ME_mixed_state(
+        MEs[idg] = calculate_ED_ME_mixed_state(
             ground_state.remove_small_components(tol=tol),
             excited_state.remove_small_components(tol=tol),
         )
