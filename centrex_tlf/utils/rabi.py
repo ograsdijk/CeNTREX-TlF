@@ -97,6 +97,31 @@ def intensity_to_rabi(intensity, coupling, D):
     rabi = electric_field_to_rabi(electric_field, coupling, D)
     return rabi
 
+def power_to_rabi_rectangular_beam(
+        power: float,
+        coupling: float,
+        wx: float,
+        wy: float,
+        D: float = 2.6675506e-30,
+) -> float:
+    """
+    Rabi rate from laser power and coupling strength for the X to B TLF transition.
+
+    Args:
+        power (float): power [W]
+        coupling (float): coupling strength
+        wx (float): x width [m]
+        wy (float): y width [m]
+        D (float, optional): Dipole moment. Defaults to 2.6675506e-30 for the X to B TLF
+                            transition.
+
+    Returns:
+        float: Rabi rate in rotational frequency [2π ⋅ Hz]
+    """
+    intensity = power / (wx*wy)
+
+    rabi = intensity_to_rabi(intensity, coupling, D)
+    return rabi
 
 def power_to_rabi_gaussian_beam(
     power: float,
@@ -106,13 +131,13 @@ def power_to_rabi_gaussian_beam(
     D: float = 2.6675506e-30,
 ) -> float:
     """
-    Rabi rate from laser power and coupling strength for the X to B TlF transition.n
+    Rabi rate from laser power and coupling strength for the X to B TlF transition.
 
     Args:
         power (float): power [W]
         coupling (float): coupling strength
-        sigma_x (float): x standard deviation
-        sigma_y (float): y standard deviation
+        sigma_x (float): x standard deviation [m]
+        sigma_y (float): y standard deviation [m]
         D (float, optional): Dipole moment. Defaults to 2.6675506e-30 for the X to B TLF
                             transition.
 
@@ -225,3 +250,4 @@ def rabi_to_power_gaussian_beam_microwave(
         float: power [W]
     """
     return rabi_to_power_gaussian_beam(rabi, coupling, sigma_x, sigma_y, D)
+
