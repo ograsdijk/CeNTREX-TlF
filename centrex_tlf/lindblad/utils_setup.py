@@ -39,6 +39,8 @@ class OBESystem:
     H_symbolic: smp.matrices.dense.MutableDenseMatrix
     C_array: npt.NDArray[np.float_]
     system: smp.matrices.dense.MutableDenseMatrix
+    coupling_symbols: Sequence[smp.Symbol]
+    polarization_symbols: Sequence[Sequence[smp.Symbol]]
     QN_original: Optional[Sequence[states.State]] = None
     decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None
     couplings_original: Optional[List[couplings_tlf.CouplingFields]] = None
@@ -319,6 +321,10 @@ def generate_OBE_system(
         V_ref_int=V_ref_int,
         C_array=C_array,
         system=system,
+        coupling_symbols=[trans.Ω for trans in transition_selectors],
+        polarization_symbols=[
+            trans.polarization_symbols for trans in transition_selectors
+        ],
         QN_original=None if qn_compact is None else QN,
         decay_channels=_decay_channels if decay_channels else None,
         couplings_original=None if qn_compact is None else couplings,
@@ -532,6 +538,10 @@ def generate_OBE_system_transitions(
         V_ref_int=V_ref_int,
         C_array=C_array,
         system=system,
+        coupling_symbols=[trans.Ω for trans in transition_selectors],
+        polarization_symbols=[
+            trans.polarization_symbols for trans in transition_selectors
+        ],
         QN_original=None if _qn_compact is None else QN,
         decay_channels=_decay_channels if decay_channels else None,
         couplings_original=None if _qn_compact is None else couplings,
