@@ -14,9 +14,11 @@ __all__: list[str] = [
 
 
 class OpticalTransitionType(IntEnum):
+    O = -2
     P = -1
     Q = 0
     R = +1
+    S = +2
 
 
 @dataclass
