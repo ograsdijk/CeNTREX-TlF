@@ -14,7 +14,7 @@ __all__: list[str] = [
 
 
 class OpticalTransitionType(IntEnum):
-    O = -2
+    O = -2  # noqa: E741
     P = -1
     Q = 0
     R = +1

@@ -103,9 +103,9 @@ def check_transitions_allowed(
                         states.CoupledBasisState,
                         transition_selector.excited_main.largest,
                     ),
-                    ΔmF_allowed=0
-                    if transition_selector.polarizations[0][2] != 0
-                    else 1,
+                    ΔmF_allowed=couplings_tlf.utils.ΔmF_allowed(
+                        transition_selector.polarizations[0]
+                    ),
                 )
             except AssertionError as err:
                 raise AssertionError(

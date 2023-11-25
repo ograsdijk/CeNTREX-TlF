@@ -106,9 +106,36 @@ def generate_uniform_population_states(
 
 
 def generate_thermal_population_states(
-    selected_states: Union[Sequence[states.QuantumSelector], states.QuantumSelector],
+    temperature: float,
     QN: Sequence[states.State],
 ) -> npt.NDArray[np.complex_]:
     levels = len(QN)
     ρ = np.zeros([levels, levels], dtype=complex)
+
+    assert isinstance(QN[0], states.State), "no State objects supplies"
+
+    j_levels = np.unique([qn.largest.J for qn in QN])
+
+    # get the relative thermal population fractions of the ground state
+    population = dict(
+        [(j, p) for j, p in zip(j_levels, thermal_population(j_levels, temperature))]
+    )
+
+    # get quantum numbers of the ground state
+    quantum_numbers = [
+        (qn.largest.J, qn.largest.F1, qn.largest.F, qn.largest.mF)
+        for qn in QN
+        if qn.largest.electronic_state == states.ElectronicState.X
+    ]
+
+    assert len(np.unique(quantum_numbers, axis=0)) == len(
+        quantum_numbers
+    ), "duplicate quantum numbers"
+
+    for idx, qn in enumerate(QN):
+        if qn.largest.F is None:
+            ρ[idx, idx] = population[qn.largest.J]
+        else:
+            ρ[idx, idx] = population[qn.largest.J] / J_levels(qn.largest.J)
+
     return ρ

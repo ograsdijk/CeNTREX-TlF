@@ -6,6 +6,14 @@ import numpy.typing as npt
 from centrex_tlf import states
 from centrex_tlf.states.states import CoupledBasisState
 
+from .polarization import (
+    polarization_X,
+    polarization_Y,
+    polarization_Z,
+    polarization_σm,
+    polarization_σp,
+)
+
 __all__: List[str] = []
 
 
@@ -117,6 +125,35 @@ def assert_transition_coupled_allowed(
         return ret
 
 
+def ΔmF_allowed(
+    polarization: npt.NDArray[np.complex_],
+) -> int:
+    """
+    Generate a tuple of all allowed ΔmF
+
+    Returns:
+        int: allowed ΔmF
+    """
+    # TODO: update to more sophisticated method, not a bunch of ifs
+    # TODO: return multiple allowed ΔmF
+    if np.all(polarization == polarization_X.vector):
+        ΔmF = +1
+    elif np.all(polarization == polarization_Y.vector):
+        ΔmF = +1
+    elif np.all(polarization == polarization_Z.vector):
+        ΔmF = 0
+    elif np.all(polarization == polarization_σm.vector):
+        ΔmF = -1
+    elif np.all(polarization == polarization_σp.vector):
+        ΔmF = -1
+    else:
+        raise ValueError(
+            f"polarization {polarization} cannot be used for select_main_states, not"
+            " yet implemented"
+        )
+    return ΔmF
+
+
 def select_main_states(
     ground_states: Sequence[states.State],
     excited_states: Sequence[states.State],
@@ -132,7 +169,7 @@ def select_main_states(
                                                 transition
         polarization (npt.NDArray[np.float_]): polarization vector
     """
-    ΔmF = 0 if polarization[2] != 0 else 1
+    ΔmF = ΔmF_allowed(polarization)
 
     allowed_transitions = []
     indices_gnd_mF0 = []

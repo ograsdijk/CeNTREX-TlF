@@ -9,7 +9,7 @@ from centrex_tlf import states
 from centrex_tlf.states.states import CoupledBasisState
 
 from .matrix_elements import calculate_ED_ME_mixed_state
-from .utils import assert_transition_coupled_allowed, select_main_states
+from .utils import ΔmF_allowed, assert_transition_coupled_allowed, select_main_states
 
 __all__ = [
     "generate_coupling_matrix",
@@ -223,7 +223,7 @@ def generate_coupling_field(
     _excited_main = cast(CoupledBasisState, excited_main.largest)
 
     assert_transition_coupled_allowed(
-        _ground_main, _excited_main, ΔmF_allowed=0 if pol_main[2] != 0 else 1
+        _ground_main, _excited_main, ΔmF_allowed(pol_main)
     )
 
     couplings = []
