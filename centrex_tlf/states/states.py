@@ -3,9 +3,26 @@ from __future__ import annotations
 import abc
 import hashlib
 import json
+import sys
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Generic,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+    overload,
+)
+
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 
 import numpy as np
 import numpy.typing as npt
@@ -21,6 +38,8 @@ __all__ = [
     "State",
     "BasisStates_from_State",
     "Basis",
+    "CoupledState",
+    "UncoupledState",
 ]
 
 
@@ -50,17 +69,23 @@ class BasisState(abc.ABC):
     basis: Optional[Basis]
 
     # scalar product (psi * a)
-    def __mul__(self, a: Union[float, complex, int]) -> State:
+    def __mul__(self, a: Union[float, complex, int]):
         raise NotImplementedError
 
     # scalar product (a * psi)
-    def __rmul__(self, a: Union[float, complex, int]) -> State:
+    def __rmul__(self, a: Union[float, complex, int]):
         raise NotImplementedError
 
-    def __matmul__(self, other: BasisState) -> Union[int, float, complex]:
+    def __add__(self, other):
         raise NotImplementedError
 
-    def __add__(self, other: BasisState) -> State:
+    def print_quantum_numbers(self, printing: bool = False) -> str:
+        raise NotImplementedError
+
+    def transform_to_omega_basis(self):
+        raise NotImplementedError
+
+    def transform_to_parity_basis(self):
         raise NotImplementedError
 
 
@@ -139,8 +164,14 @@ class CoupledBasisState(BasisState):
                 and self.basis == other.basis
             )
 
+    @overload
+    def __matmul__(self, other: CoupledBasisState) -> Literal[0, 1]: ...
+
+    @overload
+    def __matmul__(self, other: UncoupledBasisState) -> UncoupledState: ...
+
     # inner product
-    def __matmul__(self, other: BasisState) -> Union[int, float, complex]:
+    def __matmul__(self, other):
         if not isinstance(other, BasisState):
             raise TypeError(
                 "can only matmul CoupledBasisState with CoupledBasisState or "
@@ -152,15 +183,15 @@ class CoupledBasisState(BasisState):
             else:
                 return 0
         else:
-            return State([(1, other)]) @ self.transform_to_uncoupled()
+            return UncoupledState([(1, other)]) @ self.transform_to_uncoupled()
 
     # superposition: addition
-    def __add__(self, other: BasisState) -> State:
+    def __add__(self, other: Self) -> CoupledState:
         if self == other:
-            return State([(2, self)])
+            return CoupledState([(2, self)])
         elif isinstance(other, CoupledBasisState):
             if self.basis == other.basis:
-                return State([(1, self), (1, other)])
+                return CoupledState([(1, self), (1, other)])
             else:
                 raise TypeError("can only add BasisStates with the same basis")
         else:
@@ -170,12 +201,12 @@ class CoupledBasisState(BasisState):
             )
 
     # superposition: subtraction
-    def __sub__(self, other: BasisState):
+    def __sub__(self, other: Self) -> CoupledState | Literal[0]:
         if self == other:
             return 0
         elif isinstance(other, CoupledBasisState):
             if self.basis == other.basis:
-                return State([(1, self), (-1, other)])
+                return CoupledState([(1, self), (-1, other)])
             else:
                 raise TypeError("can only add BasisStates withe same basis")
         else:
@@ -185,11 +216,11 @@ class CoupledBasisState(BasisState):
             )
 
     # scalar product (psi * a)
-    def __mul__(self, a: Union[complex, float, int]) -> State:
-        return State([(a, self)])
+    def __mul__(self, a: Union[complex, float, int]) -> CoupledState:
+        return CoupledState([(a, self)])
 
     # scalar product (a * psi)
-    def __rmul__(self, a: Union[float, complex, int]) -> State:
+    def __rmul__(self, a: Union[float, complex, int]) -> CoupledState:
         return self * a
 
     def __hash__(self) -> int:
@@ -292,7 +323,7 @@ class CoupledBasisState(BasisState):
         return self.state_string()
 
     # A method to transform from coupled to uncoupled basis
-    def transform_to_uncoupled(self) -> State:
+    def transform_to_uncoupled(self) -> UncoupledState:
         F = self.F
         mF = self.mF
         F1 = self.F1
@@ -308,7 +339,7 @@ class CoupledBasisState(BasisState):
         m1s = np.arange(-I1, I1 + 1, 1)
         m2s = np.arange(-I2, I2 + 1, 1)
 
-        uncoupled_state = State()
+        uncoupled_state = UncoupledState()
 
         for mF1 in mF1s:
             for mJ in mJs:
@@ -326,12 +357,14 @@ class CoupledBasisState(BasisState):
                             Omega=Omega,
                             electronic_state=electronic_state,
                         )
-                        uncoupled_state = uncoupled_state + State([(amp, basis_state)])
+                        uncoupled_state = uncoupled_state + UncoupledState(
+                            [(amp, basis_state)]
+                        )
 
         return uncoupled_state.normalize()
 
     # Method for transforming parity eigenstate to Omega eigenstate basis
-    def transform_to_omega_basis(self) -> State:
+    def transform_to_omega_basis(self) -> CoupledState:
         F = self.F
         mF = self.mF
         F1 = self.F1
@@ -375,7 +408,9 @@ class CoupledBasisState(BasisState):
                 basis=Basis.CoupledΩ,
                 v=self.v,
             )
-            state: State = 1 / np.sqrt(2) * (state_plus + P * (-1) ** (J) * state_minus)
+            state: CoupledState = (
+                1 / np.sqrt(2) * (state_plus + P * (-1) ** (J) * state_minus)
+            )
             return state
 
         elif self.basis == Basis.Coupled and self.electronic_state == ElectronicState.X:
@@ -383,7 +418,7 @@ class CoupledBasisState(BasisState):
         else:
             raise ValueError("Cannot transform to Omega basis")
 
-    def transform_to_parity_basis(self):
+    def transform_to_parity_basis(self) -> CoupledState:
         """
         Transforms self from Omega eigenstate basis (i.e. signed Omega) to
         parity eigenstate basis (unsigned Omega, P is good quantum number).
@@ -474,29 +509,6 @@ class CoupledBasisState(BasisState):
 
         return state
 
-    # Find energy of state given a list of energies and eigenvectors and basis QN
-    def find_energy(
-        self,
-        energies: npt.NDArray[np.complex128],
-        V: npt.NDArray[np.complex128],
-        QN: Sequence[BasisState],
-    ) -> npt.NDArray[np.complex128]:
-
-        # Convert state to uncoupled basis
-        state = self.transform_to_uncoupled()
-
-        # Convert to a vector that can be multiplied by the evecs to determine overlap
-        state_vec = np.zeros((1, len(QN)))
-        for i, basis_state in enumerate(QN):
-            amp = State([(1, basis_state)]) @ state
-            state_vec[0, i] = amp
-
-        coeffs = np.multiply(np.dot(state_vec, V), np.conjugate(np.dot(state_vec, V)))
-        energy = np.dot(coeffs, energies)
-
-        self.energy = energy
-        return energy
-
 
 # Class for uncoupled basis states
 class UncoupledBasisState(BasisState):
@@ -552,15 +564,21 @@ class UncoupledBasisState(BasisState):
                 and self.basis == other.basis
             )
 
+    @overload
+    def __matmul__(self, other: UncoupledBasisState) -> Literal[1, 0]: ...
+
+    @overload
+    def __matmul__(self, other: CoupledBasisState) -> UncoupledState: ...
+
     # inner product
-    def __matmul__(self, other: BasisState) -> Union[int, float, complex]:
+    def __matmul__(self, other):
         if other.isUncoupled:
             if self == other:
                 return 1
             else:
                 return 0
         elif isinstance(other, CoupledBasisState):
-            return State([(1, self)]) @ other.transform_to_uncoupled()
+            return UncoupledState([(1, self)]) @ other.transform_to_uncoupled()
         else:
             raise TypeError(
                 "can only multiply UncoupledBasisState with UncoupledBasisState or "
@@ -568,11 +586,11 @@ class UncoupledBasisState(BasisState):
             )
 
     # superposition: addition
-    def __add__(self, other: BasisState) -> State:
+    def __add__(self, other: UncoupledBasisState) -> UncoupledState:
         if self == other:
-            return State([(2, self)])
+            return UncoupledState([(2, self)])
         elif isinstance(other, UncoupledBasisState):
-            return State([(1, self), (1, other)])
+            return UncoupledState([(1, self), (1, other)])
         else:
             raise TypeError(
                 f"can only add UncoupledBasisState (not {type(other)}) "
@@ -580,11 +598,11 @@ class UncoupledBasisState(BasisState):
             )
 
     # superposition: subtraction
-    def __sub__(self, other: BasisState) -> Union[int, State]:
+    def __sub__(self, other: UncoupledBasisState) -> Union[int, UncoupledState]:
         if self == other:
             return 0
         elif isinstance(other, UncoupledBasisState):
-            return State([(1, self), (-1, other)])
+            return UncoupledState([(1, self), (-1, other)])
         else:
             raise TypeError(
                 f"can only subtract UncoupledBasisState (not {type(other)}) "
@@ -592,11 +610,11 @@ class UncoupledBasisState(BasisState):
             )
 
     # scalar product (psi * a)
-    def __mul__(self, a: Union[float, complex, int]) -> State:
-        return State([(a, self)])
+    def __mul__(self, a: Union[float, complex, int]) -> UncoupledState:
+        return UncoupledState([(a, self)])
 
     # scalar product (a * psi)
-    def __rmul__(self, a: Union[float, complex, int]) -> State:
+    def __rmul__(self, a: Union[float, complex, int]) -> UncoupledState:
         return self * a
 
     def __hash__(self):
@@ -644,7 +662,7 @@ class UncoupledBasisState(BasisState):
         return self.state_string()
 
     # Method for converting to coupled basis
-    def transform_to_coupled(self) -> State:
+    def transform_to_coupled(self) -> CoupledState:
         # Determine quantum numbers
         J = self.J
         mJ = self.mJ
@@ -682,10 +700,10 @@ class UncoupledBasisState(BasisState):
                     amp = uncoupled_state @ coupled_state
                     data.append((amp, coupled_state))
 
-        return State(data)
+        return CoupledState(data)
 
     # Method for transforming parity eigenstate to Omega eigenstate basis
-    def transform_to_omega_basis(self) -> State:
+    def transform_to_omega_basis(self) -> UncoupledState:
         # Determine quantum numbers
         J = self.J
         mJ = self.mJ
@@ -730,39 +748,45 @@ class UncoupledBasisState(BasisState):
         return state
 
 
-# Define a class for superposition states
-class State:
-    # constructor
+S = TypeVar("S", bound=BasisState)
+
+
+class State(Generic[S]):
     def __init__(
         self,
-        data: List[Tuple[Union[int, float, complex], Any]] = [],
+        data: Sequence[
+            Tuple[
+                Union[int, float, complex],
+                S,
+            ]
+        ],
         remove_zero_amp_cpts: bool = True,
-        name: Optional[str] = None,
-        energy: float = 0.0,
     ):
-        # remove check, takes a lot of time, doesn't seem to get called anyway
-        # check for duplicates
-        # for i in range(len(data)):
-        #     _, cpt1 = data[i][0], data[i][1]
-        #     for amp2, cpt2 in data[i + 1 :]:
-        #         if cpt1 == cpt2:
-        #             raise AssertionError("duplicate components!")
         # remove components with zero amplitudes
         if remove_zero_amp_cpts:
             self.data = [(amp, cpt) for amp, cpt in data if amp != 0]
         else:
-            self.data = data
+            self.data = list(data)
+
         # for iteration over the State
         self.index = len(self.data)
-        # Store energy of state
-        self.energy = energy
-        # Give the state a name if desired
-        self.name = name
+
+    def _create_new_instance(
+        self,
+        data: Sequence[
+            Tuple[
+                Union[int, float, complex],
+                S,
+            ]
+        ],
+        remove_zero_amp_cpts: bool = True,
+    ) -> Self:
+        return self.__class__(data, remove_zero_amp_cpts)
 
     # superposition: addition
     # (highly inefficient and ugly but should work)
-    def __add__(self, other: State) -> State:
-        data = []
+    def __add__(self, other: Self) -> Self:
+        data: List[Tuple[Union[float, complex], S]] = []
         # add components that are in self but not in other
         for amp1, cpt1 in self.data:
             only_in_self = True
@@ -787,30 +811,30 @@ class State:
                 if cpt2 == cpt1:
                     data.append((amp1 + amp2, cpt1))
                     break
-        return State(data)
+        return self._create_new_instance(data)
 
     # superposition: subtraction
-    def __sub__(self, other: State) -> State:
+    def __sub__(self, other: Self) -> Self:
         return self + -1 * other
 
     # scalar product (psi * a)
-    def __mul__(self, a: Union[float, complex, int]) -> State:
-        return State([(a * amp, psi) for amp, psi in self.data])
+    def __mul__(self, a: Union[float, complex, int]) -> Self:
+        return self._create_new_instance([(a * amp, psi) for amp, psi in self.data])
 
     # scalar product (a * psi)
-    def __rmul__(self, a: Union[float, complex, int]) -> State:
+    def __rmul__(self, a: Union[float, complex, int]) -> Self:
         return self * a
 
     # scalar division (psi / a)
-    def __truediv__(self, a: Union[float, complex, int]) -> State:
+    def __truediv__(self, a: Union[float, complex, int]) -> Self:
         return self * (1 / a)
 
     # negation
-    def __neg__(self) -> State:
+    def __neg__(self) -> Self:
         return -1 * self
 
     # inner product
-    def __matmul__(self, other: State) -> Union[int, float, complex]:
+    def __matmul__(self, other: Self) -> Union[int, float, complex]:
         result = 0
         for amp1, psi1 in self:
             for amp2, psi2 in other:
@@ -838,7 +862,7 @@ class State:
         Returns:
             bool: True if equal, False if not
         """
-        if not isinstance(other, State):
+        if not isinstance(other, self.__class__):
             return False
         else:
             S1 = self.order_by_amp()
@@ -853,11 +877,6 @@ class State:
     # direct access to a component
     def __getitem__(self, i: int) -> Tuple[Union[complex, float, int], BasisState]:
         return self.data[i]
-
-    # this breaks the code, havent figured out why yet, has something to do with the
-    # __add__ function I think
-    # def __len__(self):
-    #     return len(self.data)
 
     def __repr__(self) -> str:
         ordered = self.order_by_amp()
@@ -877,68 +896,35 @@ class State:
         else:
             return string
 
+    def find_largest_component(self) -> S:
+        # Order the state by amplitude
+        state = self.order_by_amp()
+
+        return state.data[0][1]
+
     @property
-    def largest(self) -> Union[CoupledBasisState, UncoupledBasisState]:
+    def largest(self) -> S:
         return self.find_largest_component()
 
-    # Some utility functions
-    # Function for normalizing states
-    def normalize(self) -> State:
+    def normalize(self) -> Self:
         data = []
         N = np.sqrt(self @ self)
         for amp, basis_state in self.data:
             data.append((amp / N, basis_state))
 
-        return State(data)
-
-    # Function that displays the state as a sum of the basis states
-    def print_state(self, tol: float = 0.1, probabilities: bool = False):
-        for amp, basis_state in self.data:
-            if np.abs(amp) > tol:
-                if probabilities:
-                    amp = np.abs(amp) ** 2
-                if np.real(complex(amp)) > 0:
-                    print("+", end="")
-                string = basis_state.print_quantum_numbers(printing=False)
-                string = "{:.4f}".format(complex(amp)) + " x " + string  # type: ignore
-                print(string)
-
-    # Function that returns state vector in given basis
-    def state_vector(
-        self,
-        QN: Union[
-            Sequence[BasisState],
-            Sequence[CoupledBasisState],
-            Sequence[UncoupledBasisState],
-            Sequence[State],
-        ],
-    ) -> npt.NDArray[np.complex128]:
-        state_vector = [1 * state @ self for state in QN]
-        return np.array(state_vector, dtype=complex)
-
-    # Method that generates a density matrix from state
-    def density_matrix(
-        self, QN: Union[Sequence[BasisState], Sequence[State]]
-    ) -> npt.NDArray[np.complex128]:
-        # Get state vector
-        state_vec = self.state_vector(QN)
-
-        # Generate density matrix from state vector
-        density_matrix = np.tensordot(state_vec.conj(), state_vec, axes=0)
-
-        return density_matrix
+        return self._create_new_instance(data)
 
     # Method that removes components that are smaller than tolerance from the state
-    def remove_small_components(self, tol: float = 1e-3) -> State:
+    def remove_small_components(self, tol: float = 1e-3) -> Self:
         purged_data = []
         for amp, basis_state in self.data:
             if np.abs(amp) > tol:
                 purged_data.append((amp, basis_state))
 
-        return State(purged_data, energy=self.energy)
+        return self._create_new_instance(purged_data)
 
     # Method for ordering states in descending order of amp^2
-    def order_by_amp(self) -> State:
+    def order_by_amp(self) -> Self:
         data = self.data
         amp_array = np.zeros(len(data))
 
@@ -953,7 +939,7 @@ class State:
         reordered_data = data
         reordered_data = [reordered_data[i] for i in index]
 
-        return State(reordered_data)
+        return self._create_new_instance(reordered_data)
 
     # Method for printing largest component basis states
     def print_largest_components(self, n: int = 1) -> str:
@@ -969,128 +955,151 @@ class State:
 
         return string
 
-    def find_largest_component(self) -> Union[CoupledBasisState, UncoupledBasisState]:
-        # Order the state by amplitude
-        state = self.order_by_amp()
+    def state_vector(
+        self,
+        QN: Sequence[S],
+    ) -> npt.NDArray[np.complex128]:
+        state_vector = [1 * state @ self for state in QN]
+        return np.array(state_vector, dtype=complex)
 
-        return state.data[0][1]
+    # Method that generates a density matrix from state
+    def density_matrix(
+        self,
+        QN: Sequence[S],
+    ) -> npt.NDArray[np.complex128]:
+        # Get state vector
+        state_vec = self.state_vector(QN)
 
-    # Method for converting the state into the coupled basis
-    def transform_to_coupled(self) -> State:
-        # Loop over the basis states, check if they are already in uncoupled
-        # basis and if not convert to coupled basis, output state in new basis
-        state_in_coupled_basis = State()
+        # Generate density matrix from state vector
+        density_matrix = np.tensordot(state_vec.conj(), state_vec, axes=0)
 
-        for amp, basis_state in self.data:
-            if basis_state.isCoupled:
-                state_in_coupled_basis += State([(amp, basis_state)])
-            if basis_state.isUncoupled:
-                state_in_coupled_basis += amp * basis_state.transform_to_coupled()
-
-        return state_in_coupled_basis
-
-    # Method for converting the state into the uncoupled basis
-    def transform_to_uncoupled(self) -> State:
-        # Loop over the basis states, check if they are already in uncoupled
-        # basis and if not convert to uncoupled basis, output state in new basis
-        state_in_uncoupled_basis = State()
-
-        for amp, basis_state in self.data:
-            if basis_state.isUncoupled:
-                state_in_uncoupled_basis += State([(amp, basis_state)])
-            if basis_state.isCoupled:
-                state_in_uncoupled_basis += amp * basis_state.transform_to_uncoupled()
-
-        return state_in_uncoupled_basis
+        return density_matrix
 
     # Method for transforming all basis states to omega basis
-    def transform_to_omega_basis(self) -> State:
-        state = State()
+    def transform_to_omega_basis(self) -> Self:
+        state = self._create_new_instance(data=[])
         for amp, basis_state in self.data:
             state += amp * basis_state.transform_to_omega_basis()
 
         return state
 
     # Method for transforming all basis states to parity basis
-    def transform_to_parity_basis(self) -> State:
-        state = State()
+    def transform_to_parity_basis(self) -> Self:
+        state = self._create_new_instance(data=[])
         for amp, basis_state in self.data:
             state += amp * basis_state.transform_to_parity_basis()
 
         return state
 
-    # Method for obtaining time-reversed version of state (i.e. just reverse all
-    # projection quantum numbers)
-    def time_reversed(self) -> State:
-        new_data: List[Tuple[Union[int, float, complex], BasisState]] = []
+
+class CoupledState(State):
+    def __init__(
+        self,
+        data: Sequence[Tuple[Union[int, float, complex], CoupledBasisState]] = [],
+        remove_zero_amp_cpts: bool = True,
+    ):
+        super().__init__(data=data, remove_zero_amp_cpts=remove_zero_amp_cpts)
+
+    def _create_new_instance(
+        self,
+        data: Sequence[Tuple[Union[int, float, complex], CoupledBasisState]],
+        remove_zero_amp_cpts: bool = True,
+    ):
+        return CoupledState(data, remove_zero_amp_cpts)
+
+    def find_largest_component(self) -> CoupledBasisState:
+        return super().find_largest_component()
+
+    @property
+    def largest(self) -> CoupledBasisState:
+        return super().largest
+
+    # Function that returns state vector in given basis
+    def state_vector(
+        self,
+        QN: Union[
+            Sequence[CoupledBasisState],
+            Sequence[CoupledState],
+        ],
+    ) -> npt.NDArray[np.complex128]:
+        return super().state_vector(QN)
+
+    # Method that generates a density matrix from state
+    def density_matrix(
+        self, QN: Union[Sequence[CoupledBasisState], Sequence[CoupledState]]
+    ) -> npt.NDArray[np.complex128]:
+        return super().density_matrix(QN)
+
+    # Method for converting the state into the uncoupled basis
+    def transform_to_uncoupled(self) -> UncoupledState:
+        # Loop over the basis states, check if they are already in uncoupled
+        # basis and if not convert to uncoupled basis, output state in new basis
+        state_in_uncoupled_basis = UncoupledState()
 
         for amp, basis_state in self.data:
-            electronic_state = basis_state.electronic_state
-            P = basis_state.P
-            Omega = basis_state.Omega
+            if basis_state.isUncoupled:
+                state_in_uncoupled_basis += UncoupledState([(amp, basis_state)])
             if basis_state.isCoupled:
-                F = basis_state.F
-                mF = -basis_state.mF
-                F1 = basis_state.F1
-                J = basis_state.J
-                I1 = basis_state.I1
-                I2 = basis_state.I2
+                state_in_uncoupled_basis += amp * basis_state.transform_to_uncoupled()
 
-                new_data.append(
-                    (
-                        amp,
-                        CoupledBasisState(
-                            F,
-                            mF,
-                            F1,
-                            J,
-                            I1,
-                            I2,
-                            electronic_state=electronic_state,
-                            P=P,
-                            Omega=Omega,
-                        ),
-                    )
-                )
+        return state_in_uncoupled_basis
 
-            elif basis_state.isUncoupled:
-                J = basis_state.J
-                mJ = -basis_state.mJ
-                I1 = basis_state.I1
-                m1 = -basis_state.m1
-                I2 = basis_state.I2
-                m2 = -basis_state.m2
 
-                new_data.append(
-                    (
-                        amp,
-                        UncoupledBasisState(
-                            J,
-                            mJ,
-                            I1,
-                            m1,
-                            I2,
-                            m2,
-                            electronic_state=electronic_state,
-                            P=P,
-                            Omega=Omega,
-                        ),
-                    )
-                )
+class UncoupledState(State):
+    def __init__(
+        self,
+        data: Sequence[Tuple[Union[int, float, complex], UncoupledBasisState]] = [],
+        remove_zero_amp_cpts: bool = True,
+    ):
+        super().__init__(data=data, remove_zero_amp_cpts=remove_zero_amp_cpts)
 
-        return State(new_data)
+    def _create_new_instance(
+        self,
+        data: Sequence[Tuple[int | float | complex, UncoupledBasisState]],
+        remove_zero_amp_cpts: bool = True,
+    ) -> UncoupledState:
+        return UncoupledState(data, remove_zero_amp_cpts)
 
-    # Method for making the largest coefficient real
-    def make_real(self) -> State:
-        reordered_state = self.order_by_amp()
-        a = reordered_state.data[0][0]
-        arg = np.arctan(np.imag(a) / np.real(a))
+    def find_largest_component(self) -> UncoupledBasisState:
+        return super().find_largest_component()
 
-        return self * np.exp(-1j * arg * np.sign(np.imag(a)))
+    @property
+    def largest(self) -> UncoupledBasisState:
+        return super().largest
+
+    # Function that returns state vector in given basis
+    def state_vector(
+        self,
+        QN: Union[
+            Sequence[UncoupledBasisState],
+            Sequence[UncoupledState],
+        ],
+    ) -> npt.NDArray[np.complex128]:
+        return super().state_vector(QN)
+
+    # Method that generates a density matrix from state
+    def density_matrix(
+        self, QN: Union[Sequence[UncoupledBasisState], Sequence[UncoupledState]]
+    ) -> npt.NDArray[np.complex128]:
+        return super().density_matrix(QN)
+
+    # Method for converting the state into the coupled basis
+    def transform_to_coupled(self) -> CoupledState:
+        # Loop over the basis states, check if they are already in uncoupled
+        # basis and if not convert to coupled basis, output state in new basis
+        state_in_coupled_basis = CoupledState()
+
+        for amp, basis_state in self.data:
+            if basis_state.isCoupled:
+                state_in_coupled_basis += CoupledState([(amp, basis_state)])
+            if basis_state.isUncoupled:
+                state_in_coupled_basis += amp * basis_state.transform_to_coupled()
+
+        return state_in_coupled_basis
 
 
 def BasisStates_from_State(
-    states: Union[Sequence[State], npt.NDArray[Any]]
+    states: Union[Sequence[State], npt.NDArray[Any]],
 ) -> npt.NDArray[Any]:
     unique = []
     for state in states:
@@ -1100,7 +1109,17 @@ def BasisStates_from_State(
     return np.array(unique)
 
 
+@overload
 def basisstate_to_state_list(
-    states: Union[Sequence[CoupledBasisState], Sequence[UncoupledBasisState]]
-) -> List[State]:
+    states: Sequence[CoupledBasisState],
+) -> List[CoupledState]: ...
+
+
+@overload
+def basisstate_to_state_list(
+    states: Sequence[UncoupledBasisState],
+) -> List[UncoupledState]: ...
+
+
+def basisstate_to_state_list(states):
     return [1 * bs for bs in states]

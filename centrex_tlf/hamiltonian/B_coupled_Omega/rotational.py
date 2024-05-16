@@ -1,13 +1,13 @@
 from functools import lru_cache
 
-from centrex_tlf.states import CoupledBasisState, State
+from centrex_tlf.states import CoupledBasisState, CoupledState
 
 from ..constants import BConstants
 from ..quantum_operators import J2, J4, J6
 
 
 @lru_cache(maxsize=int(1e6))
-def Hrot(psi: CoupledBasisState, constants: BConstants) -> State:
+def Hrot(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Rotational Hamiltonian for the B-state.
     """

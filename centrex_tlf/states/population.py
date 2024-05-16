@@ -6,7 +6,7 @@ import numpy.typing as npt
 from scipy import constants as cst
 
 from .find_states import QuantumSelector
-from .states import State
+from .states import CoupledState
 from .utils_compact import compact_QN_coupled_indices
 
 __all__ = [
@@ -53,7 +53,7 @@ def J_levels(J: int) -> int:
 
 def generate_thermal_population_states(
     states_to_fill: Union[Sequence[QuantumSelector], QuantumSelector],
-    states: Sequence[State],
+    states: Sequence[CoupledState],
     T: float,
     qn_compact: Optional[Union[Sequence[QuantumSelector], QuantumSelector]] = None,
 ) -> npt.NDArray[np.complex_]:

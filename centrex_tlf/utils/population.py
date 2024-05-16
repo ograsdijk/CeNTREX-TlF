@@ -1,4 +1,4 @@
-from typing import Sequence, Union
+from typing import Sequence, Union, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -27,7 +27,19 @@ def J_levels(J: int) -> int:
     return 4 * (2 * J + 1)
 
 
-def thermal_population(J: int, T: float, B: float = 6.66733e9, n: int = 100) -> float:
+@overload
+def thermal_population(
+    J: npt.NDArray[np.int_], T: float, B: float = 6.66733e9, n: int = 100
+) -> npt.NDArray[np.float_]: ...
+
+
+@overload
+def thermal_population(
+    J: int, T: float, B: float = 6.66733e9, n: int = 100
+) -> float: ...
+
+
+def thermal_population(J, T, B=6.66733e9, n=100):
     """
     Thermal population of a given J sublevel
 
@@ -74,7 +86,7 @@ def generate_uniform_population_states(
         Sequence[states.QuantumSelector],
         states.QuantumSelector,
     ],
-    QN: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
 ) -> npt.NDArray[np.complex_]:
     """
     spread population uniformly over the given states
@@ -107,12 +119,12 @@ def generate_uniform_population_states(
 
 def generate_thermal_population_states(
     temperature: float,
-    QN: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
 ) -> npt.NDArray[np.complex_]:
     levels = len(QN)
     ρ = np.zeros([levels, levels], dtype=complex)
 
-    assert isinstance(QN[0], states.State), "no State objects supplies"
+    assert isinstance(QN[0], states.CoupledState), "no State objects supplies"
 
     j_levels = np.unique([qn.largest.J for qn in QN])
 

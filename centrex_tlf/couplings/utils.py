@@ -155,10 +155,10 @@ def ΔmF_allowed(
 
 
 def select_main_states(
-    ground_states: Sequence[states.State],
-    excited_states: Sequence[states.State],
+    ground_states: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
     polarization: npt.NDArray[np.complex_],
-) -> Tuple[states.State, states.State]:
+) -> Tuple[states.CoupledState, states.CoupledState]:
     """Select main states for calculating the transition strength to normalize
     the Rabi rate with
 

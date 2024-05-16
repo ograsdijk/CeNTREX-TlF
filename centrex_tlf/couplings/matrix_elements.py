@@ -1,5 +1,6 @@
+import math
 from functools import lru_cache
-from typing import Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -10,8 +11,8 @@ __all__ = ["calculate_ED_ME_mixed_state", "ED_ME_coupled"]
 
 
 def calculate_ED_ME_mixed_state(
-    bra: states.State,
-    ket: states.State,
+    bra: states.CoupledState,
+    ket: states.CoupledState,
     pol_vec: npt.NDArray[np.complex_] = np.array([1.0, 1.0, 1.0], dtype=np.complex_),
     reduced: bool = False,
     normalize_pol: bool = True,
@@ -81,25 +82,24 @@ def ED_ME_coupled(
 
     # calculate the reduced matrix element
     q = Omega - Omegap
-    ME = (
+    ME: complex = (
         (-1) ** (F1 + J + Fp + F1p + I1 + I2)
-        * np.sqrt((2 * F + 1) * (2 * Fp + 1) * (2 * F1p + 1) * (2 * F1 + 1))
+        * math.sqrt((2 * F + 1) * (2 * Fp + 1) * (2 * F1p + 1) * (2 * F1 + 1))
         * hamiltonian.sixj_f(F1p, Fp, I2, F, F1, 1)
         * hamiltonian.sixj_f(Jp, F1p, I1, F1, J, 1)
         * (-1) ** (J - Omega)
-        * np.sqrt((2 * J + 1) * (2 * Jp + 1))
+        * math.sqrt((2 * J + 1) * (2 * Jp + 1))
         * hamiltonian.threej_f(J, 1, Jp, -Omega, q, Omegap)
         * float(np.abs(q) < 2)
     )
 
     # if we want the complete matrix element, calculate angular part
     if not rme_only:
-
         # calculate elements of the polarization vector in spherical basis
-        p_vec = {}
-        p_vec[-1] = -1 / np.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1])
+        p_vec: Dict[int, complex] = {}
+        p_vec[-1] = -1 / math.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1])
         p_vec[0] = pol_vec[2]
-        p_vec[1] = +1 / np.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1])
+        p_vec[1] = +1 / math.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1])
 
         # calculate the value of p that connects the states
         p = mF - mFp

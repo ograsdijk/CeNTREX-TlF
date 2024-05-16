@@ -1,6 +1,6 @@
 import numpy as np
 
-from centrex_tlf.states import State, UncoupledBasisState
+from centrex_tlf.states import UncoupledBasisState, UncoupledState
 
 from .constants import BConstants
 from .wigner import threej_f
@@ -13,7 +13,7 @@ __all__ = ["H_LD", "H_c1p", "H_mhf_Tl", "H_mhf_F", "HZx", "HZy", "HZz"]
 ########################################################
 
 
-def H_LD(psi: UncoupledBasisState, coefficients: BConstants) -> State:
+def H_LD(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
     J = psi.J
     mJ = psi.mJ
     I1 = psi.I1
@@ -36,7 +36,7 @@ def H_LD(psi: UncoupledBasisState, coefficients: BConstants) -> State:
         J, mJ, I1, m1, I2, m2, Omegaprime, electronic_state=psi.electronic_state
     )
 
-    return State([(amp, ket)])
+    return UncoupledState([(amp, ket)])
 
 
 ########################################################
@@ -45,7 +45,7 @@ def H_LD(psi: UncoupledBasisState, coefficients: BConstants) -> State:
 ########################################################
 
 
-def H_c1p(psi: UncoupledBasisState, coefficients: BConstants) -> State:
+def H_c1p(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
     # Find the quantum numbers of the input state
     J = psi.J
     mJ = psi.mJ
@@ -135,7 +135,7 @@ def H_c1p(psi: UncoupledBasisState, coefficients: BConstants) -> State:
                 if amp != 0:
                     data.append((amp, basis_state))
 
-    return State(data)
+    return UncoupledState(data)
 
 
 ########################################################
@@ -143,7 +143,7 @@ def H_c1p(psi: UncoupledBasisState, coefficients: BConstants) -> State:
 ########################################################
 
 
-def H_mhf_Tl(psi: UncoupledBasisState, coefficients: BConstants) -> State:
+def H_mhf_Tl(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
     # Find the quantum numbers of the input state
     J = psi.J
     mJ = psi.mJ
@@ -198,10 +198,10 @@ def H_mhf_Tl(psi: UncoupledBasisState, coefficients: BConstants) -> State:
                 if amp != 0:
                     data.append((amp, basis_state))
 
-    return State(data)
+    return UncoupledState(data)
 
 
-def H_mhf_F(psi: UncoupledBasisState, coefficients: BConstants) -> State:
+def H_mhf_F(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
     # Find the quantum numbers of the input state
     J = psi.J
     mJ = psi.mJ
@@ -256,7 +256,7 @@ def H_mhf_F(psi: UncoupledBasisState, coefficients: BConstants) -> State:
                 if amp != 0:
                     data.append((amp, basis_state))
 
-    return State(data)
+    return UncoupledState(data)
 
 
 ########################################################
@@ -264,17 +264,17 @@ def H_mhf_F(psi: UncoupledBasisState, coefficients: BConstants) -> State:
 ########################################################
 
 
-def HZx(psi: UncoupledBasisState) -> State:
+def HZx(psi: UncoupledBasisState) -> UncoupledState:
     # TODO
-    return State([(1.0, psi)])
+    return UncoupledState([(1.0, psi)])
 
 
-def HZy(psi: UncoupledBasisState) -> State:
+def HZy(psi: UncoupledBasisState) -> UncoupledState:
     # TODO
-    return State([(1.0, psi)])
+    return UncoupledState([(1.0, psi)])
 
 
-def HZz(psi: UncoupledBasisState, coefficients: BConstants) -> State:
+def HZz(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
     # Find the quantum numbers of the input state
     J = psi.J
     mJ = psi.mJ
@@ -300,7 +300,6 @@ def HZz(psi: UncoupledBasisState, coefficients: BConstants) -> State:
 
     # Loop over possible values of Jprime
     for Jprime in range(np.abs(J - 1), J + 2):
-
         # Electron orbital angular momentum term
         L_term = (
             coefficients.gL
@@ -331,4 +330,4 @@ def HZz(psi: UncoupledBasisState, coefficients: BConstants) -> State:
         if amp != 0:
             data.append((amp, basis_state))
 
-    return State(data)
+    return UncoupledState(data)

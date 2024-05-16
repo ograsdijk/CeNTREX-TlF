@@ -9,6 +9,7 @@ from typing import (
     TypeVar,
     Union,
     no_type_check,
+    overload,
 )
 
 import numpy as np
@@ -17,9 +18,10 @@ import numpy.typing as npt
 from .states import (
     BasisState,
     CoupledBasisState,
+    CoupledState,
     ElectronicState,
-    State,
     UncoupledBasisState,
+    UncoupledState,
 )
 from .utils import get_unique_list, reorder_evecs
 
@@ -62,7 +64,9 @@ class QuantumSelector:
 
     def get_indices(
         self,
-        QN: Union[Sequence[State], Sequence[CoupledBasisState], npt.NDArray[Any]],
+        QN: Union[
+            Sequence[CoupledState], Sequence[CoupledBasisState], npt.NDArray[Any]
+        ],
         mode: str = "python",
     ) -> npt.NDArray[np.int_]:
         return get_indices_quantumnumbers_base(self, QN, mode)
@@ -70,8 +74,8 @@ class QuantumSelector:
 
 def find_state_idx_from_state(
     H: npt.NDArray[np.complex128],
-    reference_state: State,
-    QN: Sequence[State],
+    reference_state: CoupledState,
+    QN: Sequence[CoupledState],
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
 ) -> int:
     """Determine the index of the state vector most closely corresponding to an
@@ -126,7 +130,7 @@ def find_closest_vector_idx(
     return idx
 
 
-def check_approx_state_exact_state(approx: State, exact: State) -> None:
+def check_approx_state_exact_state(approx: CoupledState, exact: CoupledState) -> None:
     """Check if the exact found states match the approximate states. The exact
     states are found from the eigenvectors of the hamiltonian and are often a
     superposition of various states.
@@ -168,11 +172,29 @@ def check_approx_state_exact_state(approx: State, exact: State) -> None:
         raise NotImplementedError
 
 
+@overload
 def find_exact_states_indices(
-    states_approx: Sequence[State],
-    QN_construct: Union[
-        Sequence[State], Sequence[CoupledBasisState], Sequence[UncoupledBasisState]
-    ],
+    states_approx: CoupledState,
+    QN_construct: CoupledBasisState,
+    H: Optional[npt.NDArray[np.complex128]] = None,
+    V: Optional[npt.NDArray[np.complex128]] = None,
+    V_ref: Optional[npt.NDArray[np.complex128]] = None,
+) -> npt.NDArray[np.int_]: ...
+
+
+@overload
+def find_exact_states_indices(
+    states_approx: UncoupledState,
+    QN_construct: UncoupledBasisState,
+    H: Optional[npt.NDArray[np.complex128]] = None,
+    V: Optional[npt.NDArray[np.complex128]] = None,
+    V_ref: Optional[npt.NDArray[np.complex128]] = None,
+) -> npt.NDArray[np.int_]: ...
+
+
+def find_exact_states_indices(
+    states_approx,
+    QN_construct,
     H: Optional[npt.NDArray[np.complex128]] = None,
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
@@ -219,21 +241,41 @@ def find_exact_states_indices(
     return indices
 
 
+@overload
 def find_exact_states(
-    states_approx: Sequence[State],
-    QN_construct: Union[
-        Sequence[State], Sequence[CoupledBasisState], Sequence[UncoupledBasisState]
-    ],
-    QN_basis: Sequence[State],
+    states_approx: Sequence[CoupledState],
+    QN_construct: Union[Sequence[CoupledBasisState], Sequence[CoupledState]],
+    QN_basis: Sequence[CoupledState],
     H: Optional[npt.NDArray[np.complex128]] = None,
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
-) -> List[State]:
+) -> List[CoupledState]: ...
+
+
+@overload
+def find_exact_states(
+    states_approx: Sequence[UncoupledState],
+    QN_construct: Union[Sequence[UncoupledBasisState], Sequence[UncoupledState]],
+    QN_basis: Sequence[UncoupledState],
+    H: Optional[npt.NDArray[np.complex128]] = None,
+    V: Optional[npt.NDArray[np.complex128]] = None,
+    V_ref: Optional[npt.NDArray[np.complex128]] = None,
+) -> List[UncoupledState]: ...
+
+
+def find_exact_states(
+    states_approx,
+    QN_construct,
+    QN_basis,
+    H: Optional[npt.NDArray[np.complex128]] = None,
+    V: Optional[npt.NDArray[np.complex128]] = None,
+    V_ref: Optional[npt.NDArray[np.complex128]] = None,
+):
     """Find closest approximate eigenstates corresponding to states_approx
 
     Args:
         states_approx (list): list of State objects to find the closest match to
-        QN_construct (list): list of State objects from which H was constructed
+        QN_construct (list): list of BasisState objects from which H was constructed
         QN_basis (list): list of State objects defining the basis for H
         H (np.ndarray): Hamiltonian, diagonal in basis QN_basis
         V (np.ndarray): eigenvectors in basis QN_basis
@@ -249,7 +291,7 @@ def find_exact_states(
 @no_type_check
 def get_indices_quantumnumbers_base(
     qn_selector: QuantumSelector,
-    QN: Union[Sequence[State], Sequence[CoupledBasisState], npt.NDArray[Any]],
+    QN: Union[Sequence[CoupledState], Sequence[CoupledBasisState], npt.NDArray[Any]],
     mode: str = "python",
 ) -> npt.NDArray[np.int_]:
     """Return the indices corresponding to all states in QN that correspond to
@@ -274,7 +316,7 @@ def get_indices_quantumnumbers_base(
     assert isinstance(
         qn_selector, QuantumSelector
     ), "supply a QuantumSelector object to select states"
-    if isinstance(QN[0], State):
+    if isinstance(QN[0], CoupledState):
         Js = np.array([s.largest.J for s in QN])
         F1s = np.array([s.largest.F1 for s in QN])
         Fs = np.array([s.largest.F for s in QN])
@@ -330,7 +372,7 @@ def get_indices_quantumnumbers_base(
 
 def get_indices_quantumnumbers(
     qn_selector: Union[QuantumSelector, Sequence[QuantumSelector], npt.NDArray[Any]],
-    QN: Union[Sequence[State], Sequence[CoupledBasisState], npt.NDArray[Any]],
+    QN: Union[Sequence[CoupledState], Sequence[CoupledBasisState], npt.NDArray[Any]],
 ) -> npt.NDArray[np.int_]:
     """return the indices corresponding to all states in QN that correspond to
     the quantum numbers in QuantumSelector or a list of QuantumSelector objects.
@@ -384,7 +426,9 @@ def get_unique_basisstates_from_basisstates(
     return get_unique_list(states)
 
 
-def get_unique_basisstates_from_states(states: Sequence[State]) -> List[BasisState]:
+def get_unique_basisstates_from_states(
+    states: Sequence[CoupledState],
+) -> List[BasisState]:
     """
     get a Sequence of unique BasisStates in a sequence of State objects
 
@@ -395,7 +439,7 @@ def get_unique_basisstates_from_states(states: Sequence[State]) -> List[BasisSta
         Sequence[BasisState]: Sequence of unique BasisStates that comprise the input
                                 States
     """
-    assert isinstance(states[0], State), "Not a sequence of State objects"
+    assert isinstance(states[0], CoupledState), "Not a sequence of State objects"
     return get_unique_basisstates_from_basisstates(
         [s for S in states for a, s in S.data]
     )

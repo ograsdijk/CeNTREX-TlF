@@ -44,13 +44,11 @@ def multipas_prism_order(passes: int) -> List[int]:
 @overload
 def gaussian(
     x: npt.NDArray[np.float_], mean: float, sigma: float
-) -> npt.NDArray[np.float_]:
-    ...
+) -> npt.NDArray[np.float_]: ...
 
 
 @overload
-def gaussian(x: float, mean: float, sigma: float) -> float:
-    ...
+def gaussian(x: float, mean: float, sigma: float) -> float: ...
 
 
 def gaussian(x, mean, sigma):
@@ -71,13 +69,11 @@ def gaussian(x, mean, sigma):
 @overload
 def gaussian_amp(
     x: npt.NDArray[np.float_], a: float, mean: float, sigma: float
-) -> npt.NDArray[np.float_]:
-    ...
+) -> npt.NDArray[np.float_]: ...
 
 
 @overload
-def gaussian_amp(x: float, a: float, mean: float, sigma: float) -> float:
-    ...
+def gaussian_amp(x: float, a: float, mean: float, sigma: float) -> float: ...
 
 
 def gaussian_amp(x, a, mean, sigma):
@@ -102,8 +98,7 @@ def gaussian_2d(
     mean_y: float,
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]:
-    ...
+) -> npt.NDArray[np.float_]: ...
 
 
 @overload
@@ -114,8 +109,7 @@ def gaussian_2d(
     mean_y: npt.NDArray[np.float_],
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]:
-    ...
+) -> npt.NDArray[np.float_]: ...
 
 
 @overload
@@ -126,8 +120,7 @@ def gaussian_2d(
     mean_y: float,
     sigma_x: float,
     sigma_y: float,
-) -> float:
-    ...
+) -> float: ...
 
 
 def gaussian_2d(x, y, mean_x, mean_y, sigma_x, sigma_y):
@@ -157,8 +150,7 @@ def gaussian_2d_amp(
     mean_y: float,
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]:
-    ...
+) -> npt.NDArray[np.float_]: ...
 
 
 @overload
@@ -170,8 +162,7 @@ def gaussian_2d_amp(
     mean_y: npt.NDArray[np.float_],
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]:
-    ...
+) -> npt.NDArray[np.float_]: ...
 
 
 @overload
@@ -183,8 +174,7 @@ def gaussian_2d_amp(
     mean_y: float,
     sigma_x: float,
     sigma_y: float,
-) -> float:
-    ...
+) -> float: ...
 
 
 def gaussian_2d_amp(

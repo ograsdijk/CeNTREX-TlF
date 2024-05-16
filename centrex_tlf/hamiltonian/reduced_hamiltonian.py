@@ -9,9 +9,9 @@ from scipy import linalg
 from centrex_tlf.states import (
     Basis,
     CoupledBasisState,
+    CoupledState,
     ElectronicState,
     QuantumSelector,
-    State,
     TlFNuclearSpins,
     find_exact_states,
     generate_uncoupled_states_ground,
@@ -81,7 +81,7 @@ def generate_diagonalized_hamiltonian(
 class ReducedHamiltonian:
     H: npt.NDArray[np.complex128]
     V: npt.NDArray[np.complex128]
-    QN_basis: List[State]
+    QN_basis: List[CoupledState]
     QN_construct: List[CoupledBasisState]
 
     def __iter__(self):
@@ -91,15 +91,15 @@ class ReducedHamiltonian:
 
 def generate_reduced_X_hamiltonian(
     X_states_approx: Sequence[CoupledBasisState],
-    E: npt.NDArray[np.float64] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-3]),
+    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-3]),
     rtol: Optional[float] = None,
     stol: float = 1e-3,
     Jmin: Optional[int] = None,
     Jmax: Optional[int] = None,
     constants: XConstants = XConstants(),
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
-    transform: npt.NDArray[np.complex_] = None,
+    transform: Optional[npt.NDArray[np.complex_]] = None,
     H_func: Optional[Callable] = None,
 ) -> ReducedHamiltonian:
     """
@@ -311,9 +311,9 @@ def compose_reduced_hamiltonian(
 
 @dataclass
 class ReducedHamiltonianTotal:
-    X_states: List[State]
-    B_states: List[State]
-    QN: List[State]
+    X_states: List[CoupledState]
+    B_states: List[CoupledState]
+    QN: List[CoupledState]
     H_int: npt.NDArray[np.complex_]
     V_ref_int: npt.NDArray[np.complex_]
     X_states_basis: List[CoupledBasisState]
@@ -324,8 +324,8 @@ class ReducedHamiltonianTotal:
 def generate_total_reduced_hamiltonian(
     X_states_approx: Sequence[CoupledBasisState],
     B_states_approx: Sequence[CoupledBasisState],
-    E: npt.NDArray[np.float64] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-5]),
+    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
     rtol: Optional[float] = None,
     stol: float = 1e-3,
     Jmin_X: Optional[int] = None,
@@ -335,7 +335,7 @@ def generate_total_reduced_hamiltonian(
     X_constants: XConstants = XConstants(),
     B_constants: BConstants = BConstants(),
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
-    transform: npt.NDArray[np.complex128] = None,
+    transform: Optional[npt.NDArray[np.complex_]] = None,
     H_func_X: Optional[Callable] = None,
     H_func_B: Optional[Callable] = None,
     use_omega_basis: bool = True,

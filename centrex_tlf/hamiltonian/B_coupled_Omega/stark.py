@@ -2,14 +2,14 @@ from functools import lru_cache
 
 import numpy as np
 
-from centrex_tlf.states import CoupledBasisState, State
+from centrex_tlf.states import CoupledBasisState, CoupledState
 
 from ..constants import BConstants
 from ..wigner import sixj_f, threej_f
 
 
 @lru_cache(maxsize=int(1e6))
-def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> State:
+def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
     """
     Operates on psi using the pth spherical tensor component of the
     dipole operator.
@@ -73,11 +73,11 @@ def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> State:
                 if amp != 0:
                     data.append((amp, basis_state))
 
-    return State(data)
+    return CoupledState(data)
 
 
 @lru_cache(maxsize=int(1e6))
-def HSx(psi: CoupledBasisState, constants: BConstants) -> State:
+def HSx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Stark Hamiltonian operator for x-component of electric field
     """
@@ -85,7 +85,7 @@ def HSx(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HSy(psi: CoupledBasisState, constants: BConstants) -> State:
+def HSy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Stark Hamiltonian operator for y-component of electric field
     """
@@ -93,7 +93,7 @@ def HSy(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HSz(psi: CoupledBasisState, constants: BConstants) -> State:
+def HSz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Stark Hamiltonian for z-component of electric field
     """

@@ -2,14 +2,14 @@ from functools import lru_cache
 
 import numpy as np
 
-from centrex_tlf.states import CoupledBasisState, State
+from centrex_tlf.states import CoupledBasisState, CoupledState
 
 from ..constants import BConstants
 from ..wigner import sixj_f, threej_f
 
 
 @lru_cache(maxsize=int(1e6))
-def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> State:
+def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
     """
     Operates on psi using the pth spherical tensor component of the magnetic
     dipole operator.
@@ -79,11 +79,11 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> State:
                 if amp != 0:
                     data.append((amp, basis_state))
 
-    return State(data)
+    return CoupledState(data)
 
 
 @lru_cache(maxsize=int(1e6))
-def HZx(psi: CoupledBasisState, constants: BConstants) -> State:
+def HZx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Zeeman Hamiltonian operator for x-component of magnetic field
     """
@@ -91,7 +91,7 @@ def HZx(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HZy(psi: CoupledBasisState, constants: BConstants) -> State:
+def HZy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Zeeman Hamiltonian operator for y-component of magnetic field
     """
@@ -99,7 +99,7 @@ def HZy(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HZz(psi: CoupledBasisState, constants: BConstants) -> State:
+def HZz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Zeeman Hamiltonian for z-component of magnetic field
     """

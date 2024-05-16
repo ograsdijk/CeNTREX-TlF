@@ -3,14 +3,14 @@ from typing import List, Sequence
 import numpy as np
 import numpy.typing as npt
 
-from .states import State
+from .states import CoupledState
 
 __all__ = ["compact_QN_coupled_indices"]
 
 
 def compact_QN_coupled_indices(
-    QN: Sequence[State], indices_compact: npt.NDArray[np.int_]
-) -> List[State]:
+    QN: Sequence[CoupledState], indices_compact: npt.NDArray[np.int_]
+) -> List[CoupledState]:
     """Compact the states given by indices in indices_compact
 
     Args:

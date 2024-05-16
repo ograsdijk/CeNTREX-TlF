@@ -2,7 +2,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from centrex_tlf.states import State, UncoupledBasisState, parity_X
+from centrex_tlf.states import UncoupledBasisState, UncoupledState, parity_X
 
 from .constants import XConstants
 from .general_uncoupled import Hrot
@@ -48,21 +48,21 @@ __all__ = [
 ########################################################
 
 
-def Hc1(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hc1(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return coefficients.c1 * (
         com(I1z, Jz, psi, coefficients)
         + (1 / 2) * (com(I1p, Jm, psi, coefficients) + com(I1m, Jp, psi, coefficients))
     )
 
 
-def Hc2(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hc2(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return coefficients.c2 * (
         com(I2z, Jz, psi, coefficients)
         + (1 / 2) * (com(I2p, Jm, psi, coefficients) + com(I2m, Jp, psi, coefficients))
     )
 
 
-def Hc4(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hc4(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return coefficients.c4 * (
         com(I1z, I2z, psi, coefficients)
         + (1 / 2)
@@ -70,7 +70,7 @@ def Hc4(psi: UncoupledBasisState, coefficients: XConstants) -> State:
     )
 
 
-def Hc3a(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hc3a(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return (
         15
         * coefficients.c3
@@ -81,7 +81,7 @@ def Hc3a(psi: UncoupledBasisState, coefficients: XConstants) -> State:
     )
 
 
-def Hc3b(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hc3b(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return (
         15
         * coefficients.c3
@@ -92,7 +92,7 @@ def Hc3b(psi: UncoupledBasisState, coefficients: XConstants) -> State:
     )
 
 
-def Hc3c(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hc3c(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return (
         -10
         * coefficients.c3
@@ -103,7 +103,7 @@ def Hc3c(psi: UncoupledBasisState, coefficients: XConstants) -> State:
     )
 
 
-def Hc3(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hc3(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return Hc3a(psi, coefficients) + Hc3b(psi, coefficients) + Hc3c(psi, coefficients)
 
 
@@ -112,7 +112,7 @@ def Hc3(psi: UncoupledBasisState, coefficients: XConstants) -> State:
 ########################################################
 
 
-def Hff(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hff(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return (
         Hrot(psi, coefficients)
         + Hc1(psi, coefficients)
@@ -130,7 +130,7 @@ def Hff(psi: UncoupledBasisState, coefficients: XConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HZx(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def HZx(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     if psi.J != 0:
         return (
             -coefficients.μ_J / psi.J * Jx(psi)
@@ -144,7 +144,7 @@ def HZx(psi: UncoupledBasisState, coefficients: XConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HZy(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def HZy(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     if psi.J != 0:
         return (
             -coefficients.μ_J / psi.J * Jy(psi)
@@ -158,7 +158,7 @@ def HZy(psi: UncoupledBasisState, coefficients: XConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HZz(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def HZz(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     if psi.J != 0:
         return (
             -coefficients.μ_J / psi.J * Jz(psi)
@@ -177,7 +177,7 @@ def HZz(psi: UncoupledBasisState, coefficients: XConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HSx(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def HSx(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return (
         -coefficients.D_TlF
         * (R1m(psi, coefficients) - R1p(psi, coefficients))
@@ -186,7 +186,7 @@ def HSx(psi: UncoupledBasisState, coefficients: XConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HSy(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def HSy(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return (
         -coefficients.D_TlF
         * 1j
@@ -196,14 +196,14 @@ def HSy(psi: UncoupledBasisState, coefficients: XConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HSz(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def HSz(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return -coefficients.D_TlF * R10(psi, coefficients)
 
 
 # Old functions from Jakobs original Hamiltonian
 
 
-def R10(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def R10(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     amp1 = np.sqrt(2) * np.sqrt(
         (psi.J - psi.mJ) * (psi.J + psi.mJ) / (8 * psi.J**2 - 2)
     )
@@ -232,10 +232,10 @@ def R10(psi: UncoupledBasisState, coefficients: XConstants) -> State:
         P=parity_X(psi.J + 1),
         electronic_state=psi.electronic_state,
     )
-    return State([(amp1, ket1), (amp2, ket2)])
+    return UncoupledState([(amp1, ket1), (amp2, ket2)])
 
 
-def R1m(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def R1m(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     amp1 = (
         -0.5
         * np.sqrt(2)
@@ -270,11 +270,11 @@ def R1m(psi: UncoupledBasisState, coefficients: XConstants) -> State:
         P=parity_X(psi.J + 1),
         electronic_state=psi.electronic_state,
     )
-    return State([(amp1, ket1), (amp2, ket2)])
+    return UncoupledState([(amp1, ket1), (amp2, ket2)])
 
 
-def R1p(psi: UncoupledBasisState, coefficients: XConstants) -> State:
-    amp1 = (
+def R1p(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    amp1: float = (
         -0.5
         * np.sqrt(2)
         * np.sqrt((psi.J - psi.mJ) * (psi.J - psi.mJ - 1) / (4 * psi.J**2 - 1))
@@ -290,7 +290,7 @@ def R1p(psi: UncoupledBasisState, coefficients: XConstants) -> State:
         P=parity_X(psi.J - 1),
         electronic_state=psi.electronic_state,
     )
-    amp2 = (
+    amp2: float = (
         0.5
         * np.sqrt(2)
         * np.sqrt(
@@ -308,22 +308,22 @@ def R1p(psi: UncoupledBasisState, coefficients: XConstants) -> State:
         P=parity_X(psi.J + 1),
         electronic_state=psi.electronic_state,
     )
-    return State([(amp1, ket1), (amp2, ket2)])
+    return UncoupledState([(amp1, ket1), (amp2, ket2)])
 
 
-def HI1R(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def HI1R(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return com(I1z, R10, psi, coefficients) + (
         com(I1p, R1m, psi, coefficients) - com(I1m, R1p, psi, coefficients)
     ) / np.sqrt(2)
 
 
-def HI2R(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def HI2R(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return com(I2z, R10, psi, coefficients) + (
         com(I2p, R1m, psi, coefficients) - com(I2m, R1p, psi, coefficients)
     ) / np.sqrt(2)
 
 
-def Hc3_alt(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hc3_alt(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return 5 * coefficients.c3 / coefficients.c4 * Hc4(
         psi, coefficients
     ) - 15 * coefficients.c3 / 2 * (
@@ -332,7 +332,7 @@ def Hc3_alt(psi: UncoupledBasisState, coefficients: XConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def Hff_alt(psi: UncoupledBasisState, coefficients: XConstants) -> State:
+def Hff_alt(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     return (
         Hrot(psi, coefficients)
         + Hc1(psi, coefficients)

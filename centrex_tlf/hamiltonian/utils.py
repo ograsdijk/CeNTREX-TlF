@@ -1,9 +1,14 @@
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Sequence, Tuple, overload
 
 import numpy as np
 import numpy.typing as npt
 
-from centrex_tlf.states import BasisState, State
+from centrex_tlf.states import (
+    CoupledBasisState,
+    CoupledState,
+    UncoupledBasisState,
+    UncoupledState,
+)
 
 __all__ = ["reorder_evecs", "matrix_to_states", "reduced_basis_hamiltonian"]
 
@@ -35,9 +40,19 @@ def reorder_evecs(
     return E_out, V_out
 
 
+@overload
 def matrix_to_states(
-    V: npt.NDArray[np.complex_], QN: Sequence[BasisState], E: Optional[List] = None
-) -> List[State]:
+    V: npt.NDArray[np.complex_], QN: Sequence[CoupledBasisState]
+) -> List[CoupledState]: ...
+
+
+@overload
+def matrix_to_states(
+    V: npt.NDArray[np.complex_], QN: Sequence[UncoupledBasisState]
+) -> List[UncoupledState]: ...
+
+
+def matrix_to_states(V, QN):
     """Turn a matrix of eigenvectors into a list of state objects
     QN is in the basis the diagonal Hamiltonian H was formed from corresponding to the
     eigenvectors V.
@@ -72,10 +87,7 @@ def matrix_to_states(
             data.append((amp, QN[j]))
 
         # store the state in the list
-        state = State(data)
-
-        if E is not None:
-            state.energy = E[i]
+        state = CoupledState(data)
 
         eigenstates.append(state)
 
@@ -84,9 +96,9 @@ def matrix_to_states(
 
 
 def reduced_basis_hamiltonian(
-    basis_original: Sequence[State],
+    basis_original: Sequence[CoupledState],
     H_original: npt.NDArray[np.complex_],
-    basis_reduced: Sequence[State],
+    basis_reduced: Sequence[CoupledState],
 ) -> npt.NDArray[np.complex128]:
     """Generate Hamiltonian for a sub-basis of the original basis
 
@@ -109,6 +121,11 @@ def reduced_basis_hamiltonian(
 
     # Loop over reduced basis states and pick out the correct matrix elements
     # for the Hamiltonian in the reduced basis
+    for i, state_i in enumerate(basis_reduced):
+        for j, state_j in enumerate(basis_reduced):
+            H_red[i, j] = H_original[index_red[i], index_red[j]]
+
+    return H_red
     for i, state_i in enumerate(basis_reduced):
         for j, state_j in enumerate(basis_reduced):
             H_red[i, j] = H_original[index_red[i], index_red[j]]

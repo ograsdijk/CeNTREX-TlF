@@ -41,7 +41,7 @@ def test_basisstate_add():
     QN_uncoupled = states.generate_uncoupled_states_ground(Js=[0, 1])
     state1 = QN_coupled[0]
     state2 = QN_coupled[5]
-    assert state1 + state2 == states.State([(1, state1), (1, state2)])
+    assert state1 + state2 == states.CoupledState([(1, state1), (1, state2)])
     with pytest.raises(TypeError):
         QN_coupled[0] + QN_uncoupled[5]
 
@@ -135,9 +135,9 @@ def test_get_unique_basisstates():
 
 def test_state_add():
     ss = states.generate_coupled_states_ground(Js=[0, 1])
-    state1 = states.State([(1.0, s) for s in ss])
+    state1 = states.CoupledState([(1.0, s) for s in ss])
     ss = states.generate_coupled_states_ground(Js=[1, 2])
-    state2 = states.State([(2.0, s) for s in ss])
+    state2 = states.CoupledState([(2.0, s) for s in ss])
     state_sum = state1 + state2
     state_sum = state_sum.order_by_amp()
     for a, s in state_sum.data:

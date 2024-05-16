@@ -10,8 +10,8 @@ from .wigner import sixj_f, threej_f
 
 
 def generate_ED_ME_mixed_state(
-    bra: states.State,
-    ket: states.State,
+    bra: states.CoupledState,
+    ket: states.CoupledState,
     pol_vec: npt.NDArray[np.complex_] = np.array([1.0, 1.0, 1.0], dtype=np.complex_),
     reduced: bool = False,
     normalize_pol: bool = True,
@@ -94,7 +94,6 @@ def ED_ME_coupled(
 
     # if we want the complete matrix element, calculate angular part
     if not rme_only:
-
         # calculate elements of the polarization vector in spherical basis
         p_vec = {}
         p_vec[-1] = -1 / np.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1])

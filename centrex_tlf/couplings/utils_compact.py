@@ -81,7 +81,7 @@ def compact_C_array_indices(
 
 def compact_coupling_field(
     fields: CouplingFields,
-    QN: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
     qn_compact: Union[Sequence[states.QuantumSelector], states.QuantumSelector],
 ) -> CouplingFields:
     if isinstance(qn_compact, states.QuantumSelector):

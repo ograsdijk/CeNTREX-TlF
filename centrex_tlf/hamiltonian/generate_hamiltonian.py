@@ -5,7 +5,12 @@ from typing import Any, Callable, List, Sequence, Union
 import numpy as np
 import numpy.typing as npt
 
-from centrex_tlf.states import Basis, CoupledBasisState, State, UncoupledBasisState
+from centrex_tlf.states import (
+    Basis,
+    CoupledBasisState,
+    CoupledState,
+    UncoupledBasisState,
+)
 
 from . import B_coupled_Omega, X_uncoupled
 from .constants import BConstants, HamiltonianConstants, XConstants
@@ -43,7 +48,7 @@ def HMatElems(
 
 def HMatElemsBCoupledP(
     H: Callable,
-    QN: Union[Sequence[State], npt.NDArray[Any]],
+    QN: Union[Sequence[CoupledState], npt.NDArray[Any]],
     constants: HamiltonianConstants,
 ) -> npt.NDArray[np.complex128]:
     result = np.zeros((len(QN), len(QN)), dtype=complex)
@@ -242,6 +247,6 @@ def _coupled_ham_func_B(
 
 
 def generate_coupled_hamiltonian_B_function(
-    H: Union[HamiltonianCoupledBP, HamiltonianCoupledBOmega]
+    H: Union[HamiltonianCoupledBP, HamiltonianCoupledBOmega],
 ) -> Callable:
     return partial(_coupled_ham_func_B, H=H)

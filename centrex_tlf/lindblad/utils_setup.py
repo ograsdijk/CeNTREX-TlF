@@ -30,9 +30,9 @@ __all__ = [
 
 @dataclass
 class OBESystem:
-    ground: Sequence[states.State]
-    excited: Sequence[states.State]
-    QN: Sequence[states.State]
+    ground: Sequence[states.CoupledState]
+    excited: Sequence[states.CoupledState]
+    QN: Sequence[states.CoupledState]
     H_int: npt.NDArray[np.complex_]
     V_ref_int: npt.NDArray[np.complex_]
     couplings: List[Any]
@@ -41,7 +41,7 @@ class OBESystem:
     system: smp.matrices.dense.MutableDenseMatrix
     coupling_symbols: Sequence[smp.Symbol]
     polarization_symbols: Sequence[Sequence[smp.Symbol]]
-    QN_original: Optional[Sequence[states.State]] = None
+    QN_original: Optional[Sequence[states.CoupledState]] = None
     decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None
     couplings_original: Optional[List[couplings_tlf.CouplingFields]] = None
 

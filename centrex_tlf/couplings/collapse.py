@@ -1,5 +1,5 @@
 import copy
-from typing import Optional, Sequence, Union
+from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -13,9 +13,9 @@ __all__ = ["collapse_matrices"]
 
 
 def collapse_matrices(
-    QN: Sequence[states.State],
-    ground_states: Sequence[states.State],
-    excited_states: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
+    ground_states: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
     gamma: float = 1,
     tol: float = 1e-4,
     qn_compact: Optional[
@@ -39,7 +39,7 @@ def collapse_matrices(
     C_list = array of collapse matrices
     """
     # Initialize list of collapse matrices
-    C_list = []
+    C_list: List[npt.NDArray[np.float_]] = []
 
     # Start looping over ground and excited states
     for excited_state in excited_states:
@@ -52,7 +52,7 @@ def collapse_matrices(
 
             if np.sqrt(BR) > tol:
                 # Initialize the coupling matrix
-                H = np.zeros((len(QN), len(QN)), dtype=complex)
+                H = np.zeros((len(QN), len(QN)), dtype=np.float64)
                 H[i, j] = np.sqrt(BR * gamma)
 
                 C_list.append(H)

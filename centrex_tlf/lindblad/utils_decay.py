@@ -13,7 +13,7 @@ __all__ = ["DecayChannel"]
 
 @dataclass
 class DecayChannel:
-    ground: states.State
+    ground: states.CoupledState
     excited: states.QuantumSelector
     branching: float
     description: str = ""
@@ -22,8 +22,8 @@ class DecayChannel:
 def add_levels_symbolic_hamiltonian(
     hamiltonian: smp.matrices.dense.MutableDenseMatrix,
     decay_channels: Sequence[DecayChannel],
-    QN: Sequence[states.State],
-    excited_states: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
 ) -> Tuple[List[int], smp.matrices.dense.MutableDenseMatrix]:
     arr = hamiltonian.copy()
     indices = get_insert_level_indices(decay_channels, QN, excited_states)
@@ -34,8 +34,8 @@ def add_levels_symbolic_hamiltonian(
 
 def get_insert_level_indices(
     decay_channels: Sequence[DecayChannel],
-    QN: Sequence[states.State],
-    excited_states: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
 ):
     indices = [i + len(QN) - len(excited_states) for i in range(len(decay_channels))]
     return indices
@@ -51,8 +51,10 @@ def add_level_symbolic_hamiltonian(
 
 
 def add_states_QN(
-    decay_channels: Sequence[DecayChannel], QN: List[states.State], indices: List[int]
-) -> List[states.State]:
+    decay_channels: Sequence[DecayChannel],
+    QN: List[states.CoupledState],
+    indices: List[int],
+) -> List[states.CoupledState]:
     states = copy.copy(QN)
     for idx, decay_channel in zip(indices, decay_channels):
         states.insert(idx, decay_channel.ground)
@@ -73,7 +75,7 @@ def add_levels_C_array(
 def add_decays_C_arrays(
     decay_channels: Sequence[DecayChannel],
     indices: List[int],
-    QN: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
     C_array: npt.NDArray[np.float_],
     Γ: float,
 ) -> npt.NDArray[np.float_]:

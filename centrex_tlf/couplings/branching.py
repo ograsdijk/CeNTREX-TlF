@@ -12,8 +12,8 @@ __all__ = ["calculate_br", "generate_br_dataframe"]
 
 
 def calculate_br(
-    excited_state: states.State,
-    ground_states: Sequence[states.State],
+    excited_state: states.CoupledState,
+    ground_states: Sequence[states.CoupledState],
     tol: float = 1e-3,
 ) -> npt.NDArray[np.float_]:
     # matrix elements between the excited state and the ground states
@@ -31,8 +31,8 @@ def calculate_br(
 
 
 def generate_br_dataframe(
-    ground_states: Sequence[states.State],
-    excited_states: Sequence[states.State],
+    ground_states: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
     group_ground: Optional[str] = None,
     group_excited: bool = True,
     remove_zeros: bool = True,

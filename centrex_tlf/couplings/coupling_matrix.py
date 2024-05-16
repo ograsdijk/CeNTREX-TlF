@@ -22,9 +22,9 @@ __all__ = [
 
 
 def generate_coupling_matrix(
-    QN: Sequence[states.State],
-    ground_states: Sequence[states.State],
-    excited_states: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
+    ground_states: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
     pol_vec: npt.NDArray[np.complex_] = np.array([0.0, 0.0, 1.0], dtype=np.complex_),
     reduced: bool = False,
     normalize_pol: bool = True,
@@ -79,11 +79,11 @@ class CouplingField:
 
 @dataclass
 class CouplingFields:
-    ground_main: states.State
-    excited_main: states.State
+    ground_main: states.CoupledState
+    excited_main: states.CoupledState
     main_coupling: complex
-    ground_states: Sequence[states.State]
-    excited_states: Sequence[states.State]
+    ground_states: Sequence[states.CoupledState]
+    excited_states: Sequence[states.CoupledState]
     fields: Sequence[CouplingField]
 
     def __repr__(self):
@@ -99,7 +99,7 @@ class CouplingFields:
 
 
 def _generate_coupling_dataframe(
-    field: CouplingField, states_list: Sequence[states.State]
+    field: CouplingField, states_list: Sequence[states.CoupledState]
 ) -> pd.DataFrame:
     indices = np.nonzero(np.triu(field.field))
     ground_states = []
@@ -121,7 +121,7 @@ def _generate_coupling_dataframe(
 
 
 def generate_coupling_dataframe(
-    fields: CouplingFields, states_list: Sequence[states.State]
+    fields: CouplingFields, states_list: Sequence[states.CoupledState]
 ) -> Sequence[pd.DataFrame]:
     """
     Generate a list of pandas DataFrames with the non-zero couplings between states
@@ -142,17 +142,17 @@ def generate_coupling_dataframe(
 
 
 def generate_coupling_field(
-    ground_main_approx: states.State,
-    excited_main_approx: states.State,
+    ground_main_approx: states.CoupledState,
+    excited_main_approx: states.CoupledState,
     ground_states_approx: Union[
-        Sequence[states.State], Sequence[states.CoupledBasisState]
+        Sequence[states.CoupledState], Sequence[states.CoupledBasisState]
     ],
     excited_states_approx: Union[
-        Sequence[states.State], Sequence[states.CoupledBasisState]
+        Sequence[states.CoupledState], Sequence[states.CoupledBasisState]
     ],
-    QN_basis: Union[Sequence[states.State], Sequence[states.CoupledBasisState]],
+    QN_basis: Union[Sequence[states.CoupledState], Sequence[states.CoupledBasisState]],
     H_rot: npt.NDArray[np.complex_],
-    QN: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
     V_ref: npt.NDArray[np.complex_],
     pol_main: npt.NDArray[np.complex_] = np.array([0, 0, 1], dtype=np.complex_),
     pol_vecs: Sequence[npt.NDArray[np.complex_]] = [],
@@ -171,9 +171,9 @@ def generate_coupling_field(
     if not np.issubdtype(pol_vecs[0].dtype, np.complex_):
         pol_vecs = [pol.astype(np.complex_) for pol in pol_vecs]
 
-    _ground_states_approx: Sequence[states.State]
-    _excited_states_approx: Sequence[states.State]
-    _QN_basis: Sequence[states.State]
+    _ground_states_approx: Sequence[states.CoupledState]
+    _excited_states_approx: Sequence[states.CoupledState]
+    _QN_basis: Sequence[states.CoupledState]
 
     if isinstance(ground_states_approx[0], CoupledBasisState):
         ground_states_approx = cast(Sequence[CoupledBasisState], ground_states_approx)
@@ -181,7 +181,9 @@ def generate_coupling_field(
             ground_states_approx
         )
     else:
-        _ground_states_approx = cast(Sequence[states.State], ground_states_approx)
+        _ground_states_approx = cast(
+            Sequence[states.CoupledState], ground_states_approx
+        )
 
     if isinstance(excited_states_approx[0], CoupledBasisState):
         excited_states_approx = cast(Sequence[CoupledBasisState], excited_states_approx)
@@ -189,13 +191,15 @@ def generate_coupling_field(
             excited_states_approx
         )
     else:
-        _excited_states_approx = cast(Sequence[states.State], excited_states_approx)
+        _excited_states_approx = cast(
+            Sequence[states.CoupledState], excited_states_approx
+        )
 
     if isinstance(QN_basis[0], CoupledBasisState):
         QN_basis = cast(Sequence[CoupledBasisState], QN_basis)
         _QN_basis = states.states.basisstate_to_state_list(QN_basis)
     else:
-        _QN_basis = cast(Sequence[states.State], QN_basis)
+        _QN_basis = cast(Sequence[states.CoupledState], QN_basis)
 
     ground_states = states.find_exact_states(
         _ground_states_approx, _QN_basis, QN, H_rot, V_ref=V_ref
@@ -249,22 +253,22 @@ def generate_coupling_field(
 
 def generate_coupling_field_automatic(
     ground_states_approx: Union[
-        Sequence[states.State],
+        Sequence[states.CoupledState],
         Sequence[states.CoupledBasisState],
         Sequence[states.UncoupledBasisState],
     ],
     excited_states_approx: Union[
-        Sequence[states.State],
+        Sequence[states.CoupledState],
         Sequence[states.CoupledBasisState],
         Sequence[states.UncoupledBasisState],
     ],
     QN_basis: Union[
-        Sequence[states.State],
+        Sequence[states.CoupledState],
         Sequence[states.CoupledBasisState],
         Sequence[states.UncoupledBasisState],
     ],
     H_rot: npt.NDArray[np.complex_],
-    QN: Sequence[states.State],
+    QN: Sequence[states.CoupledState],
     V_ref: npt.NDArray[np.complex_],
     pol_vecs: Sequence[npt.NDArray[np.complex_]],
     relative_coupling: float = 1e-3,
@@ -307,9 +311,9 @@ def generate_coupling_field_automatic(
         pol_vecs[0], np.ndarray
     ), "supply a Sequence of np.ndarrays with dtype np.float_ for pol_vecs"
 
-    _ground_states_approx: Sequence[states.State]
-    _excited_states_approx: Sequence[states.State]
-    _QN_basis: Sequence[states.State]
+    _ground_states_approx: Sequence[states.CoupledState]
+    _excited_states_approx: Sequence[states.CoupledState]
+    _QN_basis: Sequence[states.CoupledState]
 
     if isinstance(ground_states_approx[0], CoupledBasisState):
         ground_states_approx = cast(Sequence[CoupledBasisState], ground_states_approx)
@@ -317,7 +321,9 @@ def generate_coupling_field_automatic(
             ground_states_approx
         )
     else:
-        _ground_states_approx = cast(Sequence[states.State], ground_states_approx)
+        _ground_states_approx = cast(
+            Sequence[states.CoupledState], ground_states_approx
+        )
 
     if isinstance(excited_states_approx[0], CoupledBasisState):
         excited_states_approx = cast(Sequence[CoupledBasisState], excited_states_approx)
@@ -325,13 +331,15 @@ def generate_coupling_field_automatic(
             excited_states_approx
         )
     else:
-        _excited_states_approx = cast(Sequence[states.State], excited_states_approx)
+        _excited_states_approx = cast(
+            Sequence[states.CoupledState], excited_states_approx
+        )
 
     if isinstance(QN_basis[0], CoupledBasisState):
         QN_basis = cast(Sequence[CoupledBasisState], QN_basis)
         _QN_basis = states.states.basisstate_to_state_list(QN_basis)
     else:
-        _QN_basis = cast(Sequence[states.State], QN_basis)
+        _QN_basis = cast(Sequence[states.CoupledState], QN_basis)
 
     pol_main = pol_vecs[0]
     ground_main_approx, excited_main_approx = select_main_states(

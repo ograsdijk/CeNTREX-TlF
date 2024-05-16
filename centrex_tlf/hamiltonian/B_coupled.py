@@ -2,7 +2,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from centrex_tlf.states import CoupledBasisState, State
+from centrex_tlf.states import CoupledBasisState, CoupledState
 
 from .constants import BConstants
 from .quantum_operators import J2, J4, J6
@@ -24,7 +24,7 @@ __all__ = [
 ]
 
 
-def Hrot(psi: CoupledBasisState, constants: BConstants) -> State:
+def Hrot(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     return (
         constants.B_rot * J2(psi)
         - constants.D_rot * J4(psi)
@@ -37,7 +37,7 @@ def Hrot(psi: CoupledBasisState, constants: BConstants) -> State:
 ###################################################
 
 
-def H_LD(psi: CoupledBasisState, constants: BConstants) -> State:
+def H_LD(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     J = psi.J
     I1 = psi.I1
     I2 = psi.I2
@@ -81,7 +81,7 @@ def H_LD(psi: CoupledBasisState, constants: BConstants) -> State:
         if amp != 0:
             data.append((amp, ket))
 
-    return State(data)
+    return CoupledState(data)
 
 
 ###################################################
@@ -90,7 +90,7 @@ def H_LD(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def H_mhf_Tl(psi: CoupledBasisState, constants: BConstants) -> State:
+def H_mhf_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     # Find the quantum numbers of the input state
     J = psi.J
     I1 = psi.I1
@@ -113,7 +113,6 @@ def H_mhf_Tl(psi: CoupledBasisState, constants: BConstants) -> State:
 
     # Loop over possible values of Jprime
     for Jprime in np.arange(np.abs(J - 1), J + 2):
-
         # Check that the Jprime and Fprime values are physical
         if np.abs(Fprime - Jprime) <= (I1 + I2):
             # Calculate matrix element
@@ -146,11 +145,11 @@ def H_mhf_Tl(psi: CoupledBasisState, constants: BConstants) -> State:
             if amp != 0:
                 data.append((amp, basis_state))
 
-    return State(data)
+    return CoupledState(data)
 
 
 @lru_cache(maxsize=int(1e6))
-def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> State:
+def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     # Find the quantum numbers of the input state
     J = psi.J
     I1 = psi.I1
@@ -174,7 +173,6 @@ def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> State:
     # element can be non-zero
     # Need Jprime = J+1 ... |J-1|
     for Jprime in np.arange(np.abs(J - 1), J + 2):
-
         # Loop over possible values of F1prime
         for F1prime in np.arange(np.abs(Jprime - I1), Jprime + I1 + 1):
             try:
@@ -213,7 +211,7 @@ def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> State:
             if amp != 0:
                 data.append((amp, basis_state))
 
-    return State(data)
+    return CoupledState(data)
 
 
 ###################################################
@@ -221,7 +219,7 @@ def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> State:
 ###################################################
 
 
-def H_c_Tl(psi: CoupledBasisState, constants: BConstants) -> State:
+def H_c_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     # Find the quantum numbers of the input state
     J = psi.J
     I1 = psi.I1
@@ -265,11 +263,11 @@ def H_c_Tl(psi: CoupledBasisState, constants: BConstants) -> State:
     if amp != 0:
         data.append((amp, basis_state))
 
-    return State(data)
+    return CoupledState(data)
 
 
 @lru_cache(maxsize=int(1e6))
-def H_cp1_Tl(psi: CoupledBasisState, constants: BConstants) -> State:
+def H_cp1_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     # Find the quantum numbers of the input state
     J = psi.J
     I1 = psi.I1
@@ -353,11 +351,11 @@ def H_cp1_Tl(psi: CoupledBasisState, constants: BConstants) -> State:
             if amp != 0:
                 data.append((amp, ket))
 
-    return State(data)
+    return CoupledState(data)
 
 
 @lru_cache(maxsize=int(1e6))
-def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> State:
+def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
     """
     Operates on psi using the pth spherical tensor component of the magnetic
     dipole operator.
@@ -426,11 +424,11 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> State:
                 if amp != 0:
                     data.append((amp, basis_state))
 
-    return State(data)
+    return CoupledState(data)
 
 
 @lru_cache(maxsize=int(1e6))
-def HZx(psi: CoupledBasisState, constants: BConstants) -> State:
+def HZx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Zeeman Hamiltonian operator for x-component of magnetic field
     """
@@ -438,7 +436,7 @@ def HZx(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HZy(psi: CoupledBasisState, constants: BConstants) -> State:
+def HZy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Zeeman Hamiltonian operator for y-component of magnetic field
     """
@@ -446,7 +444,7 @@ def HZy(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HZz(psi: CoupledBasisState, constants: BConstants) -> State:
+def HZz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Zeeman Hamiltonian for z-component of magnetic field
     """
@@ -454,7 +452,7 @@ def HZz(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> State:
+def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
     """
     Operates on psi using the pth spherical tensor component of the
     dipole operator.
@@ -518,11 +516,11 @@ def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> State:
                 if amp != 0:
                     data.append((amp, basis_state))
 
-    return State(data)
+    return CoupledState(data)
 
 
 @lru_cache(maxsize=int(1e6))
-def HSx(psi: CoupledBasisState, constants: BConstants) -> State:
+def HSx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Stark Hamiltonian operator for x-component of electric field
     """
@@ -530,7 +528,7 @@ def HSx(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HSy(psi: CoupledBasisState, constants: BConstants) -> State:
+def HSy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Stark Hamiltonian operator for y-component of electric field
     """
@@ -538,7 +536,7 @@ def HSy(psi: CoupledBasisState, constants: BConstants) -> State:
 
 
 @lru_cache(maxsize=int(1e6))
-def HSz(psi: CoupledBasisState, constants: BConstants) -> State:
+def HSz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     Stark Hamiltonian for z-component of electric field
     """

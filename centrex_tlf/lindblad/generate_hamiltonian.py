@@ -19,7 +19,7 @@ __all__ = [
 
 def symbolic_hamiltonian_to_rotating_frame(
     hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    QN: List[states.State],
+    QN: List[states.CoupledState],
     H_int: npt.NDArray[np.complex_],
     couplings: Sequence[couplings_tlf.CouplingFields],
     δs: Sequence[smp.Symbol],
@@ -77,6 +77,8 @@ def symbolic_hamiltonian_to_rotating_frame(
 
     transformed = smp.Matrix(transformed)
 
+    energy_diag = np.diag(H_int)
+
     for idc, (δ, coupling) in enumerate(zip(δs, couplings)):
         # generate transition frequency symbol
         ω = smp.Symbol(f"ω{idc}", real=True)
@@ -84,37 +86,45 @@ def symbolic_hamiltonian_to_rotating_frame(
         idg = QN.index(coupling.ground_main)
         ide = QN.index(coupling.excited_main)
         # transform to δ instead of ω and E
+        # if energy_diag[ide] > energy_diag[idg]:
         transformed = transformed.subs(ω, energies[ide] - energies[idg] + δ)
+        # else:
+        #     transformed = transformed.subs(ω, energies[idg] - energies[ide] + δ)
+
+    idg = QN.index(couplings[0].ground_main)
+    ide = QN.index(couplings[0].excited_main)
+    for idx in range(n_states):
+        transformed[idx, idx] -= energies[ide]
 
     # substitute level energies for symbolic values
     transformed = transformed.subs(
         [(E, val) for E, val in zip(energies, np.diag(H_int))]
     )
 
-    # set energie difference between excited and ground states to zero
-    # should be done automatically when solving for the unitary matrix, not sure
-    # why this is not happening currently
-    for coupling in couplings:
-        idg = QN.index(coupling.ground_main)
-        ide = QN.index(coupling.excited_main)
-        indices_ground = [QN.index(s) for s in coupling.ground_states]
-        indices_excited = [QN.index(s) for s in coupling.excited_states]
-        g = transformed[idg, idg].subs(
-            [(s, 0) for s in transformed[idg, idg].free_symbols]
-        )
-        e = transformed[ide, ide].subs(
-            [(s, 0) for s in transformed[ide, ide].free_symbols]
-        )
-        for idg in indices_ground:
-            transformed[idg, idg] -= g
-        for ide in indices_excited:
-            transformed[ide, ide] -= e
+    # # set energie difference between excited and ground states to zero
+    # # should be done automatically when solving for the unitary matrix, not sure
+    # # why this is not happening currently
+    # for coupling in couplings:
+    #     idg = QN.index(coupling.ground_main)
+    #     ide = QN.index(coupling.excited_main)
+    #     indices_ground = [QN.index(s) for s in coupling.ground_states]
+    #     indices_excited = [QN.index(s) for s in coupling.excited_states]
+    #     g = transformed[idg, idg].subs(
+    #         [(s, 0) for s in transformed[idg, idg].free_symbols]
+    #     )
+    #     e = transformed[ide, ide].subs(
+    #         [(s, 0) for s in transformed[ide, ide].free_symbols]
+    #     )
+    #     for idg in indices_ground:
+    #         transformed[idg, idg] -= g
+    #     for ide in indices_excited:
+    #         transformed[ide, ide] -= e
 
     return transformed
 
 
 def generate_symbolic_hamiltonian(
-    QN: List[states.State],
+    QN: List[states.CoupledState],
     H_int: npt.NDArray[np.complex_],
     couplings: Sequence[couplings_tlf.CouplingFields],
     Ωs: Sequence[smp.Symbol],
@@ -190,38 +200,35 @@ def generate_symbolic_hamiltonian(
 
 @overload
 def generate_total_symbolic_hamiltonian(
-    QN: List[states.State],
+    QN: List[states.CoupledState],
     H_int: npt.NDArray[np.complex_],
     couplings: List[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
     qn_compact: Literal[None],
-) -> smp.matrices.dense.MutableDenseMatrix:
-    ...
+) -> smp.matrices.dense.MutableDenseMatrix: ...
 
 
 @overload
 def generate_total_symbolic_hamiltonian(
-    QN: List[states.State],
+    QN: List[states.CoupledState],
     H_int: npt.NDArray[np.complex_],
     couplings: List[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
-) -> smp.matrices.dense.MutableDenseMatrix:
-    ...
+) -> smp.matrices.dense.MutableDenseMatrix: ...
 
 
 @overload
 def generate_total_symbolic_hamiltonian(
-    QN: List[states.State],
+    QN: List[states.CoupledState],
     H_int: npt.NDArray[np.complex_],
     couplings: Sequence[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
     qn_compact: Union[Sequence[states.QuantumSelector], states.QuantumSelector],
-) -> Tuple[smp.matrices.dense.MutableDenseMatrix, List[states.State]]:
-    ...
+) -> Tuple[smp.matrices.dense.MutableDenseMatrix, List[states.CoupledState]]: ...
 
 
 def generate_total_symbolic_hamiltonian(
-    QN: List[states.State],
+    QN: List[states.CoupledState],
     H_int: npt.NDArray[np.complex_],
     couplings: Sequence[Any],
     transitions: Sequence[Any],
@@ -229,7 +236,7 @@ def generate_total_symbolic_hamiltonian(
         Union[Sequence[states.QuantumSelector], states.QuantumSelector]
     ] = None,
 ) -> Union[
-    Tuple[smp.matrices.dense.MutableDenseMatrix, List[states.State]],
+    Tuple[smp.matrices.dense.MutableDenseMatrix, List[states.CoupledState]],
     smp.matrices.dense.MutableDenseMatrix,
 ]:
     """Generate the total symbolic hamiltonian for the given system
@@ -269,9 +276,7 @@ def generate_total_symbolic_hamiltonian(
         QN_compact = copy.deepcopy(QN)
         for qnc in qn_compact:
             indices_compact = states.get_indices_quantumnumbers(qnc, QN_compact)
-            QN_compact = states.compact_QN_coupled_indices(
-                QN_compact, indices_compact
-            )
+            QN_compact = states.compact_QN_coupled_indices(QN_compact, indices_compact)
             H_symbolic = compact_symbolic_hamiltonian_indices(
                 H_symbolic, indices_compact
             )

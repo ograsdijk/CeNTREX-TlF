@@ -24,16 +24,16 @@ __all__ = [
 
 @dataclass
 class TransitionSelector:
-    ground: Sequence[states.State]
-    excited: Sequence[states.State]
+    ground: Sequence[states.CoupledState]
+    excited: Sequence[states.CoupledState]
     polarizations: Sequence[npt.NDArray[np.complex_]]
     polarization_symbols: List[smp.Symbol]
     Ω: smp.Symbol
     δ: smp.Symbol
     description: Optional[str] = None
     type: Optional[str] = None
-    ground_main: Optional[states.State] = None
-    excited_main: Optional[states.State] = None
+    ground_main: Optional[states.CoupledState] = None
+    excited_main: Optional[states.CoupledState] = None
     phase_modulation: bool = False
 
     def __repr__(self) -> str:
@@ -48,8 +48,8 @@ class TransitionSelector:
 def generate_transition_selectors(
     transitions: Sequence[Union[OpticalTransition, MicrowaveTransition]],
     polarizations: Sequence[Sequence[Polarization]],
-    ground_mains: Optional[Sequence[states.State]] = None,
-    excited_mains: Optional[Sequence[states.State]] = None,
+    ground_mains: Optional[Sequence[states.CoupledState]] = None,
+    excited_mains: Optional[Sequence[states.CoupledState]] = None,
     phase_modulations: Optional[Sequence[bool]] = None,
 ) -> List[TransitionSelector]:
     """
