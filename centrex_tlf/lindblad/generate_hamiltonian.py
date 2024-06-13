@@ -88,37 +88,20 @@ def symbolic_hamiltonian_to_rotating_frame(
         # transform to δ instead of ω and E
         # if energy_diag[ide] > energy_diag[idg]:
         transformed = transformed.subs(ω, energies[ide] - energies[idg] + δ)
-        # else:
-        #     transformed = transformed.subs(ω, energies[idg] - energies[ide] + δ)
 
-    idg = QN.index(couplings[0].ground_main)
-    ide = QN.index(couplings[0].excited_main)
-    for idx in range(n_states):
-        transformed[idx, idx] -= energies[ide]
+    for idc, (δ, coupling) in enumerate(zip(δs, couplings)):
+        idg = QN.index(coupling.ground_main)
+        expr = transformed[idg, idg]
+        for d in δs:
+            expr = expr.subs(d, 0)
+
+        for idx in range(transformed.shape[0]):
+            transformed[idx, idx] -= expr
 
     # substitute level energies for symbolic values
     transformed = transformed.subs(
         [(E, val) for E, val in zip(energies, np.diag(H_int))]
     )
-
-    # # set energie difference between excited and ground states to zero
-    # # should be done automatically when solving for the unitary matrix, not sure
-    # # why this is not happening currently
-    # for coupling in couplings:
-    #     idg = QN.index(coupling.ground_main)
-    #     ide = QN.index(coupling.excited_main)
-    #     indices_ground = [QN.index(s) for s in coupling.ground_states]
-    #     indices_excited = [QN.index(s) for s in coupling.excited_states]
-    #     g = transformed[idg, idg].subs(
-    #         [(s, 0) for s in transformed[idg, idg].free_symbols]
-    #     )
-    #     e = transformed[ide, ide].subs(
-    #         [(s, 0) for s in transformed[ide, ide].free_symbols]
-    #     )
-    #     for idg in indices_ground:
-    #         transformed[idg, idg] -= g
-    #     for ide in indices_excited:
-    #         transformed[ide, ide] -= e
 
     return transformed
 
