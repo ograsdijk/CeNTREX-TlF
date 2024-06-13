@@ -357,8 +357,7 @@ def generate_OBE_system_transitions(
     verbose: bool = False,
     normalize_pol: bool = False,
 ) -> OBESystem:
-    """Convenience function for generating the symbolic OBE system of equations
-    and Julia code.
+    """Convenience function for generating the symbolic OBE system of equations.
 
     Args:
         transitions (list): list of TransitionSelectors defining the transitions

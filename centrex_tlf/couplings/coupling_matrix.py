@@ -223,6 +223,10 @@ def generate_coupling_field(
         normalize_pol=normalize_pol,
     )
 
+    assert (
+        ME_main != 0
+    ), f"main coupling element for {ground_main_approx} -> {excited_main_approx} is zero"
+
     _ground_main = cast(CoupledBasisState, ground_main.largest)
     _excited_main = cast(CoupledBasisState, excited_main.largest)
 

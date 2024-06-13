@@ -145,7 +145,7 @@ def ΔmF_allowed(
     elif np.all(polarization == polarization_σm.vector):
         ΔmF = -1
     elif np.all(polarization == polarization_σp.vector):
-        ΔmF = -1
+        ΔmF = +1
     else:
         raise ValueError(
             f"polarization {polarization} cannot be used for select_main_states, not"
