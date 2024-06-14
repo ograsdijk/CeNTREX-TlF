@@ -77,18 +77,20 @@ def symbolic_hamiltonian_to_rotating_frame(
 
     transformed = smp.Matrix(transformed)
 
-    energy_diag = np.diag(H_int)
-
     for idc, (δ, coupling) in enumerate(zip(δs, couplings)):
         # generate transition frequency symbol
         ω = smp.Symbol(f"ω{idc}", real=True)
         # get indices of ground and excited states
         idg = QN.index(coupling.ground_main)
         ide = QN.index(coupling.excited_main)
-        # transform to δ instead of ω and E
-        # if energy_diag[ide] > energy_diag[idg]:
-        transformed = transformed.subs(ω, energies[ide] - energies[idg] + δ)
 
+        # transform to δ instead of ω and E
+        if idg < ide:
+            transformed = transformed.subs(ω, energies[ide] - energies[idg] + δ)
+        elif idg > ide:
+            transformed = transformed.subs(ω, energies[idg] - energies[ide] + δ)
+
+    # remove excited state energy from all diagonal entries
     for idc, (δ, coupling) in enumerate(zip(δs, couplings)):
         idg = QN.index(coupling.ground_main)
         expr = transformed[idg, idg]
@@ -97,6 +99,10 @@ def symbolic_hamiltonian_to_rotating_frame(
 
         for idx in range(transformed.shape[0]):
             transformed[idx, idx] -= expr
+
+    # remove extraneous 1.0 from expressions like 1.0*δ
+    for idx in range(transformed.shape[0]):
+        transformed[idx, idx] = smp.nfloat(smp.nsimplify(transformed[idx, idx]))
 
     # substitute level energies for symbolic values
     transformed = transformed.subs(
