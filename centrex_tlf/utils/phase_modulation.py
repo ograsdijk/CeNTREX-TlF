@@ -7,7 +7,7 @@ from scipy import special
 
 def sideband_spectrum(
     β: float, ω: float, kmax: int
-) -> Tuple[npt.NDArray[np.float_], npt.NDArray[np.float_]]:
+) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """
     Generate the sideband spectrum of a phase modulation eom, generated with:
     J0(β) + ΣJₖ(β) + Σ(-1)ᵏJₖ(β)
@@ -18,7 +18,7 @@ def sideband_spectrum(
         kmax (int): maximum number of sidebands to plot
 
     Returns:
-        Tuple[npt.NDArray[np.float_], npt.NDArray[np.float_]]: ndarray with frequencies
+        Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]: ndarray with frequencies
         and ndarray with sideband amplitudes
     """
     ks = np.arange(-kmax, kmax + 1, 1)

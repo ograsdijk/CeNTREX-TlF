@@ -15,9 +15,9 @@ def calculate_br(
     excited_state: states.CoupledState,
     ground_states: Sequence[states.CoupledState],
     tol: float = 1e-3,
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.floating]:
     # matrix elements between the excited state and the ground states
-    MEs = np.zeros((len(ground_states)), dtype=np.complex_)
+    MEs = np.zeros((len(ground_states)), dtype=np.complex128)
 
     for idg, ground_state in enumerate(ground_states):
         MEs[idg] = calculate_ED_ME_mixed_state(
@@ -26,7 +26,7 @@ def calculate_br(
         )
 
     # Calculate branching ratios
-    BRs = np.abs(MEs) ** 2 / (np.sum(np.abs(MEs) ** 2)).astype(np.float_)
+    BRs = np.abs(MEs) ** 2 / (np.sum(np.abs(MEs) ** 2)).astype(np.float64)
     return BRs
 
 
@@ -60,7 +60,7 @@ def generate_br_dataframe(
     Returns:
         _type_: _description_
     """
-    br: List[npt.NDArray[np.float_]] = []
+    br: List[npt.NDArray[np.floating]] = []
     for es in excited_states:
         br.append(calculate_br(es, ground_states, tolerance))
 
@@ -121,7 +121,7 @@ def generate_br_dataframe(
     br_dataframe = pd.DataFrame(data=data)
     if group_excited:
         J_unique = np.unique([s.largest.J for s in excited_states])
-        F1_unique: npt.NDArray[np.float_] = np.unique(
+        F1_unique: npt.NDArray[np.floating] = np.unique(
             [s.largest.F1 for s in excited_states]  # type: ignore
         )
         F_unique: npt.NDArray[np.int_] = np.unique(

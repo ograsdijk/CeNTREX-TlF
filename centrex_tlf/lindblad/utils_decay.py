@@ -62,8 +62,8 @@ def add_states_QN(
 
 
 def add_levels_C_array(
-    C_array: npt.NDArray[np.float_], indices: List[int]
-) -> npt.NDArray[np.float_]:
+    C_array: npt.NDArray[np.floating], indices: List[int]
+) -> npt.NDArray[np.floating]:
     arr = C_array.copy()
     # inserting rows and columns of zeros to account for the new decay levels
     for idx in indices:
@@ -76,9 +76,9 @@ def add_decays_C_arrays(
     decay_channels: Sequence[DecayChannel],
     indices: List[int],
     QN: Sequence[states.CoupledState],
-    C_array: npt.NDArray[np.float_],
+    C_array: npt.NDArray[np.floating],
     Γ: float,
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.floating]:
     # converting the C arrays to branching ratio arrays and adding the new
     # levels
     BR = add_levels_C_array(C_array, indices)

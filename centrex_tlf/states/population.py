@@ -56,7 +56,7 @@ def generate_thermal_population_states(
     states: Sequence[CoupledState],
     T: float,
     qn_compact: Optional[Union[Sequence[QuantumSelector], QuantumSelector]] = None,
-) -> npt.NDArray[np.complex_]:
+) -> npt.NDArray[np.complex128]:
     """Generate a thermal distrubtion over the states specified in
     states_to_fill, a QuantumSelector or list of Quantumselectors
 
@@ -157,7 +157,7 @@ def generate_thermal_population_states(
                 f"QuantumSelectors, not {type(qn_compact)}"
             )
 
-    density = np.eye(len(density), dtype=np.complex_) * density
+    density = np.eye(len(density), dtype=np.complex128) * density
 
     # normalize the trace to 1 and return the density matrix
     return density / np.trace(density)

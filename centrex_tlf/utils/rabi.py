@@ -22,8 +22,8 @@ def intensity_to_electric_field(intensity: float) -> float: ...
 
 @overload
 def intensity_to_electric_field(
-    intensity: npt.NDArray[np.float_],
-) -> npt.NDArray[np.float_]: ...
+    intensity: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]: ...
 
 
 def intensity_to_electric_field(intensity):
@@ -47,8 +47,8 @@ def electric_field_to_rabi(
 
 @overload
 def electric_field_to_rabi(
-    electric_field: npt.NDArray[np.float_], coupling: float, D: float
-) -> npt.NDArray[np.float_]: ...
+    electric_field: npt.NDArray[np.floating], coupling: float, D: float
+) -> npt.NDArray[np.floating]: ...
 
 
 def electric_field_to_rabi(electric_field, coupling, D):
@@ -73,8 +73,8 @@ def intensity_to_rabi(intensity: float, coupling: float, D: float) -> float: ...
 
 @overload
 def intensity_to_rabi(
-    intensity: npt.NDArray[np.float_], coupling: float, D: float
-) -> npt.NDArray[np.float_]: ...
+    intensity: npt.NDArray[np.floating], coupling: float, D: float
+) -> npt.NDArray[np.floating]: ...
 
 
 def intensity_to_rabi(intensity, coupling, D):

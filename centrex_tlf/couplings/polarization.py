@@ -14,7 +14,7 @@ __all__ = [
 
 @dataclass
 class Polarization:
-    vector: npt.NDArray[np.complex_]
+    vector: npt.NDArray[np.complex128]
     name: str
 
     def __repr__(self) -> str:

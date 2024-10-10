@@ -53,7 +53,7 @@ class QuantumSelector:
     """
 
     J: Optional[Union[Sequence[int], npt.NDArray[np.int_], int]] = None
-    F1: Optional[Union[Sequence[float], npt.NDArray[np.float_], float]] = None
+    F1: Optional[Union[Sequence[float], npt.NDArray[np.floating], float]] = None
     F: Optional[Union[Sequence[int], npt.NDArray[np.int_], int]] = None
     mF: Optional[Union[Sequence[int], npt.NDArray[np.int_], float]] = None
     electronic: Optional[
@@ -228,7 +228,9 @@ def find_exact_states_indices(
     else:
         _V = V
     if V_ref is not None:
-        _, _V = reorder_evecs(_V, np.ones(len(QN_construct), dtype=np.complex_), V_ref)
+        _, _V = reorder_evecs(
+            _V, np.ones(len(QN_construct), dtype=np.complex128), V_ref
+        )
 
     # calculating the overlaps between the state vectors of states_approx in the basis
     # from which H was generated with the eigenvectors of H

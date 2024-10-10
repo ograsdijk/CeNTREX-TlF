@@ -42,13 +42,13 @@ def reorder_evecs(
 
 @overload
 def matrix_to_states(
-    V: npt.NDArray[np.complex_], QN: Sequence[CoupledBasisState]
+    V: npt.NDArray[np.complex128], QN: Sequence[CoupledBasisState]
 ) -> List[CoupledState]: ...
 
 
 @overload
 def matrix_to_states(
-    V: npt.NDArray[np.complex_], QN: Sequence[UncoupledBasisState]
+    V: npt.NDArray[np.complex128], QN: Sequence[UncoupledBasisState]
 ) -> List[UncoupledState]: ...
 
 
@@ -58,7 +58,7 @@ def matrix_to_states(V, QN):
     eigenvectors V.
 
     Args:
-        V (npt.NDArray[np.complex_]): array with columns corresponding to eigenvectors
+        V (npt.NDArray[np.complex128]): array with columns corresponding to eigenvectors
         QN (Sequence[BasisState]): list of State objects
         E (List, optional): list of energies corresponding to the states.
                             Defaults to None.
@@ -97,14 +97,14 @@ def matrix_to_states(V, QN):
 
 def reduced_basis_hamiltonian(
     basis_original: Sequence[CoupledState],
-    H_original: npt.NDArray[np.complex_],
+    H_original: npt.NDArray[np.complex128],
     basis_reduced: Sequence[CoupledState],
 ) -> npt.NDArray[np.complex128]:
     """Generate Hamiltonian for a sub-basis of the original basis
 
     Args:
         basis_original (Sequence[State],): sequence of states of original basis
-        H_original (npt.NDArray[np.complex_]): original Hamiltonian
+        H_original (npt.NDArray[np.complex128]): original Hamiltonian
         basis_reduced (Sequence[State]): sequence of states of sub-basis
 
     Returns:
