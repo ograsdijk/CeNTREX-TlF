@@ -126,7 +126,7 @@ def assert_transition_coupled_allowed(
 
 
 def ΔmF_allowed(
-    polarization: npt.NDArray[np.complex_],
+    polarization: npt.NDArray[np.complex128],
 ) -> int:
     """
     Generate a tuple of all allowed ΔmF
@@ -157,7 +157,7 @@ def ΔmF_allowed(
 def select_main_states(
     ground_states: Sequence[states.CoupledState],
     excited_states: Sequence[states.CoupledState],
-    polarization: npt.NDArray[np.complex_],
+    polarization: npt.NDArray[np.complex128],
 ) -> Tuple[states.CoupledState, states.CoupledState]:
     """Select main states for calculating the transition strength to normalize
     the Rabi rate with
@@ -167,7 +167,7 @@ def select_main_states(
                                                 transition
         excited_states (Sequence[states.State]): Sequence of excited states for the
                                                 transition
-        polarization (npt.NDArray[np.float_]): polarization vector
+        polarization (npt.NDArray[np.floating]): polarization vector
     """
     ΔmF = ΔmF_allowed(polarization)
 

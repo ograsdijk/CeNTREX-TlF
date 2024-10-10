@@ -12,7 +12,9 @@ from .wigner import sixj_f, threej_f
 def generate_ED_ME_mixed_state(
     bra: states.CoupledState,
     ket: states.CoupledState,
-    pol_vec: npt.NDArray[np.complex_] = np.array([1.0, 1.0, 1.0], dtype=np.complex_),
+    pol_vec: npt.NDArray[np.complex128] = np.array(
+        [1.0, 1.0, 1.0], dtype=np.complex128
+    ),
     reduced: bool = False,
     normalize_pol: bool = True,
 ) -> complex:

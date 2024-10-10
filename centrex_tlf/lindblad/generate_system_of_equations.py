@@ -12,37 +12,34 @@ __all__ = ["generate_system_of_equations_symbolic"]
 @overload
 def generate_system_of_equations_symbolic(
     hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    C_array: npt.NDArray[np.float_],
+    C_array: npt.NDArray[np.floating],
     fast: bool,
     split_output: Literal[False],
-) -> smp.matrices.dense.MutableDenseMatrix:
-    ...
+) -> smp.matrices.dense.MutableDenseMatrix: ...
 
 
 @overload
 def generate_system_of_equations_symbolic(
     hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    C_array: npt.NDArray[np.float_],
+    C_array: npt.NDArray[np.floating],
     fast: bool,
-) -> smp.matrices.dense.MutableDenseMatrix:
-    ...
+) -> smp.matrices.dense.MutableDenseMatrix: ...
 
 
 @overload
 def generate_system_of_equations_symbolic(
     hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    C_array: npt.NDArray[np.float_],
+    C_array: npt.NDArray[np.floating],
     fast: bool,
     split_output: Literal[True],
 ) -> Tuple[
     smp.matrices.dense.MutableDenseMatrix, smp.matrices.dense.MutableDenseMatrix
-]:
-    ...
+]: ...
 
 
 def generate_system_of_equations_symbolic(
     hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    C_array: npt.NDArray[np.float_],
+    C_array: npt.NDArray[np.floating],
     fast: bool = False,
     split_output: bool = False,
 ) -> Union[

@@ -25,10 +25,12 @@ def generate_coupling_matrix(
     QN: Sequence[states.CoupledState],
     ground_states: Sequence[states.CoupledState],
     excited_states: Sequence[states.CoupledState],
-    pol_vec: npt.NDArray[np.complex_] = np.array([0.0, 0.0, 1.0], dtype=np.complex_),
+    pol_vec: npt.NDArray[np.complex128] = np.array(
+        [0.0, 0.0, 1.0], dtype=np.complex128
+    ),
     reduced: bool = False,
     normalize_pol: bool = True,
-) -> npt.NDArray[np.complex_]:
+) -> npt.NDArray[np.complex128]:
     """generate optical coupling matrix for given ground and excited states
     Checks if couplings are already pre-cached, otherwise falls back to
     calculate_coupling_matrix.
@@ -73,8 +75,8 @@ def generate_coupling_matrix(
 
 @dataclass
 class CouplingField:
-    polarization: npt.NDArray[np.complex_]
-    field: npt.NDArray[np.complex_]
+    polarization: npt.NDArray[np.complex128]
+    field: npt.NDArray[np.complex128]
 
 
 @dataclass
@@ -151,25 +153,25 @@ def generate_coupling_field(
         Sequence[states.CoupledState], Sequence[states.CoupledBasisState]
     ],
     QN_basis: Union[Sequence[states.CoupledState], Sequence[states.CoupledBasisState]],
-    H_rot: npt.NDArray[np.complex_],
+    H_rot: npt.NDArray[np.complex128],
     QN: Sequence[states.CoupledState],
-    V_ref: npt.NDArray[np.complex_],
-    pol_main: npt.NDArray[np.complex_] = np.array([0, 0, 1], dtype=np.complex_),
-    pol_vecs: Sequence[npt.NDArray[np.complex_]] = [],
+    V_ref: npt.NDArray[np.complex128],
+    pol_main: npt.NDArray[np.complex128] = np.array([0, 0, 1], dtype=np.complex128),
+    pol_vecs: Sequence[npt.NDArray[np.complex128]] = [],
     relative_coupling: float = 1e-3,
     absolute_coupling: float = 1e-6,
     normalize_pol: bool = True,
 ) -> CouplingFields:
     assert isinstance(
         pol_main, np.ndarray
-    ), "supply a Sequence of np.ndarrays with dtype np.complex_ for pol_vecs"
+    ), "supply a Sequence of np.ndarrays with dtype np.complex128 for pol_vecs"
     assert isinstance(
         pol_vecs[0], np.ndarray
-    ), "supply a Sequence of np.ndarrays with dtype np.complex_ for pol_vecs"
-    if not np.issubdtype(pol_main.dtype, np.complex_):
-        pol_main.astype(np.complex_)
-    if not np.issubdtype(pol_vecs[0].dtype, np.complex_):
-        pol_vecs = [pol.astype(np.complex_) for pol in pol_vecs]
+    ), "supply a Sequence of np.ndarrays with dtype np.complex128 for pol_vecs"
+    if not np.issubdtype(pol_main.dtype, np.complex128):
+        pol_main.astype(np.complex128)
+    if not np.issubdtype(pol_vecs[0].dtype, np.complex128):
+        pol_vecs = [pol.astype(np.complex128) for pol in pol_vecs]
 
     _ground_states_approx: Sequence[states.CoupledState]
     _excited_states_approx: Sequence[states.CoupledState]
@@ -219,7 +221,7 @@ def generate_coupling_field(
     ME_main = calculate_ED_ME_mixed_state(
         excited_main,
         ground_main,
-        pol_vec=np.asarray(pol_main, dtype=np.complex_),
+        pol_vec=np.asarray(pol_main, dtype=np.complex128),
         normalize_pol=normalize_pol,
     )
 
@@ -271,10 +273,10 @@ def generate_coupling_field_automatic(
         Sequence[states.CoupledBasisState],
         Sequence[states.UncoupledBasisState],
     ],
-    H_rot: npt.NDArray[np.complex_],
+    H_rot: npt.NDArray[np.complex128],
     QN: Sequence[states.CoupledState],
-    V_ref: npt.NDArray[np.complex_],
-    pol_vecs: Sequence[npt.NDArray[np.complex_]],
+    V_ref: npt.NDArray[np.complex128],
+    pol_vecs: Sequence[npt.NDArray[np.complex128]],
     relative_coupling: float = 1e-3,
     absolute_coupling: float = 1e-6,
     normalize_pol: bool = True,
@@ -313,7 +315,7 @@ def generate_coupling_field_automatic(
     """
     assert isinstance(
         pol_vecs[0], np.ndarray
-    ), "supply a Sequence of np.ndarrays with dtype np.float_ for pol_vecs"
+    ), "supply a Sequence of np.ndarrays with dtype np.floating for pol_vecs"
 
     _ground_states_approx: Sequence[states.CoupledState]
     _excited_states_approx: Sequence[states.CoupledState]

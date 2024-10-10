@@ -21,7 +21,7 @@ def collapse_matrices(
     qn_compact: Optional[
         Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
     ] = None,
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.floating]:
     """
     Function that generates the collapse matrix for given ground and excited states
 
@@ -39,7 +39,7 @@ def collapse_matrices(
     C_list = array of collapse matrices
     """
     # Initialize list of collapse matrices
-    C_list: List[npt.NDArray[np.float_]] = []
+    C_list: List[npt.NDArray[np.floating]] = []
 
     # Start looping over ground and excited states
     for excited_state in excited_states:

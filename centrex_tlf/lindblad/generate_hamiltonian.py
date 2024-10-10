@@ -20,7 +20,7 @@ __all__ = [
 def symbolic_hamiltonian_to_rotating_frame(
     hamiltonian: smp.matrices.dense.MutableDenseMatrix,
     QN: List[states.CoupledState],
-    H_int: npt.NDArray[np.complex_],
+    H_int: npt.NDArray[np.complex128],
     couplings: Sequence[couplings_tlf.CouplingFields],
     δs: Sequence[smp.Symbol],
 ) -> smp.matrices.dense.MutableDenseMatrix:
@@ -114,7 +114,7 @@ def symbolic_hamiltonian_to_rotating_frame(
 
 def generate_symbolic_hamiltonian(
     QN: List[states.CoupledState],
-    H_int: npt.NDArray[np.complex_],
+    H_int: npt.NDArray[np.complex128],
     couplings: Sequence[couplings_tlf.CouplingFields],
     Ωs: Sequence[smp.Symbol],
     δs: Sequence[smp.Symbol],
@@ -190,7 +190,7 @@ def generate_symbolic_hamiltonian(
 @overload
 def generate_total_symbolic_hamiltonian(
     QN: List[states.CoupledState],
-    H_int: npt.NDArray[np.complex_],
+    H_int: npt.NDArray[np.complex128],
     couplings: List[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
     qn_compact: Literal[None],
@@ -200,7 +200,7 @@ def generate_total_symbolic_hamiltonian(
 @overload
 def generate_total_symbolic_hamiltonian(
     QN: List[states.CoupledState],
-    H_int: npt.NDArray[np.complex_],
+    H_int: npt.NDArray[np.complex128],
     couplings: List[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
 ) -> smp.matrices.dense.MutableDenseMatrix: ...
@@ -209,7 +209,7 @@ def generate_total_symbolic_hamiltonian(
 @overload
 def generate_total_symbolic_hamiltonian(
     QN: List[states.CoupledState],
-    H_int: npt.NDArray[np.complex_],
+    H_int: npt.NDArray[np.complex128],
     couplings: Sequence[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
     qn_compact: Union[Sequence[states.QuantumSelector], states.QuantumSelector],
@@ -218,7 +218,7 @@ def generate_total_symbolic_hamiltonian(
 
 def generate_total_symbolic_hamiltonian(
     QN: List[states.CoupledState],
-    H_int: npt.NDArray[np.complex_],
+    H_int: npt.NDArray[np.complex128],
     couplings: Sequence[Any],
     transitions: Sequence[Any],
     qn_compact: Optional[

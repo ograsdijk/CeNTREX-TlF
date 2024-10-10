@@ -43,8 +43,8 @@ def multipas_prism_order(passes: int) -> List[int]:
 
 @overload
 def gaussian(
-    x: npt.NDArray[np.float_], mean: float, sigma: float
-) -> npt.NDArray[np.float_]: ...
+    x: npt.NDArray[np.floating], mean: float, sigma: float
+) -> npt.NDArray[np.floating]: ...
 
 
 @overload
@@ -68,8 +68,8 @@ def gaussian(x, mean, sigma):
 
 @overload
 def gaussian_amp(
-    x: npt.NDArray[np.float_], a: float, mean: float, sigma: float
-) -> npt.NDArray[np.float_]: ...
+    x: npt.NDArray[np.floating], a: float, mean: float, sigma: float
+) -> npt.NDArray[np.floating]: ...
 
 
 @overload
@@ -92,24 +92,24 @@ def gaussian_amp(x, a, mean, sigma):
 
 @overload
 def gaussian_2d(
-    x: npt.NDArray[np.float_],
-    y: npt.NDArray[np.float_],
+    x: npt.NDArray[np.floating],
+    y: npt.NDArray[np.floating],
     mean_x: float,
     mean_y: float,
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]: ...
+) -> npt.NDArray[np.floating]: ...
 
 
 @overload
 def gaussian_2d(
-    x: npt.NDArray[np.float_],
-    y: npt.NDArray[np.float_],
-    mean_x: npt.NDArray[np.float_],
-    mean_y: npt.NDArray[np.float_],
+    x: npt.NDArray[np.floating],
+    y: npt.NDArray[np.floating],
+    mean_x: npt.NDArray[np.floating],
+    mean_y: npt.NDArray[np.floating],
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]: ...
+) -> npt.NDArray[np.floating]: ...
 
 
 @overload
@@ -143,26 +143,26 @@ def gaussian_2d(x, y, mean_x, mean_y, sigma_x, sigma_y):
 
 @overload
 def gaussian_2d_amp(
-    x: npt.NDArray[np.float_],
-    y: npt.NDArray[np.float_],
+    x: npt.NDArray[np.floating],
+    y: npt.NDArray[np.floating],
     a: float,
     mean_x: float,
     mean_y: float,
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]: ...
+) -> npt.NDArray[np.floating]: ...
 
 
 @overload
 def gaussian_2d_amp(
-    x: npt.NDArray[np.float_],
-    y: npt.NDArray[np.float_],
-    a: npt.NDArray[np.float_],
-    mean_x: npt.NDArray[np.float_],
-    mean_y: npt.NDArray[np.float_],
+    x: npt.NDArray[np.floating],
+    y: npt.NDArray[np.floating],
+    a: npt.NDArray[np.floating],
+    mean_x: npt.NDArray[np.floating],
+    mean_y: npt.NDArray[np.floating],
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]: ...
+) -> npt.NDArray[np.floating]: ...
 
 
 @overload
@@ -203,20 +203,20 @@ def gaussian_2d_amp(
 
 
 def generate_2d_multipass_gaussian_intensity(
-    X: npt.NDArray[np.float_],
-    Y: npt.NDArray[np.float_],
+    X: npt.NDArray[np.floating],
+    Y: npt.NDArray[np.floating],
     locations_x: Sequence[float],
     locations_y: Sequence[float],
     intensities: Sequence[float],
     sigma_x: float,
     sigma_y: float,
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.floating]:
     """
     generate the intensity in 2D of a multipass
 
     Args:
-        X (npt.NDArray[np.float_]): X values to evaluate multipass at
-        Y (npt.NDArray[np.float_]): Y values to evaluate multipass at
+        X (npt.NDArray[np.floating]): X values to evaluate multipass at
+        Y (npt.NDArray[np.floating]): Y values to evaluate multipass at
         locations_x (Sequence[float]): x locations of passes
         locations_y (Sequence[float]): y locations of passes
         intensities (Sequence[float]): intensities of each pass
@@ -224,14 +224,14 @@ def generate_2d_multipass_gaussian_intensity(
         sigma_y (float): standard deviation in y
 
     Returns:
-        npt.NDArray[np.float_]: intensity at X, Y coordinates
+        npt.NDArray[np.floating]: intensity at X, Y coordinates
     """
     assert (
         len(locations_x) == len(locations_y) == len(intensities)
     ), "length of locations_x, locations_y and intensities must be equal"
-    _intensities = cast(npt.NDArray[np.float_], np.asarray(intensities))
-    _locations_x = cast(npt.NDArray[np.float_], np.asarray(locations_x))
-    _locations_y = cast(npt.NDArray[np.float_], np.asarray(locations_y))
+    _intensities = cast(npt.NDArray[np.floating], np.asarray(intensities))
+    _locations_x = cast(npt.NDArray[np.floating], np.asarray(locations_x))
+    _locations_y = cast(npt.NDArray[np.floating], np.asarray(locations_y))
     multipass = gaussian_2d_amp(
         x=X[:, :, np.newaxis],
         y=Y[:, :, np.newaxis],
@@ -245,8 +245,8 @@ def generate_2d_multipass_gaussian_intensity(
 
 
 def generate_2d_multipass_gaussian_rabi(
-    X: npt.NDArray[np.float_],
-    Y: npt.NDArray[np.float_],
+    X: npt.NDArray[np.floating],
+    Y: npt.NDArray[np.floating],
     locations_x: Sequence[float],
     locations_y: Sequence[float],
     intensities: Sequence[float],
@@ -254,13 +254,13 @@ def generate_2d_multipass_gaussian_rabi(
     sigma_y: float,
     coupling: float,
     D: float = 2.6675506e-30,
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.floating]:
     """
     Generate the rabi rate in 2D of a multipass.
 
     Args:
-        X (npt.NDArray[np.float_]): X values to evaluate multipass at
-        Y (npt.NDArray[np.float_]): Y values to evaluate multipass at
+        X (npt.NDArray[np.floating]): X values to evaluate multipass at
+        Y (npt.NDArray[np.floating]): Y values to evaluate multipass at
         locations_x (Sequence[float]): x locations of passes
         locations_y (Sequence[float]): y locations of passes
         intensities (Sequence[float]): intensities of each pass
@@ -271,7 +271,7 @@ def generate_2d_multipass_gaussian_rabi(
                             transition.
 
     Returns:
-        npt.NDArray[np.float_]: rabi rate at X, Y coordinates
+        npt.NDArray[np.floating]: rabi rate at X, Y coordinates
     """
     multipass = generate_2d_multipass_gaussian_intensity(
         X, Y, locations_x, locations_y, intensities, sigma_x, sigma_y

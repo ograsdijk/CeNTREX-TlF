@@ -1,4 +1,4 @@
-from typing import Sequence, Union, overload
+from typing import Optional, Sequence, Union, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -11,6 +11,7 @@ __all__ = [
     "thermal_population",
     "generate_uniform_population_state_indices",
     "generate_uniform_population_states",
+    "get_diagonal_indices_flattened",
 ]
 
 
@@ -30,7 +31,7 @@ def J_levels(J: int) -> int:
 @overload
 def thermal_population(
     J: npt.NDArray[np.int_], T: float, B: float = 6.66733e9, n: int = 100
-) -> npt.NDArray[np.float_]: ...
+) -> npt.NDArray[np.floating]: ...
 
 
 @overload
@@ -64,7 +65,7 @@ def thermal_population(J, T, B=6.66733e9, n=100):
 
 def generate_uniform_population_state_indices(
     state_indices: Sequence[int], levels: int
-) -> npt.NDArray[np.complex_]:
+) -> npt.NDArray[np.complex128]:
     """
     spread population uniformly over the given state indices
 
@@ -73,7 +74,7 @@ def generate_uniform_population_state_indices(
         levels (int): total states involved
 
     Returns:
-        npt.NDArray[np.complex_]: density matrix
+        npt.NDArray[np.complex128]: density matrix
     """
     ρ = np.zeros([levels, levels], dtype=complex)
     for ids in state_indices:
@@ -87,7 +88,7 @@ def generate_uniform_population_states(
         states.QuantumSelector,
     ],
     QN: Sequence[states.CoupledState],
-) -> npt.NDArray[np.complex_]:
+) -> npt.NDArray[np.complex128]:
     """
     spread population uniformly over the given states
 
@@ -98,7 +99,7 @@ def generate_uniform_population_states(
         QN (Sequence[states.State]): all states involved
 
     Returns:
-        npt.NDArray[np.complex_]: density matrix
+        npt.NDArray[np.complex128]: density matrix
     """
     levels = len(QN)
     ρ = np.zeros([levels, levels], dtype=complex)
@@ -120,7 +121,7 @@ def generate_uniform_population_states(
 def generate_thermal_population_states(
     temperature: float,
     QN: Sequence[states.CoupledState],
-) -> npt.NDArray[np.complex_]:
+) -> npt.NDArray[np.complex128]:
     levels = len(QN)
     ρ = np.zeros([levels, levels], dtype=complex)
 
@@ -145,9 +146,26 @@ def generate_thermal_population_states(
     ), "duplicate quantum numbers"
 
     for idx, qn in enumerate(QN):
+        if qn.largest.electronic_state != states.ElectronicState.X:
+            continue
         if qn.largest.F is None:
             ρ[idx, idx] = population[qn.largest.J]
         else:
             ρ[idx, idx] = population[qn.largest.J] / J_levels(qn.largest.J)
 
     return ρ
+
+
+def get_diagonal_indices_flattened(
+    size: int, states: Optional[Sequence[int]] = None, mode: str = "python"
+) -> list[int]:
+    if states is None:
+        indices = [i + size * i for i in range(size)]
+    else:
+        indices = [i + size * i for i in states]
+    if mode == "julia":
+        return [i + 1 for i in indices]
+    elif mode == "python":
+        return indices
+    else:
+        raise ValueError("`mode` has to be python or julia")

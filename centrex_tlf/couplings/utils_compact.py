@@ -35,19 +35,19 @@ def insert_row_column_indices(
     return arr
 
 
-def BR_to_C_array(BR: npt.NDArray[np.float_], Gamma) -> npt.NDArray[np.float_]:
+def BR_to_C_array(BR: npt.NDArray[np.floating], Gamma) -> npt.NDArray[np.floating]:
     return np.sqrt(BR * Gamma)
 
 
 def C_array_to_BR(
-    C_array: npt.NDArray[np.float_], Gamma: float
-) -> npt.NDArray[np.float_]:
+    C_array: npt.NDArray[np.floating], Gamma: float
+) -> npt.NDArray[np.floating]:
     return C_array**2 / Gamma
 
 
 def compact_BR_array_indices(
-    BR_array: npt.NDArray[np.float_], indices_compact: npt.NDArray[np.int_]
-) -> npt.NDArray[np.float_]:
+    BR_array: npt.NDArray[np.floating], indices_compact: npt.NDArray[np.int_]
+) -> npt.NDArray[np.floating]:
     new_shape = np.asarray(BR_array[0].shape) - len(indices_compact) + 1
     BR_array_new = []
     for BR in BR_array:
@@ -71,8 +71,10 @@ def compact_BR_array_indices(
 
 
 def compact_C_array_indices(
-    C_array: npt.NDArray[np.float_], Gamma: float, indices_compact: npt.NDArray[np.int_]
-) -> npt.NDArray[np.float_]:
+    C_array: npt.NDArray[np.floating],
+    Gamma: float,
+    indices_compact: npt.NDArray[np.int_],
+) -> npt.NDArray[np.floating]:
     BR = C_array_to_BR(C_array, Gamma)
     BR_compact = compact_BR_array_indices(BR, indices_compact)
     C_array_compact = BR_to_C_array(BR_compact, Gamma)

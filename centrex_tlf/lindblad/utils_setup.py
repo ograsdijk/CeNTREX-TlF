@@ -33,11 +33,11 @@ class OBESystem:
     ground: Sequence[states.CoupledState]
     excited: Sequence[states.CoupledState]
     QN: Sequence[states.CoupledState]
-    H_int: npt.NDArray[np.complex_]
-    V_ref_int: npt.NDArray[np.complex_]
+    H_int: npt.NDArray[np.complex128]
+    V_ref_int: npt.NDArray[np.complex128]
     couplings: List[Any]
     H_symbolic: smp.matrices.dense.MutableDenseMatrix
-    C_array: npt.NDArray[np.float_]
+    C_array: npt.NDArray[np.floating]
     system: smp.matrices.dense.MutableDenseMatrix
     coupling_symbols: Sequence[smp.Symbol]
     polarization_symbols: Sequence[Sequence[smp.Symbol]]
@@ -130,8 +130,8 @@ def generate_OBE_system(
     decay_channels: Optional[
         Union[Sequence[utils_decay.DecayChannel], utils_decay.DecayChannel]
     ] = None,
-    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
+    E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
     X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
     B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
     nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
@@ -139,7 +139,7 @@ def generate_OBE_system(
     Jmax_X: Optional[int] = None,
     Jmin_B: Optional[int] = None,
     Jmax_B: Optional[int] = None,
-    transform: Optional[npt.NDArray[np.complex_]] = None,
+    transform: Optional[npt.NDArray[np.complex128]] = None,
     H_func_X: Optional[Callable] = None,
     H_func_B: Optional[Callable] = None,
     verbose: bool = False,
@@ -341,8 +341,8 @@ def generate_OBE_system_transitions(
     decay_channels: Optional[
         Union[Sequence[utils_decay.DecayChannel], utils_decay.DecayChannel]
     ] = None,
-    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
+    E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
     Γ: float = hamiltonian.Γ,
     X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
     B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
@@ -351,7 +351,7 @@ def generate_OBE_system_transitions(
     Jmax_X: Optional[int] = None,
     Jmin_B: Optional[int] = None,
     Jmax_B: Optional[int] = None,
-    transform: Optional[npt.NDArray[np.complex_]] = None,
+    transform: Optional[npt.NDArray[np.complex128]] = None,
     H_func_X: Optional[Callable] = None,
     H_func_B: Optional[Callable] = None,
     verbose: bool = False,
@@ -558,8 +558,8 @@ def setup_OBE_system(
     decay_channels: Optional[
         Union[Sequence[utils_decay.DecayChannel], utils_decay.DecayChannel]
     ] = None,
-    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
+    E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
     X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
     B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
     nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
@@ -567,7 +567,7 @@ def setup_OBE_system(
     Jmax_X: Optional[int] = None,
     Jmin_B: Optional[int] = None,
     Jmax_B: Optional[int] = None,
-    transform: Optional[npt.NDArray[np.complex_]] = None,
+    transform: Optional[npt.NDArray[np.complex128]] = None,
     H_func_X: Optional[Callable] = None,
     H_func_B: Optional[Callable] = None,
     verbose: bool = False,
@@ -634,8 +634,8 @@ def setup_OBE_system_transitions(
     decay_channels: Optional[
         Union[Sequence[utils_decay.DecayChannel], utils_decay.DecayChannel]
     ] = None,
-    E: npt.NDArray[np.float_] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float_] = np.array([0.0, 0.0, 1e-5]),
+    E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
     X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
     B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
     nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
@@ -643,7 +643,7 @@ def setup_OBE_system_transitions(
     Jmax_X: Optional[int] = None,
     Jmin_B: Optional[int] = None,
     Jmax_B: Optional[int] = None,
-    transform: Optional[npt.NDArray[np.complex_]] = None,
+    transform: Optional[npt.NDArray[np.complex128]] = None,
     H_func_X: Optional[Callable] = None,
     H_func_B: Optional[Callable] = None,
     verbose: bool = False,
