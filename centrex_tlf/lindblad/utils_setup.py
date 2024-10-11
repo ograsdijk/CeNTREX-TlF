@@ -492,20 +492,22 @@ def generate_OBE_system_transitions(
         indices = utils_decay.get_insert_level_indices(
             _decay_channels, QN, excited_states
         )
+
         couplings = [
             insert_levels_coupling_field(coupling, indices_insert=indices)
             for coupling in couplings
         ]
-        QN = utils_decay.add_states_QN(_decay_channels, QN, indices)
+        QN_decay = utils_decay.add_states_QN(_decay_channels, QN, indices)
 
         if _qn_compact is not None:
             indices, H_symbolic = utils_decay.add_levels_symbolic_hamiltonian(
                 H_symbolic, _decay_channels, QN_compact, excited_states
             )
-            QN_compact = utils_decay.add_states_QN(_decay_channels, QN_compact, indices)
             C_array = utils_decay.add_decays_C_arrays(
                 _decay_channels, indices, QN_compact, C_array, Γ
             )
+
+            QN_compact = utils_decay.add_states_QN(_decay_channels, QN_compact, indices)
 
             couplings_compact = [
                 insert_levels_coupling_field(coupling, indices_insert=indices)
@@ -518,6 +520,7 @@ def generate_OBE_system_transitions(
             C_array = utils_decay.add_decays_C_arrays(
                 _decay_channels, indices, QN, C_array, Γ
             )
+        QN = QN_decay
 
     if verbose:
         logger.info(

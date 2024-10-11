@@ -79,14 +79,29 @@ def add_decays_C_arrays(
     C_array: npt.NDArray[np.floating],
     Γ: float,
 ) -> npt.NDArray[np.floating]:
+    """
+    Add decays to the C arrays. Note that QN has to be the original QN before adding
+    extra states!
+
+    Args:
+        decay_channels (Sequence[DecayChannel]): Additional decay channels
+        indices (List[int]): indices where to add the decay channels
+        QN (Sequence[states.CoupledState]): original CoupledStates
+        C_array (npt.NDArray[np.floating]): original C arrays
+
+    Returns:
+        npt.NDArray[np.floating]: modified C arrays
+    """
     # converting the C arrays to branching ratio arrays and adding the new
     # levels
     BR = add_levels_C_array(C_array, indices)
     BR = BR**2 / Γ
 
-    # getting the excited state indices
+    # getting the excited state indices, account for the fact that the C_arrays have
+    # been extended already by adding len(decay_channels) to the indices
     indices_excited = [
-        decay_channel.excited.get_indices(QN) for decay_channel in decay_channels
+        decay_channel.excited.get_indices(QN) + len(decay_channels)
+        for decay_channel in decay_channels
     ]
     # getting the total added branching ratios for each excited state
     BR_added: Dict[int, float] = {}
