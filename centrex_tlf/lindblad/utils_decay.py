@@ -64,6 +64,16 @@ def add_states_QN(
 def add_levels_C_array(
     C_array: npt.NDArray[np.floating], indices: List[int]
 ) -> npt.NDArray[np.floating]:
+    """
+    Adding levels to the C arrays. Used when adding new decay channels.
+
+    Args:
+        C_array (npt.NDArray[np.floating]): original C arrays
+        indices (List[int]): indices where to add levels
+
+    Returns:
+        npt.NDArray[np.floating]: modified C arrays
+    """
     arr = C_array.copy()
     # inserting rows and columns of zeros to account for the new decay levels
     for idx in indices:
