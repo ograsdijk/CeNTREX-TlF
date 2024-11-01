@@ -680,7 +680,7 @@ class UncoupledBasisState(BasisState):
 
         uncoupled_state = self
 
-        data = []
+        data: list[tuple[complex, CoupledBasisState]] = []
 
         # Loop over possible values of F1, F and m_F
         for F1 in np.arange(J - I1, J + I1 + 1):
