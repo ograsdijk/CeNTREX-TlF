@@ -11,6 +11,7 @@ __all__ = [
     "power_to_rabi_gaussian_beam_microwave",
     "rabi_to_electric_field",
     "electric_field_to_intensity",
+    "power_to_intensity_gaussian_beam",
     "rabi_to_power_gaussian_beam",
     "rabi_to_power_gaussian_beam_microwave",
 ]
@@ -119,6 +120,23 @@ def power_to_rabi_rectangular_beam(
 
     rabi = intensity_to_rabi(intensity, coupling, D)
     return rabi
+
+
+def power_to_intensity_gaussian_beam(
+    power: float, sigma_x: float, sigma_y: float
+) -> float:
+    """
+    Intensity in W/m^2 from a given power and beam width
+
+    Args:
+        power (float): power [W]
+        sigma_x (float): x standard deviation [m]
+        sigma_y (float): y standard deviation [m]
+
+    Returns:
+        float: intensity [W/m^2]
+    """
+    return power / (2 * np.pi * sigma_x * sigma_y)
 
 
 def power_to_rabi_gaussian_beam(
