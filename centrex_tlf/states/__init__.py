@@ -1,5 +1,4 @@
 from . import (
-    constants,
     find_states,
     generate_states,
     population,
@@ -7,7 +6,6 @@ from . import (
     utils,
     utils_compact,
 )
-from .constants import *  # noqa
 from .find_states import *  # noqa
 from .generate_states import *  # noqa
 from .population import *  # noqa
@@ -20,5 +18,4 @@ __all__ += utils.__all__.copy()
 __all__ += utils_compact.__all__.copy()
 __all__ += generate_states.__all__.copy()
 __all__ += find_states.__all__.copy()
-__all__ += constants.__all__.copy()
 __all__ += population.__all__.copy()

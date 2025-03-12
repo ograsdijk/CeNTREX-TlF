@@ -1,8 +1,8 @@
 import numpy as np
 
+from centrex_tlf.constants import BConstants
 from centrex_tlf.states import UncoupledBasisState, UncoupledState
 
-from .constants import BConstants
 from .wigner import threej_f
 
 __all__ = ["H_LD", "H_c1p", "H_mhf_Tl", "H_mhf_F", "HZx", "HZy", "HZz"]

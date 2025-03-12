@@ -2,9 +2,9 @@ from functools import lru_cache
 
 import numpy as np
 
+from centrex_tlf.constants import BConstants
 from centrex_tlf.states import CoupledBasisState, CoupledState
 
-from .constants import BConstants
 from .quantum_operators import J2, J4, J6
 from .wigner import sixj_f, threej_f
 

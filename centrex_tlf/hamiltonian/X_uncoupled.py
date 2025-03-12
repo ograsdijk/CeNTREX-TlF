@@ -2,9 +2,9 @@ from functools import lru_cache
 
 import numpy as np
 
+from centrex_tlf.constants import XConstants
 from centrex_tlf.states import UncoupledBasisState, UncoupledState, parity_X
 
-from .constants import XConstants
 from .general_uncoupled import Hrot
 from .quantum_operators import (
     I1m,

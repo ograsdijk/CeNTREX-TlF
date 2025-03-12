@@ -6,6 +6,7 @@ import numpy as np
 import numpy.typing as npt
 from scipy import linalg
 
+from centrex_tlf.constants import BConstants, XConstants
 from centrex_tlf.states import (
     Basis,
     CoupledBasisState,
@@ -25,7 +26,6 @@ from centrex_tlf.states.generate_states import (
 from centrex_tlf.transitions import MicrowaveTransition, OpticalTransition
 
 from .basis_transformations import generate_transform_matrix
-from .constants import BConstants, XConstants
 from .generate_hamiltonian import (
     generate_coupled_hamiltonian_B,
     generate_coupled_hamiltonian_B_function,

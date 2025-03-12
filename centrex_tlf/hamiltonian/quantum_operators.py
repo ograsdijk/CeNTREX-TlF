@@ -2,14 +2,13 @@ import math
 from functools import lru_cache
 from typing import Callable, overload
 
+from centrex_tlf.constants import HamiltonianConstants
 from centrex_tlf.states import (
     CoupledBasisState,
     CoupledState,
     UncoupledBasisState,
     UncoupledState,
 )
-
-from .constants import HamiltonianConstants
 
 __all__ = [
     "J2",

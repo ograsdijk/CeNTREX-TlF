@@ -7,7 +7,8 @@ from typing import Any, List, Optional, Sequence, Tuple, Union
 import numpy as np
 import numpy.typing as npt
 
-from .constants import TlFNuclearSpins
+from centrex_tlf.constants import TlFNuclearSpins
+
 from .find_states import QuantumSelector, get_unique_basisstates_from_basisstates
 from .states import Basis, CoupledBasisState, ElectronicState, UncoupledBasisState
 from .utils import parity_X
