@@ -6,14 +6,13 @@ import numpy as np
 import numpy.typing as npt
 from scipy import linalg
 
-from centrex_tlf.constants import BConstants, XConstants
+from centrex_tlf.constants import BConstants, TlFNuclearSpins, XConstants
 from centrex_tlf.states import (
     Basis,
     CoupledBasisState,
     CoupledState,
     ElectronicState,
     QuantumSelector,
-    TlFNuclearSpins,
     find_exact_states,
     generate_uncoupled_states_ground,
     get_unique_basisstates_from_states,

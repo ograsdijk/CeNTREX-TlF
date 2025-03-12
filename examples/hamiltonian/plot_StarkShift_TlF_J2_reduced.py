@@ -3,8 +3,8 @@ import numpy as np
 from tqdm import tqdm
 
 from centrex_tlf import hamiltonian
+from centrex_tlf.constants import TlFNuclearSpins
 from centrex_tlf.hamiltonian.basis_transformations import generate_transform_matrix
-from centrex_tlf.states.constants import TlFNuclearSpins
 from centrex_tlf.states.find_states import QuantumSelector
 from centrex_tlf.states.generate_states import (
     generate_coupled_states_ground,

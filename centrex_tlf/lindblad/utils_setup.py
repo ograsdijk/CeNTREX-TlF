@@ -6,8 +6,8 @@ import numpy as np
 import numpy.typing as npt
 import sympy as smp
 
+from centrex_tlf import constants, hamiltonian, states
 from centrex_tlf import couplings as couplings_tlf
-from centrex_tlf import hamiltonian, states
 from centrex_tlf.couplings.utils_compact import (
     compact_coupling_field,
     insert_levels_coupling_field,
@@ -133,9 +133,9 @@ def generate_OBE_system(
     ] = None,
     E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
     B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
-    X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
-    B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
-    nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
+    X_constants: constants.XConstants = constants.XConstants(),
+    B_constants: constants.BConstants = constants.BConstants(),
+    nuclear_spins: constants.TlFNuclearSpins = constants.TlFNuclearSpins(),
     Jmin_X: Optional[int] = None,
     Jmax_X: Optional[int] = None,
     Jmin_B: Optional[int] = None,
@@ -345,9 +345,9 @@ def generate_OBE_system_transitions(
     E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
     B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
     Γ: float = hamiltonian.Γ,
-    X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
-    B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
-    nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
+    X_constants: constants.XConstants = constants.XConstants(),
+    B_constants: constants.BConstants = constants.BConstants(),
+    nuclear_spins: constants.TlFNuclearSpins = constants.TlFNuclearSpins(),
     Jmin_X: Optional[int] = None,
     Jmax_X: Optional[int] = None,
     Jmin_B: Optional[int] = None,
@@ -568,9 +568,9 @@ def setup_OBE_system(
     ] = None,
     E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
     B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
-    X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
-    B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
-    nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
+    X_constants: constants.XConstants = constants.XConstants(),
+    B_constants: constants.BConstants = constants.BConstants(),
+    nuclear_spins: constants.TlFNuclearSpins = constants.TlFNuclearSpins(),
     Jmin_X: Optional[int] = None,
     Jmax_X: Optional[int] = None,
     Jmin_B: Optional[int] = None,
@@ -644,9 +644,9 @@ def setup_OBE_system_transitions(
     ] = None,
     E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
     B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
-    X_constants: hamiltonian.constants.XConstants = hamiltonian.XConstants(),
-    B_constants: hamiltonian.constants.BConstants = hamiltonian.BConstants(),
-    nuclear_spins: states.TlFNuclearSpins = states.TlFNuclearSpins(),
+    X_constants: constants.XConstants = constants.XConstants(),
+    B_constants: constants.BConstants = constants.BConstants(),
+    nuclear_spins: constants.TlFNuclearSpins = constants.TlFNuclearSpins(),
     Jmin_X: Optional[int] = None,
     Jmax_X: Optional[int] = None,
     Jmin_B: Optional[int] = None,
@@ -657,7 +657,7 @@ def setup_OBE_system_transitions(
     verbose: bool = False,
     normalize_pol: bool = False,
     Γ: float = hamiltonian.Γ,
-):
+) -> OBESystem:
     """Convenience function for generating the OBE system
 
     Args:
