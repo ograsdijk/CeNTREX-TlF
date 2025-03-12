@@ -41,6 +41,7 @@ class OBESystem:
     system: smp.matrices.dense.MutableDenseMatrix
     coupling_symbols: Sequence[smp.Symbol]
     polarization_symbols: Sequence[Sequence[smp.Symbol]]
+    dissipator: Optional[smp.matrices.dense.MutableDenseMatrix] = None
     QN_original: Optional[Sequence[states.CoupledState]] = None
     decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None
     couplings_original: Optional[List[couplings_tlf.CouplingFields]] = None
@@ -528,7 +529,10 @@ def generate_OBE_system_transitions(
             "matrices into a symbolic system of equations"
         )
         logging.basicConfig(level=logging.WARNING)
-    system = generate_system_of_equations_symbolic(H_symbolic, C_array, fast=True)
+    ham, dissipator = generate_system_of_equations_symbolic(
+        H_symbolic, C_array, fast=True, split_output=True
+    )
+    system = ham + dissipator
 
     obe_system = OBESystem(
         QN=QN_compact if _qn_compact is not None else QN,
@@ -540,6 +544,7 @@ def generate_OBE_system_transitions(
         V_ref_int=V_ref_int,
         C_array=C_array,
         system=system,
+        dissipator=dissipator,
         coupling_symbols=[trans.Ω for trans in transition_selectors],
         polarization_symbols=[
             trans.polarization_symbols for trans in transition_selectors
