@@ -160,7 +160,7 @@ def power_to_rabi_gaussian_beam(
     Returns:
         float: Rabi rate in rotational frequency [2π ⋅ Hz]
     """
-    intensity = power / (2 * np.pi * sigma_x * sigma_y)
+    intensity = power_to_intensity_gaussian_beam(power, sigma_x, sigma_y)
 
     rabi = intensity_to_rabi(intensity, coupling, D)
     return rabi
