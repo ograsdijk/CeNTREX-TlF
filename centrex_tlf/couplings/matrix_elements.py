@@ -83,14 +83,20 @@ def ED_ME_coupled(
     Omegap = ket.Omega
 
     # calculate the reduced matrix element
+    # see Oskari Timgren's Thesis, page 131
     q = Omega - Omegap
     ME: complex = (
-        (-1) ** (F1 + J + Fp + F1p + I1 + I2)
-        * math.sqrt((2 * F + 1) * (2 * Fp + 1) * (2 * F1p + 1) * (2 * F1 + 1))
+        (-1) ** (F1p + F1 + Fp + I1 + I2 - Omega)
+        * math.sqrt(
+            (2 * J + 1)
+            * (2 * Jp + 1)
+            * (2 * F1 + 1)
+            * (2 * F1p + 1)
+            * (2 * F + 1)
+            * (2 * Fp + 1)
+        )
         * hamiltonian.sixj_f(F1p, Fp, I2, F, F1, 1)
         * hamiltonian.sixj_f(Jp, F1p, I1, F1, J, 1)
-        * (-1) ** (J - Omega)
-        * math.sqrt((2 * J + 1) * (2 * Jp + 1))
         * hamiltonian.threej_f(J, 1, Jp, -Omega, q, Omegap)
         * float(np.abs(q) < 2)
     )
@@ -98,22 +104,28 @@ def ED_ME_coupled(
     # if we want the complete matrix element, calculate angular part
     if not rme_only:
         # calculate elements of the polarization vector in spherical basis
-        p_vec: Dict[int, complex] = {}
-        p_vec[-1] = -1 / math.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1])
-        p_vec[0] = pol_vec[2]
-        p_vec[1] = +1 / math.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1])
-
-        # calculate the value of p that connects the states
-        p = mF - mFp
-        p = p * int(np.abs(p) <= 1)
-        # multiply RME by the angular part
-        ME = (
-            ME
-            * (-1) ** (F - mF)
-            * hamiltonian.threej_f(F, 1, Fp, -mF, p, mFp)
-            * p_vec[p]
-            * int(np.abs(p) <= 1)
-        )
+        ME *= angular_part(pol_vec, F, mF, Fp, mFp)
 
     # return the matrix element
     return ME
+
+
+@lru_cache(maxsize=int(1e6))
+def angular_part(
+    pol_vec: Tuple[complex, complex, complex], F: int, mF: int, Fp: int, mFp: int
+) -> complex:
+    p_vec: Dict[int, complex] = {}
+    p_vec[-1] = -1 / math.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1])
+    p_vec[0] = pol_vec[2]
+    p_vec[1] = +1 / math.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1])
+
+    # calculate the value of p that connects the states
+    p = mF - mFp
+    p = p * int(np.abs(p) <= 1)
+    angular = (
+        (-1) ** (F - mF)
+        * hamiltonian.threej_f(F, 1, Fp, -mF, p, mFp)
+        * p_vec[p]
+        * int(np.abs(p) <= 1)
+    )
+    return angular

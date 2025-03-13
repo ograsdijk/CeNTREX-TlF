@@ -14,6 +14,7 @@ numpy = ">=2"
 scipy = ">=1.13"
 sympy = ">=1.13.2"
 pandas = ">=2"
+typing_extensions = "^4.12.2"
 
 
 [build-system]
