@@ -88,6 +88,9 @@ class BasisState(abc.ABC):
     def transform_to_parity_basis(self):
         raise NotImplementedError
 
+    def state_string_custom(self, quantum_numbers: list[str]) -> str:
+        raise NotImplementedError
+
 
 class CoupledBasisState(BasisState):
     # constructor
@@ -246,7 +249,19 @@ class CoupledBasisState(BasisState):
     def __repr__(self) -> str:
         return self.state_string()
 
-    def state_string(self) -> str:
+    def _format_quantum_numbers_helper(
+        self,
+    ) -> tuple[
+        sp.core.numbers.Rational,
+        sp.core.numbers.Rational,
+        sp.core.numbers.Rational,
+        sp.core.numbers.Rational,
+        sp.core.numbers.Rational,
+        sp.core.numbers.Rational,
+        Optional[str],
+        Optional[int],
+        Optional[int],
+    ]:
         F = sp.S(str(self.F), rational=True)
         mF = sp.S(str(self.mF), rational=True)
         F1 = sp.S(str(self.F1), rational=True)
@@ -260,6 +275,10 @@ class CoupledBasisState(BasisState):
                 P = "-"
         Omega = self.Omega
         v = self.v
+        return F, mF, F1, J, I1, I2, P, Omega, v
+
+    def state_string(self) -> str:
+        F, mF, F1, J, I1, I2, P, Omega, v = self._format_quantum_numbers_helper()
 
         string = f"J = {J}, F₁ = {F1}, F = {F}, mF = {mF}, I₁ = {I1}, I₂ = {I2}"
 
@@ -273,47 +292,17 @@ class CoupledBasisState(BasisState):
             string = f"{string}, v = {v}"
         return "|" + string + ">"
 
-    def state_string_custom(self, to_print: List[str]) -> str:
-        F = sp.S(str(self.F), rational=True)
-        mF = sp.S(str(self.mF), rational=True)
-        F1 = sp.S(str(self.F1), rational=True)
-        J = sp.S(str(self.J), rational=True)
-        I1 = sp.S(str(self.I1), rational=True)
-        I2 = sp.S(str(self.I2), rational=True)
-        if self.P is not None:
-            if self.P == 1:
-                P = "+"
-            elif self.P == -1:
-                P = "-"
-        Omega = self.Omega
-        v = self.v
+    def state_string_custom(self, quantum_numbers: List[str]) -> str:
+        F, mF, F1, J, I1, I2, P, Omega, v = self._format_quantum_numbers_helper()
 
         string = ""
-        for val in to_print:
-            if val == "J":
-                string += f"J = {J}, "
-            elif val == "F1":
-                string += f"F₁ = {F1}, "
-            elif val == "F":
-                string += f"F = {F}, "
-            elif val == "mF":
-                string += f"mF = {mF}, "
-            elif val == "I1":
-                string += f"I₁ = {I1}, "
-            elif val == "I2":
-                string += f"I₂ = {I2}, "
-            elif val == "electronic":
-                if self.electronic_state is not None:
-                    string = f"{self.electronic_state.name}, {string}"
-            elif val == "P":
-                if P is not None:
-                    string += f"P = {P}, "
-            elif val == "Ω":
-                if Omega is not None:
-                    string += f"Ω = {Omega}, "
-            elif val == "v":
-                if v is not None:
-                    string += f"v = {v}, "
+        for name in quantum_numbers:
+            val = getattr(self, name)
+            if val is not None:
+                if name == "Ω":
+                    string += f"{name} = {Omega}, "
+                else:
+                    string += f"{name} = {eval(name)}"
         string = string.strip(", ")
         return "|" + string + ">"
 
@@ -634,26 +623,46 @@ class UncoupledBasisState(BasisState):
     def __repr__(self) -> str:
         return self.state_string()
 
+    def _format_quantum_numbers_helper(
+        self, name: str
+    ) -> tuple[
+        str,
+        Optional[sp.core.numbers.Rational | int],
+    ]:
+        if name == "J":
+            return ("J", sp.S(str(self.J), rational=True))
+        elif name == "mJ":
+            return ("mJ", sp.S(str(self.mJ), rational=True))
+        elif name == "I1":
+            return ("I₁", sp.S(str(self.I1), rational=True))
+        elif name == "I2":
+            return ("I₂", sp.S(str(self.I2), rational=True))
+        elif name == "m1":
+            return ("m₁", sp.S(str(self.m1), rational=True))
+        elif name == "m2":
+            return ("m₂", sp.S(str(self.m2), rational=True))
+        elif name == "P":
+            if self.P == 1:
+                P = "+"
+            elif self.P == -1:
+                P = "-"
+            return ("P", P)
+        elif name == "Omega" or name == "Ω":
+            return ("Ω", self.Omega)
+        else:
+            return (name, None)
+
     def state_string(self) -> str:
-        J, mJ = sp.S(str(self.J), rational=True), sp.S(str(self.mJ), rational=True)
-        I1 = sp.S(str(self.I1), rational=True)
-        m1 = sp.S(str(self.m1), rational=True)
-        I2 = sp.S(str(self.I2), rational=True)
-        m2 = sp.S(str(self.m2), rational=True)
-        if self.P == 1:
-            P = "+"
-        elif self.P == -1:
-            P = "-"
-        Omega = self.Omega
+        quantum_numbers = ["J", "mJ", "I1", "m1", "I2", "m2", "P", "Omega"]
+        return self.state_string_custom(quantum_numbers)
 
-        string = f"J = {J}, mJ = {mJ}, I₁ = {I1}, m₁ = {m1}, I₂ = {I2}, m₂ = {m2}"
-
-        if self.electronic_state is not None:
-            string = f"{self.electronic_state.name}, {string}"
-        if self.P is not None:
-            string = f"{string}, P = {P}"
-        if Omega is not None:
-            string = f"{string}, Ω = {Omega}"
+    def state_string_custom(self, quantum_numbers: list[str]) -> str:
+        string = ""
+        for name in quantum_numbers:
+            label, value = self._format_quantum_numbers_helper(name)
+            if value is not None:
+                string += f"{label} = {value}, "
+        string = string.strip(", ")
         return "|" + string + ">"
 
     def print_quantum_numbers(self, printing: bool = False) -> str:
@@ -887,6 +896,24 @@ class State(Generic[S]):
             if np.abs(amp) < amp_max * 1e-3:
                 continue
             string += f"{amp:.2f} x {state}"
+            idx += 1
+            if (idx > 5) or (idx == len(ordered.data)):
+                break
+            string += "\n"
+        if idx == 0:
+            return ""
+        else:
+            return string
+
+    def state_string_custom(self, quantum_numbers: list[str]) -> str:
+        ordered = self.order_by_amp()
+        idx = 0
+        string = ""
+        amp_max = np.max(np.abs(list(zip(*ordered))[0]))
+        for amp, state in ordered:
+            if np.abs(amp) < amp_max * 1e-3:
+                continue
+            string += f"{amp:.2f} x {state.state_string_custom(quantum_numbers)}"
             idx += 1
             if (idx > 5) or (idx == len(ordered.data)):
                 break
