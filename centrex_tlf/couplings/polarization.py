@@ -20,6 +20,17 @@ def format_value(val: complex) -> str:
     return f"{val}"
 
 
+def decompose(vector: npt.NDArray[np.complex128]) -> str:
+    # Assuming self.vector is ordered as [X, Y, Z]
+    x, y, z = vector
+
+    x_str = format_value(x)
+    y_str = format_value(y)
+    z_str = format_value(z)
+
+    return f"{x_str} X + {y_str} Y + {z_str} Z"
+
+
 @dataclass
 class Polarization:
     vector: npt.NDArray[np.complex128]
@@ -31,32 +42,21 @@ class Polarization:
     def __mul__(self, value: int | float | complex) -> Self:
         assert isinstance(value, (int, float, complex))
         vec_new = self.vector * value
-        name_new = self._decompose(vec_new)
-        return self.__class__(vector=vec_new, name=name_new)
+        new_name = decompose(vec_new)
+        return self.__class__(vector=vec_new, name=new_name)
 
     def __rmul__(self, value: int | float | complex) -> Self:
         return self.__mul__(value)
 
     def __add__(self, other: Self) -> Self:
         vec_new = self.vector + other.vector
-        name_new = self._decompose(vec_new)
-        return self.__class__(vector=vec_new, name=name_new)
+        new_name = decompose(vec_new)
+        return self.__class__(vector=vec_new, name=new_name)
 
     def normalize(self) -> Self:
         vec_new = self.vector / np.linalg.norm(self.vector)
-        name_new = self._decompose(vec_new)
-        return self.__class__(vector=vec_new, name=name_new)
-
-    def _decompose(self, vector: npt.NDArray[np.complex128] | None) -> str:
-        if vector is None:
-            vector = self.vector
-        x, y, z = vector
-        x_str = format_value(x)
-        y_str = format_value(y)
-        z_str = format_value(z)
-
-        name = f"{x_str} X + {y_str} Y + {z_str} Z"
-        return name
+        new_name = decompose(vec_new)
+        return self.__class__(vector=vec_new, name=new_name)
 
 
 polarization_X = Polarization(np.array([1, 0, 0], dtype=np.complex128), "X")
