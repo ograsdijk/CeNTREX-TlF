@@ -87,8 +87,12 @@ def matrix_to_states(V, QN):
             data.append((amp, QN[j]))
 
         # store the state in the list
-        state = CoupledState(data)
-
+        if isinstance(QN[0], CoupledState):
+            state = CoupledState(data)
+        elif isinstance(QN[1], UncoupledBasisState):
+            state = UncoupledState(data)
+        else:
+            raise ValueError(f"QN should be liist of CoupledState or UncoupledState, not {type(QN[0])}")
         eigenstates.append(state)
 
     # return the list of states
