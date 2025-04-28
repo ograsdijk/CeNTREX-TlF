@@ -297,12 +297,15 @@ class CoupledBasisState(BasisState):
 
         string = ""
         for name in quantum_numbers:
-            val = getattr(self, name)
-            if val is not None:
-                if name == "Ω":
-                    string += f"{name} = {Omega}, "
-                else:
-                    string += f"{name} = {eval(name)}"
+            if "electronic" in name:
+                string += f"{self.electronic_state.name}, "
+            else:
+                val = getattr(self, name)
+                if val is not None:
+                    if name == "Ω":
+                        string += f"{name} = {Omega}, "
+                    else:
+                        string += f"{name} = {eval(name)}, "
         string = string.strip(", ")
         return "|" + string + ">"
 
@@ -659,9 +662,12 @@ class UncoupledBasisState(BasisState):
     def state_string_custom(self, quantum_numbers: list[str]) -> str:
         string = ""
         for name in quantum_numbers:
-            label, value = self._format_quantum_numbers_helper(name)
-            if value is not None:
-                string += f"{label} = {value}, "
+            if "electronic" in name:
+                string += f"{self.electronic_state.name}, "
+            else:
+                label, value = self._format_quantum_numbers_helper(name)
+                if value is not None:
+                    string += f"{label} = {value}, "
         string = string.strip(", ")
         return "|" + string + ">"
 
