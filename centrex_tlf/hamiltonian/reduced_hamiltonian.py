@@ -13,6 +13,7 @@ from centrex_tlf.states import (
     CoupledState,
     ElectronicState,
     QuantumSelector,
+    UncoupledBasisState,
     find_exact_states,
     generate_uncoupled_states_ground,
     get_unique_basisstates_from_states,
@@ -26,6 +27,7 @@ from centrex_tlf.transitions import MicrowaveTransition, OpticalTransition
 
 from .basis_transformations import generate_transform_matrix
 from .generate_hamiltonian import (
+    Hamiltonian,
     generate_coupled_hamiltonian_B,
     generate_coupled_hamiltonian_B_function,
     generate_uncoupled_hamiltonian_X,
@@ -82,9 +84,12 @@ class ReducedHamiltonian:
     V: npt.NDArray[np.complex128]
     QN_basis: List[CoupledState]
     QN_construct: List[CoupledBasisState]
+    hamiltonian: Hamiltonian
+    transform: npt.NDArray[np.complex128] | None = None
+    QN_pretransform: list[UncoupledBasisState] | None = None
 
     def __iter__(self):
-        # suppot for legacy code
+        # support for legacy code
         return iter((self.QN_basis, self.H))
 
 
@@ -190,7 +195,13 @@ def generate_reduced_X_hamiltonian(
     H_X_red = reduced_basis_hamiltonian(QN_diag, H_diagonalized.H, ground_states)
 
     return ReducedHamiltonian(
-        H=H_X_red, V=H_diagonalized.V, QN_basis=ground_states, QN_construct=list(QNc)
+        H=H_X_red,
+        V=H_diagonalized.V,
+        QN_basis=ground_states,
+        QN_construct=list(QNc),
+        hamiltonian=H_X_uc,
+        transform=S_transform,
+        QN_pretransform=QN,
     )
 
 
@@ -291,6 +302,7 @@ def generate_reduced_B_hamiltonian(
         V=H_diagonalized.V,
         QN_basis=excited_states,
         QN_construct=list(QN_B),
+        hamiltonian=H_B,
     )
 
 
@@ -318,6 +330,8 @@ class ReducedHamiltonianTotal:
     X_states_basis: List[CoupledBasisState]
     B_states_basis: List[CoupledBasisState]
     QN_basis: List[CoupledBasisState]
+    X_hamiltonian: ReducedHamiltonian
+    B_hamiltonian: ReducedHamiltonian
 
 
 def generate_total_reduced_hamiltonian(
@@ -392,7 +406,7 @@ def generate_total_reduced_hamiltonian(
                             Hamiltonian and reference eigenvectors
     """
 
-    ground_states, H_X_red = generate_reduced_X_hamiltonian(
+    X_hamiltonian = generate_reduced_X_hamiltonian(
         X_states_approx,
         E=E,
         B=B,
@@ -405,6 +419,7 @@ def generate_total_reduced_hamiltonian(
         H_func=H_func_X,
         transform=transform,
     )
+    ground_states, H_X_red = X_hamiltonian
 
     if use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
         _B_states_approx = cast(
@@ -466,6 +481,8 @@ def generate_total_reduced_hamiltonian(
         X_states_basis=list(X_states_approx),
         B_states_basis=list(B_states_approx),
         QN_basis=list(X_states_approx) + list(B_states_approx),
+        X_hamiltonian=X_hamiltonian,
+        B_hamiltonian=H_B_red,
     )
 
 
