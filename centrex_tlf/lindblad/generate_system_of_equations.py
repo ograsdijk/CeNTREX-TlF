@@ -54,7 +54,7 @@ def generate_system_of_equations_symbolic(
     if fast:
         # C_array is an array of 2D arrays, where each 2D array only has one
         # entry, i.e. don't have to do the full matrix multiplication each
-        # time for C@ρ@Cᶜ, i.e. using manual spare matrix multiplication
+        # time for C@ρ@Cᶜ, i.e. using manual sparse matrix multiplication
         for C, Cᶜ in zip(C_array, C_conj_array):
             idC = np.nonzero(C)
             idCᶜ = np.nonzero(Cᶜ)
