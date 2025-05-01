@@ -3,7 +3,7 @@ import numpy as np
 from centrex_tlf import hamiltonian, transitions
 
 trans = transitions.OpticalTransition(
-    transitions.OpticalTransitionType.R, J_ground=0, F1=3 / 2, F=2
+    transitions.OpticalTransitionType.R, J_ground=0, F1_excited=3 / 2, F_excited=2
 )
 
 # include Jmax_X to include mixing of ground states. The B state calculation

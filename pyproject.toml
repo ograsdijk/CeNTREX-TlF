@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "centrex-tlf"
-version = "0.1.4"
+version = "0.1.5"
 description = ""
 authors = ["ograsdijk <o.grasdijk@gmail.com>"]
 readme = "README.md"
