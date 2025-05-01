@@ -86,7 +86,7 @@ class ReducedHamiltonian:
     QN_construct: List[CoupledBasisState]
     hamiltonian: Hamiltonian
     transform: npt.NDArray[np.complex128] | None = None
-    QN_pretransform: list[UncoupledBasisState] | None = None
+    QN_pretransform: Sequence[UncoupledBasisState] | None = None
 
     def __iter__(self):
         # support for legacy code
@@ -201,7 +201,7 @@ def generate_reduced_X_hamiltonian(
         QN_construct=list(QNc),
         hamiltonian=H_X_uc,
         transform=S_transform,
-        QN_pretransform=QN,
+        QN_pretransform=cast(Sequence[UncoupledBasisState], QN),
     )
 
 

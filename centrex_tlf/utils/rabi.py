@@ -30,7 +30,7 @@ __all__ = [
 T = TypeVar("T", float, npt.NDArray[np.floating])
 
 
-def fwhm_to_sigma(fwhm: float) -> float:
+def fwhm_to_sigma(fwhm: T) -> T:
     """
     Full width at half maximum to standard deviation
 
@@ -43,7 +43,7 @@ def fwhm_to_sigma(fwhm: float) -> float:
     return fwhm / (2 * np.sqrt(2 * np.log(2)))
 
 
-def sigma_to_fwhm(sigma: float) -> float:
+def sigma_to_fwhm(sigma: T) -> T:
     """
     Standard deviation to full width at half maximum
 
@@ -56,7 +56,7 @@ def sigma_to_fwhm(sigma: float) -> float:
     return sigma * 2 * np.sqrt(2 * np.log(2))
 
 
-def sigma_to_waist(sigma: float) -> float:
+def sigma_to_waist(sigma: T) -> T:
     """
     Standard deviation to waist
 
@@ -69,7 +69,7 @@ def sigma_to_waist(sigma: float) -> float:
     return sigma * 2
 
 
-def waist_to_sigma(waist: float) -> float:
+def waist_to_sigma(waist: T) -> T:
     """
     Waist to standard deviation
 
@@ -82,17 +82,7 @@ def waist_to_sigma(waist: float) -> float:
     return waist / 2
 
 
-@overload
-def intensity_to_electric_field(intensity: float) -> float: ...
-
-
-@overload
-def intensity_to_electric_field(
-    intensity: npt.NDArray[np.floating],
-) -> npt.NDArray[np.floating]: ...
-
-
-def intensity_to_electric_field(intensity):
+def intensity_to_electric_field(intensity: T) -> T:
     """
     Intensity in W/m^2 to electric field
 
@@ -121,7 +111,7 @@ def electric_field_to_rabi(electric_field: T, coupling: float, D: float) -> T:
     return electric_field * coupling * D / cst.hbar
 
 
-def intensity_to_rabi(intensity: T, coupling: float, D: float):
+def intensity_to_rabi(intensity: T, coupling: float, D: float) -> T:
     """
     Rabi rate from an intensity
 
@@ -340,7 +330,7 @@ def rabi_to_power_gaussian_beam_microwave(
     D: float = XConstants.D,
 ) -> T:
     """
-    power in W given a rabi rate and couling strength
+    power in W given a rabi rate and coupling strength
 
     Args:
         rabi (float): rabi rate in rotational frequency [2π ⋅ Hz]

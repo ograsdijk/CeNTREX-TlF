@@ -11,68 +11,85 @@ __all__ = ["generate_system_of_equations_symbolic"]
 
 @overload
 def generate_system_of_equations_symbolic(
-    hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    C_array: npt.NDArray[np.floating],
+    hamiltonian: smp.Matrix,
+    C_array: npt.NDArray[np.floating | np.complexfloating],  # 3D array
     fast: bool,
     split_output: Literal[False],
-) -> smp.matrices.dense.MutableDenseMatrix: ...
+) -> smp.Matrix: ...
 
 
 @overload
 def generate_system_of_equations_symbolic(
-    hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    C_array: npt.NDArray[np.floating],
+    hamiltonian: smp.Matrix,
+    C_array: npt.NDArray[np.floating | np.complexfloating],  # 3D array
     fast: bool,
-) -> smp.matrices.dense.MutableDenseMatrix: ...
+) -> smp.Matrix: ...
 
 
 @overload
 def generate_system_of_equations_symbolic(
-    hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    C_array: npt.NDArray[np.floating],
+    hamiltonian: smp.Matrix,
+    C_array: npt.NDArray[np.floating | np.complexfloating],  # 3D array
     fast: bool,
     split_output: Literal[True],
-) -> Tuple[
-    smp.matrices.dense.MutableDenseMatrix, smp.matrices.dense.MutableDenseMatrix
-]: ...
+) -> Tuple[smp.Matrix, smp.Matrix]: ...
 
 
 def generate_system_of_equations_symbolic(
-    hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    C_array: npt.NDArray[np.floating],
+    hamiltonian: smp.Matrix,
+    C_array: npt.NDArray[np.floating | np.complexfloating],  # 3D array
     fast: bool = False,
     split_output: bool = False,
-) -> Union[
-    smp.matrices.dense.MutableDenseMatrix,
-    Tuple[smp.matrices.dense.MutableDenseMatrix, smp.matrices.dense.MutableDenseMatrix],
-]:
-    n_states = hamiltonian.shape[0]
-    ρ = generate_density_matrix_symbolic(n_states)
-    C_conj_array = np.einsum("ijk->ikj", C_array.conj())
+) -> Union[smp.Matrix, Tuple[smp.Matrix, smp.Matrix]]:
+    n_states: int = hamiltonian.shape[0]  # Explicitly annotate n_states
+    density_matrix: smp.Matrix = generate_density_matrix_symbolic(n_states)
 
-    matrix_mult_sum = smp.zeros(n_states, n_states)
+    # Ensure C_array is complex for consistency
+    if not np.iscomplexobj(C_array):
+        C_array = C_array.astype(np.complex128)
+
+    C_conj_array: npt.NDArray[np.floating | np.complexfloating] = np.einsum(
+        "ijk->ikj",
+        C_array.conj(),  # type: ignore[arg-type]
+    )
+
+    # Initialize the matrix for the summation
+    matrix_mult_sum: smp.Matrix = smp.zeros(n_states, n_states)
+
     if fast:
-        # C_array is an array of 2D arrays, where each 2D array only has one
-        # entry, i.e. don't have to do the full matrix multiplication each
-        # time for C@ρ@Cᶜ, i.e. using manual sparse matrix multiplication
-        for C, Cᶜ in zip(C_array, C_conj_array):
-            idC = np.nonzero(C)
-            idCᶜ = np.nonzero(Cᶜ)
-            val = C[idC][0] * Cᶜ[idCᶜ][0] * ρ[idC[-1], idCᶜ[0]][0]
-            matrix_mult_sum[idC[0][0], idCᶜ[-1][0]] += val
-
+        # Sparse matrix multiplication optimization
+        for C, C_conj in zip(C_array, C_conj_array):
+            nonzero_C = np.nonzero(C)
+            nonzero_C_conj = np.nonzero(C_conj)
+            value = (
+                C[nonzero_C][0]
+                * C_conj[nonzero_C_conj][0]
+                * density_matrix[nonzero_C[-1], nonzero_C_conj[0]][0]
+            )
+            matrix_mult_sum[nonzero_C[0][0], nonzero_C_conj[-1][0]] += value
     else:
+        # Full matrix multiplication
         for idx in range(C_array.shape[0]):
-            matrix_mult_sum[:, :] += C_array[idx] @ ρ @ C_conj_array[idx]
+            matrix_mult_sum += C_array[idx] @ density_matrix @ C_conj_array[idx]
 
-    Cprecalc = np.einsum("ijk,ikl", C_conj_array, C_array)
+    # Precompute terms for Lindblad operators
+    C_precalc: npt.NDArray[np.floating | np.complexfloating] = np.einsum(
+        "ijk,ikl",
+        C_conj_array,  # type: ignore[arg-type]
+        C_array,  # type: ignore[arg-type]
+    )
+    lindblad_term: smp.Matrix = -0.5 * (
+        C_precalc @ density_matrix + density_matrix @ C_precalc
+    )
 
-    a = -0.5 * (Cprecalc @ ρ + ρ @ Cprecalc)
-    b = -1j * (hamiltonian @ ρ - ρ @ hamiltonian)
+    # Compute Hamiltonian contribution
+    hamiltonian_term: smp.Matrix = -1j * (
+        hamiltonian @ density_matrix - density_matrix @ hamiltonian
+    )
 
     if split_output:
-        return b, matrix_mult_sum + a
+        return hamiltonian_term, matrix_mult_sum + lindblad_term
     else:
-        system = smp.zeros(n_states, n_states)
-        system += matrix_mult_sum + a + b
+        system: smp.Matrix = smp.zeros(n_states, n_states)
+        system += matrix_mult_sum + lindblad_term + hamiltonian_term
         return system

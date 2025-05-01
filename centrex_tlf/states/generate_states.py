@@ -201,12 +201,12 @@ def generate_coupled_states_base(
     """
     if (basis is not None) and (basis is not basis.CoupledΩ):
         assert qn_selector.P is not None, "function requires a parity to be set"
-    assert (
-        qn_selector.J is not None
-    ), "function requires a rotational quantum number to be set"
-    assert (
-        qn_selector.electronic is not None
-    ), "function requires electronic state to be set"
+    assert qn_selector.J is not None, (
+        "function requires a rotational quantum number to be set"
+    )
+    assert qn_selector.electronic is not None, (
+        "function requires electronic state to be set"
+    )
     assert qn_selector.Ω is not None, "function requires Ω to be set"
 
     # generate all combinations

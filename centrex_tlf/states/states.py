@@ -171,7 +171,7 @@ class CoupledBasisState(BasisState):
     def __matmul__(self, other: CoupledBasisState) -> Literal[0, 1]: ...
 
     @overload
-    def __matmul__(self, other: UncoupledBasisState) -> UncoupledState: ...
+    def __matmul__(self, other: UncoupledBasisState) -> int | float | complex: ...
 
     # inner product
     def __matmul__(self, other):
@@ -297,7 +297,7 @@ class CoupledBasisState(BasisState):
 
         string = ""
         for name in quantum_numbers:
-            if "electronic" in name:
+            if "electronic" in name and self.electronic_state:
                 string += f"{self.electronic_state.name}, "
             else:
                 val = getattr(self, name)
@@ -368,9 +368,9 @@ class CoupledBasisState(BasisState):
         Omega = self.Omega
 
         assert self.basis is not None, "Unknown basis state, can't transform to Ω basis"
-        assert (
-            P is not None
-        ), "Can't transform state to Omega basis if parity is not known"
+        assert P is not None, (
+            "Can't transform state to Omega basis if parity is not known"
+        )
 
         # Check that not already in omega basis
         if self.basis == Basis.CoupledP and self.electronic_state == ElectronicState.B:
@@ -560,7 +560,7 @@ class UncoupledBasisState(BasisState):
     def __matmul__(self, other: UncoupledBasisState) -> Literal[1, 0]: ...
 
     @overload
-    def __matmul__(self, other: CoupledBasisState) -> UncoupledState: ...
+    def __matmul__(self, other: CoupledBasisState) -> int | float | complex: ...
 
     # inner product
     def __matmul__(self, other):
@@ -662,7 +662,7 @@ class UncoupledBasisState(BasisState):
     def state_string_custom(self, quantum_numbers: list[str]) -> str:
         string = ""
         for name in quantum_numbers:
-            if "electronic" in name:
+            if "electronic" in name and self.electronic_state:
                 string += f"{self.electronic_state.name}, "
             else:
                 label, value = self._format_quantum_numbers_helper(name)
