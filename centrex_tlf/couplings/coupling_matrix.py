@@ -162,12 +162,12 @@ def generate_coupling_field(
     absolute_coupling: float = 1e-6,
     normalize_pol: bool = True,
 ) -> CouplingFields:
-    assert isinstance(
-        pol_main, np.ndarray
-    ), "supply a Sequence of np.ndarrays with dtype np.complex128 for pol_vecs"
-    assert isinstance(
-        pol_vecs[0], np.ndarray
-    ), "supply a Sequence of np.ndarrays with dtype np.complex128 for pol_vecs"
+    assert isinstance(pol_main, np.ndarray), (
+        "supply a Sequence of np.ndarrays with dtype np.complex128 for pol_vecs"
+    )
+    assert isinstance(pol_vecs[0], np.ndarray), (
+        "supply a Sequence of np.ndarrays with dtype np.complex128 for pol_vecs"
+    )
     if not np.issubdtype(pol_main.dtype, np.complex128):
         pol_main.astype(np.complex128)
     if not np.issubdtype(pol_vecs[0].dtype, np.complex128):
@@ -225,16 +225,18 @@ def generate_coupling_field(
         normalize_pol=normalize_pol,
     )
 
-    assert (
-        ME_main != 0
-    ), f"main coupling element for {ground_main_approx} -> {excited_main_approx} is zero"
+    assert ME_main != 0, (
+        f"main coupling element for {ground_main_approx} -> {excited_main_approx} is zero"
+    )
 
     _ground_main = cast(CoupledBasisState, ground_main.largest)
     _excited_main = cast(CoupledBasisState, excited_main.largest)
 
-    assert_transition_coupled_allowed(
-        _ground_main, _excited_main, ΔmF_allowed(pol_main)
-    )
+    ΔmF_raw = ΔmF_allowed(pol_main)
+    if not isinstance(ΔmF_raw, (int, np.int_)):
+        ΔmF_raw = int(ΔmF_raw[0])
+
+    assert_transition_coupled_allowed(_ground_main, _excited_main, ΔmF_raw)
 
     couplings = []
     for pol in pol_vecs:
@@ -313,9 +315,9 @@ def generate_coupling_field_automatic(
                                 polarization, containing the polarization and coupling
                                 field
     """
-    assert isinstance(
-        pol_vecs[0], np.ndarray
-    ), "supply a Sequence of np.ndarrays with dtype np.floating for pol_vecs"
+    assert isinstance(pol_vecs[0], np.ndarray), (
+        "supply a Sequence of np.ndarrays with dtype np.floating for pol_vecs"
+    )
 
     _ground_states_approx: Sequence[states.CoupledState]
     _excited_states_approx: Sequence[states.CoupledState]

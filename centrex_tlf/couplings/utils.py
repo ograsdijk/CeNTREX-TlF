@@ -1,4 +1,4 @@
-from typing import List, Sequence, Tuple, Union, cast
+from typing import Iterable, List, Literal, Sequence, Tuple, Union, cast, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -18,85 +18,149 @@ __all__: List[str] = []
 
 
 def check_transition_coupled_allowed(
-    ground: states.CoupledBasisState, excited: states.CoupledBasisState
-):
+    ground: states.CoupledBasisState,
+    excited: states.CoupledBasisState,
+) -> bool:
     """
-    Check whether the transition between the two states is allowed based on the quantum
-    numbers
+    Check if an electric-dipole (E1) transition between two coupled-basis states is allowed.
+
+    Applies the following selection rules:
+        • Parity must change: P_ground * P_excited == -1
+        • Total angular momentum change: |ΔF| ≤ 1
+        • The case F_ground = F_excited = 0 is forbidden.
 
     Args:
-        ground (states.CoupledBasisState): ground CoupledBasisState
-        excited (states.CoupledBasisState): excited CoupledBasisState
+        ground (CoupledBasisState): The ground-state coupled basis.
+        excited (CoupledBasisState): The excited-state coupled basis.
+
+    Returns:
+        bool: True if the transition is allowed, False otherwise.
+
+    Raises:
+        ValueError: If either state's parity (P) or total F is not set (None).
     """
-    assert ground.P is not None, "parity is required to be set for ground"
-    assert excited.P is not None, "parity is required to be set for excited"
+    if ground.P is None or excited.P is None:
+        raise ValueError("Both states must have parity P set")
+    if ground.F is None or excited.F is None:
+        raise ValueError("Both states must have total F set")
 
-    ΔF = int(excited.F - ground.F)
-    ΔP = int(excited.P - ground.P)
+    # 1. Parity change
+    if ground.P * excited.P != -1:
+        return False
 
-    flag_ΔP = abs(ΔP) != 2
-    flag_ΔF = abs(ΔF) > 1
+    # 2. Hyperfine selection rule
+    dF = abs(excited.F - ground.F)
+    if dF > 1:
+        return False
+    if dF == 0 and ground.F == 0:
+        return False
 
-    return not (flag_ΔP | flag_ΔF)
+    return True
+
+
+@overload
+def check_transition_coupled_allowed_polarization(
+    ground_state: states.CoupledBasisState,
+    excited_state: states.CoupledBasisState,
+    ΔmF_allowed: Union[int, Iterable[int]],
+    *,
+    return_err: Literal[True] = ...,
+    ΔmF_absolute: bool = ...,
+) -> Tuple[bool, str]: ...
+
+
+@overload
+def check_transition_coupled_allowed_polarization(
+    ground_state: states.CoupledBasisState,
+    excited_state: states.CoupledBasisState,
+    ΔmF_allowed: Union[int, Iterable[int]],
+    *,
+    return_err: Literal[False],
+    ΔmF_absolute: bool = ...,
+) -> bool: ...
 
 
 def check_transition_coupled_allowed_polarization(
     ground_state: states.CoupledBasisState,
     excited_state: states.CoupledBasisState,
-    ΔmF_allowed: int,
-    return_err: float = True,
-    ΔmF_absolute=False,
+    ΔmF_allowed: Union[int, Iterable[int]],
+    *,
+    return_err: bool = True,
+    ΔmF_absolute: bool = False,
 ) -> Union[bool, Tuple[bool, str]]:
-    """Check whether the transition is allowed based on the quantum numbers
-
-    Args:
-        ground_state (CoupledBasisState): ground CoupledBasisState
-        state2 (CoupledBasisState): excited CoupledBasisState
-        ΔmF_allowed (int): allowed ΔmF for the transition
-        return_err (boolean): boolean flag for returning the error message
-
-    Returns:
-        tuple: (allowed boolean, error message)
     """
-    assert ground_state.P is not None, "parity is required to be set for ground_state"
-    assert excited_state.P is not None, "parity is required to be set for excited_state"
+    Basic E1 selection-rule check for a hyperfine transition
+    including photon-polarisation (ΔmF) information.
 
+    Parameters
+    ----------
+    ground_state, excited_state : states.CoupledBasisState
+        Initial and final coupled basis states (must have P, F, mF set).
+    ΔmF_allowed : int | Iterable[int]
+        Allowed change in mF imposed by the photon polarisation.
+        Pass a single value (e.g. 0) or something like {-1, +1}.
+    return_err : bool, default True
+        If True, return (allowed, message); else return allowed only.
+    ΔmF_absolute : bool, default False
+        If True, compare |ΔmF| against |ΔmF_allowed|.
+
+    Returns
+    -------
+    bool | (bool, str)
+        Whether the transition is allowed and, optionally, an explanation.
+    """
+    # --- sanity checks -------------------------------------------------------
+    if ground_state.P is None or excited_state.P is None:
+        raise ValueError("Both states must have parity P set")
+    if ground_state.F is None or excited_state.F is None:
+        raise ValueError("Both states must have total F set")
+    if ground_state.mF is None or excited_state.mF is None:
+        raise ValueError("Both states must have magnetic quantum number mF set")
+
+    # --- helper lambdas ------------------------------------------------------
+    parity_ok = ground_state.P * excited_state.P == -1  # E1 requires P_i ≠ P_f
     ΔF = int(excited_state.F - ground_state.F)
+    F_ok = (abs(ΔF) <= 1) and not (ground_state.F == excited_state.F == 0)
+
     ΔmF = int(excited_state.mF - ground_state.mF)
     if ΔmF_absolute:
-        ΔmF = np.abs(ΔmF)
-        ΔmF_allowed = np.abs(ΔmF_allowed)
-    ΔP = int(excited_state.P - ground_state.P)
+        ΔmF = abs(ΔmF)
 
-    flag_ΔP = abs(ΔP) != 2
-    flag_ΔF = abs(ΔF) > 1
-    flag_ΔmF = ΔmF != ΔmF_allowed
-    flag_ΔFΔmF = (not flag_ΔmF) & ((ΔF == 0) & (ΔmF == 0) & (ground_state.mF == 0))
-
-    errors = ""
-    if flag_ΔP:
-        errors += "parity invalid"
-    if flag_ΔF:
-        if len(errors) != 0:
-            errors += ", "
-        errors += f"ΔF invalid -> ΔF = {ΔF}"
-    if flag_ΔmF:
-        if len(errors) != 0:
-            errors += ", "
-        errors += f"ΔmF invalid -> ΔmF = {ΔmF}"
-
-    if flag_ΔFΔmF:
-        if len(errors) != 0:
-            errors += ", "
-        errors += "ΔF = 0 & ΔmF = 0 invalid"
-
-    if len(errors) != 0:
-        errors = f"transition not allowed; {errors}"
-
-    if return_err:
-        return not (flag_ΔP | flag_ΔF | flag_ΔmF | flag_ΔFΔmF), errors
+    # Allow an int or any iterable of ints for ΔmF_allowed
+    if isinstance(ΔmF_allowed, int):
+        allowed_set = {ΔmF_allowed}
     else:
-        return not (flag_ΔP | flag_ΔF | flag_ΔmF | flag_ΔFΔmF)
+        allowed_set = set(ΔmF_allowed)
+
+    if ΔmF_absolute:
+        allowed_set = {abs(v) for v in allowed_set}
+
+    mF_ok = ΔmF in allowed_set
+
+    # Special “stretched” prohibition: ΔF = 0, ΔmF = 0, and mF = 0
+    stretched_forbidden = (ΔF == 0) and (ΔmF == 0) and (ground_state.mF == 0)
+
+    # --- aggregate result ----------------------------------------------------
+    allowed = parity_ok and F_ok and mF_ok and not stretched_forbidden
+
+    if not return_err:
+        return allowed
+
+    # Build minimal error string only when needed
+    if allowed:
+        return True, ""
+
+    errors = []
+    if not parity_ok:
+        errors.append("parity must change (P_i ≠ P_f)")
+    if not F_ok:
+        errors.append(f"|ΔF| must be ≤ 1 and F=0→0 forbidden (ΔF={ΔF})")
+    if not mF_ok:
+        errors.append(f"ΔmF={ΔmF} not in allowed set {sorted(allowed_set)}")
+    if stretched_forbidden:
+        errors.append("F=0, mF=0 → F'=0, mF'=0 transition is forbidden")
+
+    return False, "transition not allowed; " + ", ".join(errors)
 
 
 def assert_transition_coupled_allowed(
@@ -127,31 +191,52 @@ def assert_transition_coupled_allowed(
 
 def ΔmF_allowed(
     polarization: npt.NDArray[np.complex128],
-) -> int:
+    tol: float = 1e-10,
+) -> Union[int, npt.NDArray[np.int_]]:
     """
-    Generate a tuple of all allowed ΔmF
+    Determine which hyperfine ΔmF transitions are allowed by a photon’s polarization.
+
+    Args:
+        polarization (npt.NDArray[np.complex128]): Normalized Jones vector
+            [Ex, Ey, Ez] in the lab frame.
+        tol (float, optional): Threshold below which a spherical component
+            is considered zero. Defaults to 1e-10.
 
     Returns:
-        int: allowed ΔmF
+        int: the single allowed ΔmF value, if only one is nonzero.
+        npt.NDArray[np.int_]: array of allowed ΔmF values, otherwise.
+
+    Raises:
+        ValueError: If `polarization` is not shape (3,) or if all spherical components
+            are below `tol` (i.e. effectively zero).
     """
-    # TODO: update to more sophisticated method, not a bunch of ifs
-    # TODO: return multiple allowed ΔmF
-    if np.all(polarization == polarization_X.vector):
-        ΔmF = +1
-    elif np.all(polarization == polarization_Y.vector):
-        ΔmF = +1
-    elif np.all(polarization == polarization_Z.vector):
-        ΔmF = 0
-    elif np.all(polarization == polarization_σm.vector):
-        ΔmF = -1
-    elif np.all(polarization == polarization_σp.vector):
-        ΔmF = +1
-    else:
+    polarization = np.asarray(polarization, dtype=np.complex128)
+    if polarization.shape != (3,):
+        raise ValueError("polarization must be a (3,) array in (Ex, Ey, Ez) order")
+
+    # Convert (Ex,Ey,Ez) → spherical components (q = +1, 0, –1)
+    ex, ey, ez = polarization
+    e_p1 = -(ex + 1j * ey) / np.sqrt(2)  # σ⁺  (ΔmF = +1)
+    e_m1 = (ex - 1j * ey) / np.sqrt(2)  # σ⁻  (ΔmF = –1)
+    e_0 = ez  # π    (ΔmF =  0)
+
+    allowed = []
+    if abs(e_p1) > tol:
+        allowed.append(+1)
+    if abs(e_m1) > tol:
+        allowed.append(-1)
+    if abs(e_0) > tol:
+        allowed.append(0)
+
+    if not allowed:
         raise ValueError(
-            f"polarization {polarization} cannot be used for select_main_states, not"
-            " yet implemented"
+            "Polarization vector is zero or unrecognized (all components < tol)"
         )
-    return ΔmF
+
+    allowed_sorted = sorted(set(allowed))
+    if len(allowed_sorted) == 1:
+        return allowed_sorted[0]
+    return np.array(allowed_sorted, dtype=np.int_)
 
 
 def select_main_states(
@@ -159,41 +244,60 @@ def select_main_states(
     excited_states: Sequence[states.CoupledState],
     polarization: npt.NDArray[np.complex128],
 ) -> Tuple[states.CoupledState, states.CoupledState]:
-    """Select main states for calculating the transition strength to normalize
-    the Rabi rate with
-
-    Args:
-        ground_states (Sequence[states.State]): Sequence of ground states for the
-                                                transition
-        excited_states (Sequence[states.State]): Sequence of excited states for the
-                                                transition
-        polarization (npt.NDArray[np.floating]): polarization vector
     """
-    ΔmF = ΔmF_allowed(polarization)
+    Behavior-compatible re-implementation of the original selector:
 
-    allowed_transitions = []
-    indices_gnd_mF0 = []
-    for ide, exc in enumerate(excited_states):
-        exc_basisstate = cast(CoupledBasisState, exc.largest)
-        for idg, gnd in enumerate(ground_states):
-            gnd_basisstate = cast(CoupledBasisState, gnd.largest)
-            if check_transition_coupled_allowed_polarization(
-                gnd_basisstate, exc_basisstate, ΔmF, return_err=False
-            ):
-                allowed_transitions.append((idg, ide, exc_basisstate.mF))
-                if gnd_basisstate.mF == 0:
-                    indices_gnd_mF0.append((idg, ide, gnd_basisstate.mF))
-
-    assert (
-        len(allowed_transitions) > 0
-    ), "none of the supplied ground and excited states have allowed transitions"
-
-    if len(indices_gnd_mF0) > 0:
-        excited_state = excited_states[indices_gnd_mF0[-1][1]]
-        ground_state = ground_states[indices_gnd_mF0[-1][0]]
+      • Scan excited states first, ground states second (same ordering).
+      • Build *allowed_transitions* in that order.
+      • If any allowed line has ground-state mF = 0, return **the last one found**.
+      • Otherwise return **the middle element** (len // 2) of allowed_transitions.
+    """
+    # ------------------------------------------------------------------
+    # 1. Get the ΔmF value(s) allowed by the photon polarization
+    # ------------------------------------------------------------------
+    ΔmF_raw = ΔmF_allowed(polarization)
+    if isinstance(ΔmF_raw, (int, np.integer)):
+        # Scalar → wrap in a tuple
+        ΔmF_allowed_iterable: Tuple[int, ...] = (int(ΔmF_raw),)
     else:
-        idt = len(allowed_transitions) // 2
-        excited_state = excited_states[allowed_transitions[idt][1]]
-        ground_state = ground_states[allowed_transitions[idt][0]]
+        # NumPy array → copy to a tuple of plain ints
+        ΔmF_allowed_iterable = tuple(
+            int(x) for x in cast(npt.NDArray[np.int64], ΔmF_raw).tolist()
+        )
 
-    return ground_state, excited_state
+    # ------------------------------------------------------------------
+    # 2. Build the list of allowed transitions in the *original* order
+    # ------------------------------------------------------------------
+    allowed_transitions = []  # (g_idx, e_idx, mF_exc)
+    indices_gnd_mF0 = []  # (g_idx, e_idx, mF_gnd)
+
+    for e_idx, exc in enumerate(excited_states):  # ← outer loop
+        exc_bs = cast(CoupledBasisState, exc.largest)
+        for g_idx, gnd in enumerate(ground_states):  # ← inner loop
+            gnd_bs = cast(CoupledBasisState, gnd.largest)
+
+            if check_transition_coupled_allowed_polarization(
+                gnd_bs,
+                exc_bs,
+                ΔmF_allowed_iterable,  # iterable now
+                return_err=False,
+            ):
+                allowed_transitions.append((g_idx, e_idx, exc_bs.mF))
+                if gnd_bs.mF == 0:
+                    indices_gnd_mF0.append((g_idx, e_idx, gnd_bs.mF))
+
+    if not allowed_transitions:
+        raise ValueError(
+            "None of the supplied ground and excited states have allowed transitions"
+        )
+
+    # ------------------------------------------------------------------
+    # 3. Select the main pair with the *same* rules as before
+    # ------------------------------------------------------------------
+    if indices_gnd_mF0:
+        g_idx, e_idx, _ = indices_gnd_mF0[-1]  # last one with mF_gnd = 0
+    else:
+        mid = len(allowed_transitions) // 2
+        g_idx, e_idx, _ = allowed_transitions[mid]  # middle element
+
+    return ground_states[g_idx], excited_states[e_idx]

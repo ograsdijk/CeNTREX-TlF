@@ -6,8 +6,9 @@ import numpy as np
 import numpy.typing as npt
 import sympy as smp
 
-from centrex_tlf import constants, hamiltonian, states
+from centrex_tlf import constants
 from centrex_tlf import couplings as couplings_tlf
+from centrex_tlf import hamiltonian, states
 from centrex_tlf.couplings.utils_compact import (
     compact_coupling_field,
     insert_levels_coupling_field,
@@ -95,6 +96,11 @@ def check_transitions_allowed(
             and transition_selector.excited_main is not None
         ):
             try:
+                ΔmF_allowed = couplings_tlf.utils.ΔmF_allowed(
+                    transition_selector.polarizations[0]
+                )
+                if not isinstance(ΔmF_allowed, (int, np.int_)):
+                    ΔmF_allowed = int(ΔmF_allowed[0])
                 couplings_tlf.utils.assert_transition_coupled_allowed(
                     cast(
                         states.CoupledBasisState,
@@ -104,9 +110,7 @@ def check_transitions_allowed(
                         states.CoupledBasisState,
                         transition_selector.excited_main.largest,
                     ),
-                    ΔmF_allowed=couplings_tlf.utils.ΔmF_allowed(
-                        transition_selector.polarizations[0]
-                    ),
+                    ΔmF_allowed=ΔmF_allowed,
                 )
             except AssertionError as err:
                 raise AssertionError(
