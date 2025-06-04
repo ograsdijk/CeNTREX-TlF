@@ -90,14 +90,14 @@ def check_transition_coupled_allowed_polarization(
 ) -> Union[bool, Tuple[bool, str]]:
     """
     Basic E1 selection-rule check for a hyperfine transition
-    including photon-polarisation (ΔmF) information.
+    including photon-polarization (ΔmF) information.
 
     Parameters
     ----------
     ground_state, excited_state : states.CoupledBasisState
         Initial and final coupled basis states (must have P, F, mF set).
     ΔmF_allowed : int | Iterable[int]
-        Allowed change in mF imposed by the photon polarisation.
+        Allowed change in mF imposed by the photon polarization.
         Pass a single value (e.g. 0) or something like {-1, +1}.
     return_err : bool, default True
         If True, return (allowed, message); else return allowed only.
@@ -181,12 +181,9 @@ def assert_transition_coupled_allowed(
     ret = check_transition_coupled_allowed_polarization(
         ground_state, excited_state, ΔmF_allowed, return_err=True
     )
-    if isinstance(ret, tuple):
-        allowed, errors = ret
-        assert allowed, errors
-        return allowed
-    else:
-        return ret
+    allowed, errors = ret
+    assert allowed, errors
+    return allowed
 
 
 def ΔmF_allowed(

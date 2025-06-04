@@ -233,9 +233,6 @@ def generate_coupling_field(
     _excited_main = cast(CoupledBasisState, excited_main.largest)
 
     ΔmF_raw = ΔmF_allowed(pol_main)
-    if not isinstance(ΔmF_raw, (int, np.int_)):
-        ΔmF_raw = int(ΔmF_raw[0])
-
     assert_transition_coupled_allowed(_ground_main, _excited_main, ΔmF_raw)
 
     couplings = []
