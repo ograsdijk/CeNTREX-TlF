@@ -304,7 +304,7 @@ def generate_coupling_field_automatic(
                     Attributes:
                         ground_main: main ground state
                         excited_main: main excited state
-                        main_coupling: coupling strenght between main_ground
+                        main_coupling: coupling strength between main_ground
                                         and main_excited
                         ground_states: ground states in coupling
                         excited_states: excited_states in coupling
