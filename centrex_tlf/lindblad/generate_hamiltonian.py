@@ -14,31 +14,28 @@ __all__ = [
     "symbolic_hamiltonian_to_rotating_frame",
     "generate_symbolic_hamiltonian",
     "generate_total_symbolic_hamiltonian",
+    "generate_unitary_transformation_matrix",
 ]
 
 
-def symbolic_hamiltonian_to_rotating_frame(
+def generate_unitary_transformation_matrix(
     hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-    QN: List[states.CoupledState],
-    H_int: npt.NDArray[np.complex128],
-    couplings: Sequence[couplings_tlf.CouplingFields],
-    δs: Sequence[smp.Symbol],
 ) -> smp.matrices.dense.MutableDenseMatrix:
-    """Transform a symbolic hamiltonian to the rotating frame. Exponential terms
-    with the transition frequencies are required to be present in the
-    hamiltonian matrix, as well as symbolic energies on the diagonal.
-
-    Args:
-        hamiltonian (sympy.Matrix): symbolic hamiltonian
-        QN (list/array): list/array of states in the system
-        H_int (np.ndarray): numerical hamiltonian, energies only
-        couplings (list): list of couplings in system
-
-    Returns:
-        sympy.Matrix: symbolic hamiltonian in the rotating frame
     """
-    n_states = H_int.shape[0]
-    energies = np.diag(hamiltonian)
+    Generate the unitary transformation matrix to move to the rotating frame.
+    This function computes a unitary transformation matrix based on the couplings
+    in the given Hamiltonian. It identifies coupled states, solves the equations
+    to determine the frequency differences between states, and constructs the
+    transformation matrix to transition to the rotating frame.
+    Args:
+        hamiltonian (smp.matrices.dense.MutableDenseMatrix): The Hamiltonian matrix
+            representing the system, where off-diagonal elements correspond to
+            couplings between states.
+    Returns:
+        smp.matrices.dense.MutableDenseMatrix: The unitary transformation matrix
+            for transitioning to the rotating frame.
+    """
+    n_states = np.shape(hamiltonian)[0]
 
     # generate t symbol for non-rotating frame
     t = smp.Symbol("t", real=True)
@@ -66,10 +63,39 @@ def symbolic_hamiltonian_to_rotating_frame(
             sol[key] = val.subs(free_param, 0)
 
     # generate unitary transformation matrix
-    T = smp.eye(*H_int.shape)
+    T = smp.eye(n_states, n_states)
     for var in sol.keys():
         ida = int(str(var)[1:])
         T[ida, ida] = smp.exp(1j * sol[var] * t)
+    return T
+
+
+def symbolic_hamiltonian_to_rotating_frame(
+    hamiltonian: smp.matrices.dense.MutableDenseMatrix,
+    QN: List[states.CoupledState],
+    H_int: npt.NDArray[np.complex128],
+    couplings: Sequence[couplings_tlf.CouplingFields],
+    δs: Sequence[smp.Symbol],
+) -> smp.matrices.dense.MutableDenseMatrix:
+    """Transform a symbolic hamiltonian to the rotating frame. Exponential terms
+    with the transition frequencies are required to be present in the
+    hamiltonian matrix, as well as symbolic energies on the diagonal.
+
+    Args:
+        hamiltonian (sympy.Matrix): symbolic hamiltonian
+        QN (list/array): list/array of states in the system
+        H_int (np.ndarray): numerical hamiltonian, energies only
+        couplings (list): list of couplings in system
+
+    Returns:
+        sympy.Matrix: symbolic hamiltonian in the rotating frame
+    """
+    energies = np.diag(hamiltonian)
+
+    # generate t symbol for non-rotating frame
+    t = smp.Symbol("t", real=True)
+
+    T = generate_unitary_transformation_matrix(hamiltonian)
 
     # use unitary matrix to transform to rotating frame
     transformed = T.adjoint() @ hamiltonian @ T - 1j * T.adjoint() @ smp.diff(T, t)
