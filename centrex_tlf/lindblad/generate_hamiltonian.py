@@ -8,6 +8,7 @@ import sympy as smp
 from centrex_tlf import couplings as couplings_tlf
 from centrex_tlf import states
 
+from .utils import has_off_diagonal_elements
 from .utils_compact import compact_symbolic_hamiltonian_indices
 
 __all__ = [
@@ -140,11 +141,9 @@ def symbolic_hamiltonian_to_rotating_frame(
 
 
 def generate_symbolic_hamiltonian(
-    QN: List[states.CoupledState],
     H_int: npt.NDArray[np.complex128],
     couplings: Sequence[couplings_tlf.CouplingFields],
     Ωs: Sequence[smp.Symbol],
-    δs: Sequence[smp.Symbol],
     pols: List[Optional[Sequence[smp.Symbol]]],
 ) -> smp.matrices.dense.MutableDenseMatrix:
     """Generate a symbolic hamiltonian without transforming to the rotating frame.
@@ -164,6 +163,9 @@ def generate_symbolic_hamiltonian(
     Returns:
         smp.matrices.dense.MutableDenseMatrix: Symbolic Hamiltonian matrix.
     """
+    assert not has_off_diagonal_elements(H_int), (
+        "Hamiltonian should not have off-diagonal elements"
+    )
     n_states = H_int.shape[0]
     # initialize empty hamiltonian
     hamiltonian = smp.zeros(*H_int.shape)
@@ -229,7 +231,7 @@ def generate_rwa_symbolic_hamiltonian(
     pols: List[Optional[Sequence[smp.Symbol]]],
 ) -> smp.matrices.dense.MutableDenseMatrix:
     n_states = H_int.shape[0]
-    hamiltonian = generate_symbolic_hamiltonian(QN, H_int, couplings, Ωs, δs, pols)
+    hamiltonian = generate_symbolic_hamiltonian(H_int, couplings, Ωs, pols)
     transformed = symbolic_hamiltonian_to_rotating_frame(
         hamiltonian, QN, H_int, couplings, δs
     )
@@ -306,6 +308,9 @@ def generate_total_symbolic_hamiltonian(
         if qn_compact is provided, also returns the states corresponding to the
         compacted hamiltonian, i.e. ham, QN_compact
     """
+    assert not has_off_diagonal_elements(H_int), (
+        "Hamiltonian should not have off-diagonal elements"
+    )
     Ωs = [t.Ω for t in transitions]
     Δs = [t.δ for t in transitions]
     pols: List[Optional[Sequence[smp.Symbol]]] = []
