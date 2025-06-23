@@ -129,6 +129,9 @@ class CoupledBasisState(BasisState):
         else:
             self.P = None
         #     raise AssertionError("need to supply parity P")
+        assert isinstance(
+            electronic_state, ElectronicState
+        ), f"Supply electronic state as ElectronicState enum, not {type(electronic_state)}"
         self.electronic_state = electronic_state
         self.energy = energy
         self.isCoupled = True
@@ -368,9 +371,9 @@ class CoupledBasisState(BasisState):
         Omega = self.Omega
 
         assert self.basis is not None, "Unknown basis state, can't transform to Ω basis"
-        assert P is not None, (
-            "Can't transform state to Omega basis if parity is not known"
-        )
+        assert (
+            P is not None
+        ), "Can't transform state to Omega basis if parity is not known"
 
         # Check that not already in omega basis
         if self.basis == Basis.CoupledP and self.electronic_state == ElectronicState.B:
