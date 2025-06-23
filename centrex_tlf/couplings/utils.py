@@ -242,16 +242,26 @@ def select_main_states(
     polarization: npt.NDArray[np.complex128],
 ) -> Tuple[states.CoupledState, states.CoupledState]:
     """
-    Behavior-compatible re-implementation of the original selector:
+    Select the main ground and excited states based on allowed transitions.
 
-      • Scan excited states first, ground states second (same ordering).
-      • Build *allowed_transitions* in that order.
-      • If any allowed line has ground-state mF = 0, return **the last one found**.
-      • Otherwise return **the middle element** (len // 2) of allowed_transitions.
+    Scans excited states first, ground states second, and builds the list of
+    allowed transitions in that order. If any allowed transition has a ground-state
+    mF = 0, returns the last one found. Otherwise, returns the middle element
+    of the allowed transitions.
+
+    Args:
+        ground_states (Sequence[states.CoupledState]): List of ground states.
+        excited_states (Sequence[states.CoupledState]): List of excited states.
+        polarization (npt.NDArray[np.complex128]): Normalized Jones vector
+            [Ex, Ey, Ez] in the lab frame.
+
+    Returns:
+        Tuple[states.CoupledState, states.CoupledState]: Selected ground and excited states.
+
+    Raises:
+        ValueError: If none of the supplied ground and excited states have allowed transitions.
     """
-    # ------------------------------------------------------------------
-    # 1. Get the ΔmF value(s) allowed by the photon polarization
-    # ------------------------------------------------------------------
+    # Get the ΔmF value(s) allowed by the photon polarization
     ΔmF_raw = ΔmF_allowed(polarization)
     if isinstance(ΔmF_raw, (int, np.integer)):
         # Scalar → wrap in a tuple
@@ -262,21 +272,19 @@ def select_main_states(
             int(x) for x in cast(npt.NDArray[np.int64], ΔmF_raw).tolist()
         )
 
-    # ------------------------------------------------------------------
-    # 2. Build the list of allowed transitions in the *original* order
-    # ------------------------------------------------------------------
+    # Build the list of allowed transitions in the original order
     allowed_transitions = []  # (g_idx, e_idx, mF_exc)
     indices_gnd_mF0 = []  # (g_idx, e_idx, mF_gnd)
 
-    for e_idx, exc in enumerate(excited_states):  # ← outer loop
+    for e_idx, exc in enumerate(excited_states):
         exc_bs = cast(CoupledBasisState, exc.largest)
-        for g_idx, gnd in enumerate(ground_states):  # ← inner loop
+        for g_idx, gnd in enumerate(ground_states):
             gnd_bs = cast(CoupledBasisState, gnd.largest)
 
             if check_transition_coupled_allowed_polarization(
                 gnd_bs,
                 exc_bs,
-                ΔmF_allowed_iterable,  # iterable now
+                ΔmF_allowed_iterable,
                 return_err=False,
             ):
                 allowed_transitions.append((g_idx, e_idx, exc_bs.mF))
@@ -288,9 +296,7 @@ def select_main_states(
             "None of the supplied ground and excited states have allowed transitions"
         )
 
-    # ------------------------------------------------------------------
-    # 3. Select the main pair with the *same* rules as before
-    # ------------------------------------------------------------------
+    # Select the main pair
     if indices_gnd_mF0:
         g_idx, e_idx, _ = indices_gnd_mF0[-1]  # last one with mF_gnd = 0
     else:

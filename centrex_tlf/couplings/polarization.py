@@ -63,8 +63,9 @@ polarization_X = Polarization(np.array([1, 0, 0], dtype=np.complex128), "X")
 polarization_Y = Polarization(np.array([0, 1, 0], dtype=np.complex128), "Y")
 polarization_Z = Polarization(np.array([0, 0, 1], dtype=np.complex128), "Z")
 polarization_σp = Polarization(
-    np.array([1 / np.sqrt(2), 1j / np.sqrt(2), 0], dtype=np.complex128), "σp"
+    np.array([-1 / np.sqrt(2), 1j / np.sqrt(2), 0], dtype=np.complex128), "σp"
 )
+
 polarization_σm = Polarization(
-    np.array([1 / np.sqrt(2), -1j / np.sqrt(2), 0], dtype=np.complex128), "σm"
+    np.array([1 / np.sqrt(2), 1j / np.sqrt(2), 0], dtype=np.complex128), "σm"
 )

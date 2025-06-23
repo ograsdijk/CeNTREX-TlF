@@ -112,20 +112,27 @@ def ED_ME_coupled(
 
 @lru_cache(maxsize=int(1e6))
 def angular_part(
-    pol_vec: Tuple[complex, complex, complex], F: int, mF: int, Fp: int, mFp: int
+    pol_vec: Tuple[complex, complex, complex],
+    F: int,
+    mF: int,
+    Fp: int,
+    mFp: int,
 ) -> complex:
-    p_vec: Dict[int, complex] = {}
-    p_vec[-1] = -1 / math.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1])
-    p_vec[0] = pol_vec[2]
-    p_vec[1] = +1 / math.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1])
+    """
+    Return the polarization-dependent angular factor
+    ⟨F,mF| e_q·r |F',mF'⟩  with q = mF − mF'.
+    """
+    # Cartesian → spherical-basis components
+    p_vec: Dict[int, complex] = {
+        +1: -1 / math.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1]),  # σ⁺
+        0: pol_vec[2],  # π
+        -1: 1 / math.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1]),  # σ⁻
+    }
 
-    # calculate the value of p that connects the states
+    # q that connects the two Zeeman sub-levels
     p = mF - mFp
-    p = p * int(np.abs(p) <= 1)
-    angular = (
-        (-1) ** (F - mF)
-        * hamiltonian.threej_f(F, 1, Fp, -mF, p, mFp)
-        * p_vec[p]
-        * int(np.abs(p) <= 1)
-    )
+    if abs(p) > 1:
+        return 0.0
+
+    angular = (-1) ** (F - mF) * hamiltonian.threej_f(F, 1, Fp, -mF, p, mFp) * p_vec[p]
     return angular
