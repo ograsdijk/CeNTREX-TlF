@@ -12,9 +12,10 @@ from .utils_compact import compact_symbolic_hamiltonian_indices
 
 __all__ = [
     "symbolic_hamiltonian_to_rotating_frame",
-    "generate_symbolic_hamiltonian",
+    "generate_rwa_symbolic_hamiltonian",
     "generate_total_symbolic_hamiltonian",
     "generate_unitary_transformation_matrix",
+    "generate_symbolic_hamiltonian",
 ]
 
 
@@ -146,6 +147,23 @@ def generate_symbolic_hamiltonian(
     δs: Sequence[smp.Symbol],
     pols: List[Optional[Sequence[smp.Symbol]]],
 ) -> smp.matrices.dense.MutableDenseMatrix:
+    """Generate a symbolic hamiltonian without transforming to the rotating frame.
+    This function generates a symbolic Hamiltonian matrix based on the provided
+    quantum numbers, internal Hamiltonian, couplings, and transition frequencies.
+    It constructs the Hamiltonian by iterating over the couplings and fields,
+    incorporating the effects of polarizations and transition frequencies.
+
+    Args:
+        QN (List[states.CoupledState]): List of coupled states in the system.
+        H_int (npt.NDArray[np.complex128]): Internal Hamiltonian matrix.
+        couplings (Sequence[couplings_tlf.CouplingFields]): List of coupling fields.
+        Ωs (Sequence[smp.Symbol]): Transition frequency symbols.
+        δs (Sequence[smp.Symbol]): Frequency difference symbols.
+        pols (List[Optional[Sequence[smp.Symbol]]]): Polarization symbols for each coupling.
+
+    Returns:
+        smp.matrices.dense.MutableDenseMatrix: Symbolic Hamiltonian matrix.
+    """
     n_states = H_int.shape[0]
     # initialize empty hamiltonian
     hamiltonian = smp.zeros(*H_int.shape)
@@ -199,6 +217,19 @@ def generate_symbolic_hamiltonian(
 
     hamiltonian = smp.simplify(hamiltonian)
 
+    return hamiltonian
+
+
+def generate_rwa_symbolic_hamiltonian(
+    QN: List[states.CoupledState],
+    H_int: npt.NDArray[np.complex128],
+    couplings: Sequence[couplings_tlf.CouplingFields],
+    Ωs: Sequence[smp.Symbol],
+    δs: Sequence[smp.Symbol],
+    pols: List[Optional[Sequence[smp.Symbol]]],
+) -> smp.matrices.dense.MutableDenseMatrix:
+    n_states = H_int.shape[0]
+    hamiltonian = generate_symbolic_hamiltonian(QN, H_int, couplings, Ωs, δs, pols)
     transformed = symbolic_hamiltonian_to_rotating_frame(
         hamiltonian, QN, H_int, couplings, δs
     )
@@ -284,7 +315,7 @@ def generate_total_symbolic_hamiltonian(
         else:
             pols.append(transition.polarization_symbols)
 
-    H_symbolic = generate_symbolic_hamiltonian(QN, H_int, couplings, Ωs, Δs, pols)
+    H_symbolic = generate_rwa_symbolic_hamiltonian(QN, H_int, couplings, Ωs, Δs, pols)
     if qn_compact is not None:
         if isinstance(qn_compact, states.QuantumSelector):
             qn_compact = [qn_compact]
