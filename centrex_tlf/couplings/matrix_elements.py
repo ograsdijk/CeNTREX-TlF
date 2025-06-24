@@ -118,9 +118,17 @@ def angular_part(
     Fp: int,
     mFp: int,
 ) -> complex:
-    """
-    Return the polarization-dependent angular factor
-    ⟨F,mF| e_q·r |F',mF'⟩  with q = mF − mF'.
+    """calculate polarization-dependent angular factor
+
+    Args:
+        pol_vec (Tuple[complex, complex, complex]): polarization vector
+        F (int): total angular momentum quantum number
+        mF (int): projection of total angular momentum
+        Fp (int): total angular momentum quantum number of the final state
+        mFp (int): projection of total angular momentum of the final state
+
+    Returns:
+        complex: angular factor ⟨F,mF| e_q·r |F',mF'⟩ with q = mF - mF'
     """
     # Cartesian → spherical-basis components
     p_vec: Dict[int, complex] = {
