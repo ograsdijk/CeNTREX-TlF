@@ -237,7 +237,8 @@ def generate_rwa_symbolic_hamiltonian(
     )
     transformed = smp.Matrix(transformed)
 
-    Ωsᶜ = [smp.Symbol(str(Ω) + "ᶜ", complex=True) for Ω in Ωs]
+    # Ωsᶜ = [smp.Symbol(str(Ω) + "ᶜ", complex=True) for Ω in Ωs]
+    Ωsᶜ = [smp.conjugate(Ω) for Ω in Ωs]
     for idx in range(n_states):
         for idy in range(0, idx):
             for Ω, Ωᶜ in zip(Ωs, Ωsᶜ):
