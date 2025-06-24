@@ -2,10 +2,14 @@
     n, m = size(M)
     T = eltype(M)
     z = zero(T)
-    @inbounds @simd for i in 1:n, j in 1:m
-        M[i, j] = z
+    @inbounds begin
+        for i in 1:n
+            @simd for j in 1:m
+                M[i, j] = z
+            end
+        end
     end
-    nothing
+    return nothing
 end
 
 function commutator!(C, H, ρ)
@@ -35,4 +39,17 @@ function commutator!(C, H, ρ)
     end
 
     nothing
+end
+
+
+function commutator_mat!(C, A, B, buffer)
+    mul!(C, A, B)
+    mul!(buffer, B, A)
+    C .-= buffer
+    nothing
+end
+
+@inline function gaussian_peak(x::T, μ::T=zero(T), σ::T=one(T)) where {T<:AbstractFloat}
+    Δ = x - μ
+    return exp(-0.5 * (Δ / σ)^2)
 end
