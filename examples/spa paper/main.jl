@@ -8,8 +8,9 @@ using MKL
 
 include("julia_functions.jl")
 include("hamiltonian.jl")
+include("couplings.jl")
 
-efield_path = "c:/Users/ogras/anaconda3/envs/centrex-eql/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+efield_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
 
 
 const σμ = 1.078e-2
@@ -41,22 +42,23 @@ end
 const Ez_interp = make_Ez_interp(efield_path)
 
 Γ = 2π*1.56e6
-Ω0 = 1e-3*Γ
-Ω1 = 1e-3*Γ
+Ω0 = 1e-1*Γ
 δ0 = 0.0
-δ1 = 0.0
 vz = 184
 z0 = -0.25
 zstop = 0.2
 tmax = (zstop - z0) / vz
+N = 16
+diag_idxs = [i + (i - 1) * N for i in 1:N]
 
-u0 = zeros(ComplexF64, 16, 16)
+u0 = zeros(ComplexF64, N, N)
 u0[4,4] = 1.0 + 0.0im
 
-const H = zeros(ComplexF64, 16, 16)
-const buffer = zeros(ComplexF64, 16, 16)
+const H = zeros(ComplexF64, size(u0))
+const buffer = zeros(ComplexF64, size(u0))
+
+
 function lindblad!(du, u, p, t)
-    # Ω0, Ω1, δ0, δ1, vz, z0 = p
     Ω0, δ0, vz, z0 = p
 
     z = vz * t + z0
@@ -64,16 +66,12 @@ function lindblad!(du, u, p, t)
     Ez = Ez_interp(z0 + vz * t)
 
     Ω0val = Ω0*gaussian_peak(z, zμ0, σμ)
-    # Ω1val = gaussian_peak(vz * t + z0, zμ1, σμ) .* Ω1
-    # hamiltonian!(H, Ez, Ω0val, Ω1val, δ0, δ1)
     hamiltonian!(H, Ez, Ω0val, δ0)
-
     commutator_mat!(du, H, u, buffer)
     nothing
 end
 
 
-# p = (Ω0, Ω1, δ0, δ1, vz, z0)
 p = (Ω0, δ0, vz, z0)
 prob = ODEProblem(
     lindblad!,
@@ -82,7 +80,7 @@ prob = ODEProblem(
     p,
 );
 
-sol = solve(prob, Tsit5(),reltol=1e-5, abstol=1e-7);
+sol = solve(prob, Tsit5(), reltol=1e-5, abstol=1e-7, save_idxs=diag_idxs, dtmax=1e-6);
 
 
 function prob_func(prob, i, repeat)
@@ -95,8 +93,8 @@ function prob_func(prob, i, repeat)
     remake(prob, p=p)
 end
 
-detunings = -2:1e-2:2.0
-detunings *= 2π
+detunings = (-6:0.25:10.0) .+ 5.25
+detunings *= 2π*1e6
 
 ens_prob = EnsembleProblem(prob, prob_func=prob_func);
 @time sol = solve(
@@ -104,9 +102,11 @@ ens_prob = EnsembleProblem(prob, prob_func=prob_func);
     Tsit5(),
     EnsembleSerial(),
     trajectories=length(detunings),
-    save_idxs=52,
+    save_idxs=diag_idxs,
     save_start=false,
     save_everystep=false,
     reltol=1e-5,
     abstol=1e-7,
 );
+
+pop = hcat([real(sol[i].u[1]) for i in 1:length(sol)]...);

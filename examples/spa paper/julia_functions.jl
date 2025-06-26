@@ -59,10 +59,9 @@ end
 
 function transform!(out, in, transform, buffer)
     @inbounds begin
-        # buf = in * T
-        mul!(buf, in, T)
-        # out = T' * buf   (T' is adjoint(T), no allocation)
-        mul!(out, adjoint(T), buf)
-      end
+        mul!(buffer, in, transform)
+        # (adjoint(transform), no allocation)
+        mul!(out, adjoint(transform), buffer)
+    end
     nothing
 end
