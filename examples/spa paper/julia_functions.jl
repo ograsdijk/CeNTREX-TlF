@@ -42,11 +42,18 @@ function commutator!(C, H, ρ)
 end
 
 
-function commutator_mat!(C, A, B, buffer)
-    mul!(C, A, B)
-    mul!(buffer, B, A)
-    C .-= buffer
-    nothing
+function commutator_mat!(C, A, B, buf)
+    @inbounds begin
+        # C   ← A * B
+        mul!(C, A, B)
+        # buf ← B * A
+        mul!(buf, B, A)
+        # C   ← C - buf      (no temporaries)
+        C .-= buf
+        # C   ← -im * C      (no temporaries)
+        C .*= -im
+    end
+    return nothing
 end
 
 @inline function gaussian_peak(x::T, μ::T=zero(T), σ::T=one(T)) where {T<:AbstractFloat}
