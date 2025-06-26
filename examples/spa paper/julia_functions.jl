@@ -44,13 +44,9 @@ end
 
 function commutator_mat!(C, A, B, buf)
     @inbounds begin
-        # C   ← A * B
         mul!(C, A, B)
-        # buf ← B * A
         mul!(buf, B, A)
-        # C   ← C - buf      (no temporaries)
         C .-= buf
-        # C   ← -im * C      (no temporaries)
         C .*= -im
     end
     return nothing
@@ -59,4 +55,14 @@ end
 @inline function gaussian_peak(x::T, μ::T=zero(T), σ::T=one(T)) where {T<:AbstractFloat}
     Δ = x - μ
     return exp(-0.5 * (Δ / σ)^2)
+end
+
+function transform!(out, in, transform, buffer)
+    @inbounds begin
+        # buf = in * T
+        mul!(buf, in, T)
+        # out = T' * buf   (T' is adjoint(T), no allocation)
+        mul!(out, adjoint(T), buf)
+      end
+    nothing
 end
