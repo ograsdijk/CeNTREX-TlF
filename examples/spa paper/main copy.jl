@@ -1,6 +1,7 @@
 using SIMD
 using LinearAlgebra
 using LinearAlgebra.BLAS
+using LinearAlgebra:copytri!
 using DifferentialEquations
 using CSV
 using DataFrames
@@ -11,8 +12,8 @@ include("julia_functions.jl")
 include("hamiltonian_nocoupling.jl")
 include("couplings.jl")
 
-efield_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
-
+# efield_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+efield_path = "c:/Users/ogras/anaconda3/envs/centrex-eql/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
 
 const σμ = 1.078e-2
 const zμ0 = 0.0
@@ -67,44 +68,37 @@ const buffer = zeros(ComplexF64, size(u0))
 
 const evals4 = zeros(ComplexF64, 4)
 const evals12 = zeros(ComplexF64, 12)
-const blk1 = zeros(ComplexF64, 4, 4)
-const blk2 = zeros(ComplexF64, 12, 12)
 
-function hamiltonian_rotated!(
-    Hrot::StridedMatrix,
-    V::StridedMatrix,
-    H::StridedMatrix,
-    C::StridedMatrix,
-    buffer::StridedMatrix,
-    δ0::Number,
-)
-    @views begin
-        # ── 4×4 block ───────────────────────────────────────────
-        blk1 .= V[1:4, 1:4]
-        copyto!(blk1, H[1:4, 1:4])
-        ev1 = eigen!(Hermitian(blk1))          # eigenvectors land in blk1
-        copyto!(evals4, ev1.values)            # reuse the same vector each call
+const blk1 = Matrix{ComplexF64}(undef, 4, 4)   # contiguous
+const blk2 = Matrix{ComplexF64}(undef, 12, 12)
 
-        # ── 12×12 block ─────────────────────────────────────────
-        blk2 .= V[5:16, 5:16]
-        copyto!(blk2, H[5:16, 5:16])
-        ev2 = eigen!(Hermitian(blk2))
-        copyto!(evals12, ev2.values)
+const Vblk4  = @view V[1:4, 1:4]
+const Vblk12 = @view V[5:16,5:16]
+
+const diag_J0 = diagind(Hrot, 0)[1:4]
+const Hrot_J0  = @view Hrot[diag_J0]
+const diag_J1 = diagind(Hrot, 0)[5:16]
+const Hrot_J1  = @view Hrot[diag_J1]
+
+function hamiltonian_rotated!(Hrot, V, H, C, buffer, δ0)
+    @inbounds begin
+        copyto!(blk1, @view H[1:4, 1:4])
+        copyto!(blk2, @view H[5:16, 5:16])
+        F0 = eigen!(Hermitian(blk1, :U))
+        F1 = eigen!(Hermitian(blk2, :U))
+
+        copyto!(Vblk4,  F0.vectors)
+        copyto!(Vblk12, F1.vectors)
+
+        transform!(Hrot, C, V, buffer)
+
+        copyto!(Hrot_J0, F0.values)
+        copyto!(Hrot_J1, F1.values)
+
+        shift = 8.378458391518878e10 + δ0
+        Hrot_J1 .-= shift
     end
-
-    # Rotate: buf = C * V;  Hrot = Vᴴ * buf
-    mul!(buffer, C, V)                                    # buf  ←  C·V
-    gemm!('C', 'N', one(eltype(Hrot)), V, buffer, zero(eltype(Hrot)), Hrot)
-
-    # Overwrite the diagonal—no `diagind`, no allocation
-    @inbounds for i in 1:4
-        Hrot[i, i] = evals4[i]
-    end
-    @inbounds for k in 1:12
-        j = k + 4                                     # map 1–12 → 5–16
-        Hrot[j, j] = evals12[k] - 8.378458391518878e10 - δ0
-    end
-    return nothing
+    nothing
 end
 
 function lindblad!(du, u, p, t)
@@ -118,7 +112,7 @@ function lindblad!(du, u, p, t)
     hamiltonian_nocoupling!(H, Ez)
     couplings!(C, Ω0val)
 
-    hamiltonian_rotated!(Hrot, V, H, C, δ0)
+    hamiltonian_rotated!(Hrot, V, H, C, buffer, δ0)
     transform!(utransformed, u, V, buffer)
 
     commutator_mat!(dutransformed, Hrot, utransformed, buffer)
@@ -136,22 +130,22 @@ prob = ODEProblem(
     p,
 );
 
-@time sol = solve(prob, Tsit5(), reltol=1e-5, abstol=1e-7, save_idxs=diag_idxs);
+@time sol = solve(prob, Tsit5(), reltol=1e-5, abstol=1e-7, save_idxs=diag_idxs, saveat=1e-6);
 
 pop = hcat(real(sol.u)...);
 
-function prob_func(prob, i, repeat)
-    p = (rabis[i], δ0, vz, z0)
-    remake(prob, p=p)
-end
+# function prob_func(prob, i, repeat)
+#     p = (rabis[i], δ0, vz, z0)
+#     remake(prob, p=p)
+# end
 
 function prob_func(prob, i, repeat)
     p = (Ω0, detunings[i], vz, z0)
     remake(prob, p=p)
 end
 
-detunings = -2:1e-2:2.0
-detunings *= 2π
+detunings = (-6:0.25:10.0) .+ 5.25
+detunings *= 2π*1e6
 
 ens_prob = EnsembleProblem(prob, prob_func=prob_func);
 @time sol = solve(
@@ -159,9 +153,9 @@ ens_prob = EnsembleProblem(prob, prob_func=prob_func);
     Tsit5(),
     EnsembleSerial(),
     trajectories=length(detunings),
-    save_idxs=52,
+    save_idxs=diag_idxs,
     save_start=false,
     save_everystep=false,
-    reltol=1e-5,
-    abstol=1e-7,
 );
+
+pop = hcat([real(sol[i].u[1]) for i in 1:length(sol)]...);
