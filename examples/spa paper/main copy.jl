@@ -12,8 +12,8 @@ include("julia_functions.jl")
 include("hamiltonian_nocoupling.jl")
 include("couplings.jl")
 
-# efield_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
-efield_path = "c:/Users/ogras/anaconda3/envs/centrex-eql/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+efield_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+# efield_path = "c:/Users/ogras/anaconda3/envs/centrex-eql/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
 
 const σμ = 1.078e-2
 const zμ0 = 0.0
@@ -44,7 +44,7 @@ end
 const Ez_interp = make_Ez_interp(efield_path)
 
 Γ = 2π*1.56e6
-Ω0 = 0.5*Γ
+Ω0 = 0.05*Γ
 δ0 = 2π*5.26e6
 vz = 184
 z0 = -0.25
@@ -64,6 +64,8 @@ const C = zeros(ComplexF64, size(u0))
 const Hrot = zeros(ComplexF64, size(u0))
 
 const H = zeros(ComplexF64, size(u0))
+const Hblock_J0 = @view H[1:4, 1:4]
+const Hblock_J1 = @view H[5:16, 5:16]
 const buffer = zeros(ComplexF64, size(u0))
 
 const evals4 = zeros(ComplexF64, 4)
@@ -78,24 +80,27 @@ const Vblk12 = @view V[5:16,5:16]
 const diag_J0 = diagind(Hrot, 0)[1:4]
 const Hrot_J0  = @view Hrot[diag_J0]
 const diag_J1 = diagind(Hrot, 0)[5:16]
-const Hrot_J1  = @view Hrot[diag_J1]
+const Hrot_J1 = @view Hrot[diag_J1]
 
-function hamiltonian_rotated!(Hrot, V, H, C, buffer, δ0)
+function hamiltonian_rotated!(Hrot, V, C, buffer, δ0)
+    shift = ω0 + δ0
+
     @inbounds begin
-        copyto!(blk1, @view H[1:4, 1:4])
-        copyto!(blk2, @view H[5:16, 5:16])
-        F0 = eigen!(Hermitian(blk1, :U))
-        F1 = eigen!(Hermitian(blk2, :U))
+        # copyto!(blk1, Hblock_J0)
+        # copyto!(blk2, Hblock_J1)
+        F0 = eigen(Hblock_J0)
+        F1 = eigen(Hblock_J1)
 
         copyto!(Vblk4,  F0.vectors)
         copyto!(Vblk12, F1.vectors)
 
-        transform!(Hrot, C, V, buffer)
+        mul!(buffer, C, V)
+        # (adjoint(transform), no allocation)
+        mul!(Hrot, adjoint(V), buffer)
 
         copyto!(Hrot_J0, F0.values)
         copyto!(Hrot_J1, F1.values)
 
-        shift = 8.378458391518878e10 + δ0
         Hrot_J1 .-= shift
     end
     nothing
@@ -112,17 +117,21 @@ function lindblad!(du, u, p, t)
     hamiltonian_nocoupling!(H, Ez)
     couplings!(C, Ω0val)
 
-    hamiltonian_rotated!(Hrot, V, H, C, buffer, δ0)
-    transform!(utransformed, u, V, buffer)
+    hamiltonian_rotated!(Hrot, V, C, buffer, δ0)
+
+    mul!(buffer, u, V)
+    mul!(utransformed, adjoint(V), buffer)
 
     commutator_mat!(dutransformed, Hrot, utransformed, buffer)
-    transform!(du, dutransformed, adjoint(V), buffer)
+
+    mul!(buffer, dutransformed, adjoint(V))
+    mul!(du, V, buffer)
     nothing
 end
 
 
 # p = (Ω0, Ω1, δ0, δ1, vz, z0)
-p = (Ω0, δ0, vz, z0)
+p = (Ω0, δ0, vz, z0);
 prob = ODEProblem(
     lindblad!,
     u0,
@@ -130,7 +139,7 @@ prob = ODEProblem(
     p,
 );
 
-@time sol = solve(prob, Tsit5(), reltol=1e-5, abstol=1e-7, save_idxs=diag_idxs, saveat=1e-6);
+@time sol = solve(prob, Tsit5(), save_idxs=diag_idxs, saveat=5e-6);
 
 pop = hcat(real(sol.u)...);
 
@@ -139,23 +148,23 @@ pop = hcat(real(sol.u)...);
 #     remake(prob, p=p)
 # end
 
-function prob_func(prob, i, repeat)
-    p = (Ω0, detunings[i], vz, z0)
-    remake(prob, p=p)
-end
+# function prob_func(prob, i, repeat)
+#     p = (Ω0, detunings[i], vz, z0)
+#     remake(prob, p=p)
+# end
 
-detunings = (-6:0.25:10.0) .+ 5.25
-detunings *= 2π*1e6
+# detunings = (-6:0.25:10.0) .+ 5.25
+# detunings *= 2π*1e6
 
-ens_prob = EnsembleProblem(prob, prob_func=prob_func);
-@time sol = solve(
-    ens_prob,
-    Tsit5(),
-    EnsembleSerial(),
-    trajectories=length(detunings),
-    save_idxs=diag_idxs,
-    save_start=false,
-    save_everystep=false,
-);
+# ens_prob = EnsembleProblem(prob, prob_func=prob_func);
+# @time sol = solve(
+#     ens_prob,
+#     Tsit5(),
+#     EnsembleSerial(),
+#     trajectories=length(detunings),
+#     save_idxs=diag_idxs,
+#     save_start=false,
+#     save_everystep=false,
+# );
 
-pop = hcat([real(sol[i].u[1]) for i in 1:length(sol)]...);
+# pop = hcat([real(sol[i].u[1]) for i in 1:length(sol)]...);

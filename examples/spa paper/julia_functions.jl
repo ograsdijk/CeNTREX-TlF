@@ -41,6 +41,13 @@ function commutator!(C, H, ρ)
     nothing
 end
 
+function commutator_mat!(C, A, B)
+    @inbounds begin
+        mul!(C, B, A)
+        mul!(C, A, B, -1im, 1im)
+    end
+    return nothing
+end
 
 function commutator_mat!(C, A, B, buf)
     @inbounds begin

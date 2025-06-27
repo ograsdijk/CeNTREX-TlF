@@ -11,6 +11,7 @@ include("hamiltonian.jl")
 include("couplings.jl")
 
 efield_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+# efield_path = "c:/Users/ogras/anaconda3/envs/centrex-eql/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
 
 
 const σμ = 1.078e-2
@@ -43,7 +44,7 @@ const Ez_interp = make_Ez_interp(efield_path)
 
 Γ = 2π*1.56e6
 Ω0 = 1e-1*Γ
-δ0 = 0.0
+δ0 = 5.26e6 * 2π
 vz = 184
 z0 = -0.25
 zstop = 0.2
@@ -52,7 +53,7 @@ N = 16
 diag_idxs = [i + (i - 1) * N for i in 1:N]
 
 u0 = zeros(ComplexF64, N, N)
-u0[4,4] = 1.0 + 0.0im
+u0[1,1] = 1.0 + 0.0im
 
 const H = zeros(ComplexF64, size(u0))
 const buffer = zeros(ComplexF64, size(u0))
@@ -67,7 +68,7 @@ function lindblad!(du, u, p, t)
 
     Ω0val = Ω0*gaussian_peak(z, zμ0, σμ)
     hamiltonian!(H, Ez, Ω0val, δ0)
-    commutator_mat!(du, H, u, buffer)
+    commutator_mat!(du, H, u)
     nothing
 end
 
@@ -80,7 +81,10 @@ prob = ODEProblem(
     p,
 );
 
-sol = solve(prob, Tsit5(), reltol=1e-5, abstol=1e-7, save_idxs=diag_idxs, dtmax=1e-6);
+@time sol = solve(prob, Tsit5(), reltol=1e-5, abstol=1e-7, save_idxs=diag_idxs, dtmax=1e-6);
+
+
+pop = hcat(real(sol.u)...);
 
 
 function prob_func(prob, i, repeat)
