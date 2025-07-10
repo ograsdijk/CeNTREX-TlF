@@ -33,3 +33,19 @@ function couplings!(H, Ω0)
     end
     nothing
 end
+
+function coupling_full!(H, Ω0)
+    @inbounds begin
+        zero_matrix!(H)
+        t0 = 2*0.288675134594813 * Ω0
+        H[1,9] = t0
+        H[9,1] = conj(H[1,9])
+        H[2,10] = t0
+        H[10,2] = conj(H[2,10])
+        H[3,11] = t0
+        H[11,3] = conj(H[3,11])
+        H[4,12] = t0
+        H[12,4] = conj(H[4,12])
+    end
+    nothing
+end

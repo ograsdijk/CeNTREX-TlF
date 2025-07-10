@@ -3,7 +3,11 @@ from sympy.printing.julia import julia_code
 
 
 def sympy_matrix_to_julia_fill_hermitian(
-    M: smp.Matrix, func_name: str = "fill_matrix!"
+    M: smp.Matrix,
+    func_name: str = "fill_matrix!",
+    zero_input: bool = True,
+    inplace_add: bool = False,
+    input_name: str = "H",
 ) -> tuple[str, smp.FunctionClass]:
     """
     Generate a Julia function that efficiently fills a Hermitian matrix in-place from a SymPy matrix.
@@ -72,12 +76,18 @@ def sympy_matrix_to_julia_fill_hermitian(
     keep = [(t, e) for t, e in pruned_subs if t not in inline]
     inline_map = {t: lookup[t] for t in inline}
 
+    if inplace_add:
+        assignment = "+="
+    else:
+        assignment = "="
+
     # 5) emit Julia code
     lines = []
-    sig = f"function {func_name}(H" + (", " + args if args else "") + ")"
+    sig = f"function {func_name}({input_name}" + (", " + args if args else "") + ")"
     lines.append(sig)
     lines.append("    @inbounds begin")
-    lines.append("        zero_matrix!(H)")
+    if zero_input:
+        lines.append(f"        zero_matrix!({input_name})")
     # emit kept temporaries
     for t, expr in keep:
         expr_sub = expr.subs(inline_map)
@@ -88,10 +98,12 @@ def sympy_matrix_to_julia_fill_hermitian(
             expr = reduced_all[i * cols + j].subs(inline_map)
             if expr != 0:
                 code = julia_code(expr)
-                lines.append(f"        H[{i + 1},{j + 1}] = {code}")
+                lines.append(
+                    f"        {input_name}[{i + 1},{j + 1}] {assignment} {code}"
+                )
                 if i != j:
                     lines.append(
-                        f"        H[{j + 1},{i + 1}] = conj(H[{i + 1},{j + 1}])"
+                        f"        {input_name}[{j + 1},{i + 1}] {assignment} conj({input_name}[{i + 1},{j + 1}])"
                     )
     lines.append("    end")
     lines.append("    nothing")

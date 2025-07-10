@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 @inline function zero_matrix!(M)
     n, m = size(M)
     T = eltype(M)
@@ -61,14 +63,25 @@ end
 
 @inline function gaussian_peak(x::T, μ::T=zero(T), σ::T=one(T)) where {T<:AbstractFloat}
     Δ = x - μ
-    return exp(-0.5 * (Δ / σ)^2)
+    return exp(-T(0.5) * (Δ / σ)^2)
 end
 
-function transform!(out, in, transform, buffer)
+@inline function apply_transform!(out, in, transform, buffer)
     @inbounds begin
+        # buf = in * T
         mul!(buffer, in, transform)
-        # (adjoint(transform), no allocation)
+        # out = T' * buf   (T' is adjoint(T), no allocation)
         mul!(out, adjoint(transform), buffer)
+    end
+    nothing
+end
+
+function transform_couplings!(out, in, v0, v1, buffer)
+    @inbounds begin
+        # buf = in * v0
+        mul!(buffer, in, v0)
+        # out = v1' * buf   (v1' is adjoint(v1), no allocation)
+        mul!(out, adjoint(v1), buffer)
     end
     nothing
 end
