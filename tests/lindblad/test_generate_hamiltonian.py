@@ -38,7 +38,7 @@ def test_generate_symbolic_hamiltonian():
                 pol_vecs=transition.polarizations,
             )
         )
-    hamiltonian_symbolic = lindblad.generate_symbolic_hamiltonian(
+    hamiltonian_symbolic = lindblad.generate_rwa_symbolic_hamiltonian(
         QN=H_reduced.QN,
         H_int=H_reduced.H_int,
         couplings=coupl,
