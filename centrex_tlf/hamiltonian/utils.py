@@ -132,8 +132,3 @@ def reduced_basis_hamiltonian(
             H_red[i, j] = H_original[index_red[i], index_red[j]]
 
     return H_red
-    for i, state_i in enumerate(basis_reduced):
-        for j, state_j in enumerate(basis_reduced):
-            H_red[i, j] = H_original[index_red[i], index_red[j]]
-
-    return H_red
