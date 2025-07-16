@@ -7,8 +7,8 @@ include("electric_field.jl")
 include("J01_J12_spa_functions.jl")
 include("julia_functions.jl")
 
-# field_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
-field_path = "c:/Users/ogras/anaconda3/envs/centrex-eql/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+field_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+# field_path = "c:/Users/ogras/anaconda3/envs/centrex-eql/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
 
 function reorder_evecs!(
     V_out::AbstractMatrix{<:ComplexF64},
@@ -53,7 +53,7 @@ end
 end
 
 
-function evolve(p, t_array, states_track, N)
+function evolve(p, t_array, states_track, Ez_interp, N)
     nt      = length(t_array)
     ntrack  = length(states_track)
 
@@ -83,7 +83,6 @@ function evolve(p, t_array, states_track, N)
 
     ψ       = zeros(ComplexF64, N, ntrack)   # current kets
     ψ_tmp   = similar(ψ)                      # scratch for ψ update
-
 
     # ───────────────────────────  result containers  ───────────────────────────
     ψt  = Array{ComplexF64,3}(undef, N, ntrack, nt)
@@ -166,7 +165,7 @@ const zμ0 = 0.0
 const zμ1 = 25.4e-3 * 1.125
 const Γ = 2π * 1.56e6
 
-Ω0 = 2e-1 * Γ
+Ω0 = 3e-1 * Γ
 Ω1 = 2e-1 * Γ
 ω0 = 83817989701.69382
 ω1 = 167564827658.9896
@@ -182,32 +181,10 @@ states_track = [1]
 
 p = (Ω0, Ω1, ω0, ω1, δ0, δ1, vz, z0)
 
-ψt, Et, Pt = evolve(p, t_array, states_track, N);
+ψt, Et, Pt = evolve(p, t_array, states_track, Ez_interp, N);
 
-@time ψt, Et, Pt = evolve(p, t_array, states_track, N);
+@time ψt, Et, Pt = evolve(p, t_array, states_track, Ez_interp, N);
 
-plot(t_array*vz .+ z0, Pt[1,1:16,:]')
+plot(t_array*vz .+ z0, Pt[1,1:36,:]')
 
 argmax(Pt[1,:,1]), argmax(Pt[1,:,end])
-
-# probs_detuning = []
-# detunings = (-5:0.2:5) .* 2π * 1e6
-# @showprogress for det in detunings
-#     p = (Ω0, ω0, det, vz, z0)
-#     ψt, Et, Pt = evolve(p, t_array, states_track, N)
-#     push!(probs_detuning, Pt[:,1:16,end])
-# end
-
-# pi = [probs_detuning[i][1] for i in 1:length(probs_detuning)]
-# pf = [probs_detuning[i][14] for i in 1:length(probs_detuning)]
-
-# probs_rabi = []
-# rabis = (10 .^ range(-3, -0.522879, 21)) .*Γ
-# @showprogress for rabi in rabis
-#     p = (rabi, ω0, δ0, vz, z0)
-#     ψt, Et, Pt = evolve(p, t_array, states_track, N)
-#     push!(probs_rabi, Pt[:,1:16,end])
-# end
-
-# pi = [probs_rabi[i][1] for i in 1:length(probs_rabi)]
-# pf = [probs_rabi[i][14] for i in 1:length(probs_rabi)]
