@@ -1,5 +1,4 @@
 using LinearAlgebra
-using MKL
 using Plots
 using ProgressMeter
 
@@ -7,7 +6,8 @@ include("electric_field.jl")
 include("J01_J12_spa_functions.jl")
 include("julia_functions.jl")
 
-field_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+# field_path = "c:/Users/Olivier/Anaconda3/envs/centrex-eql-testing/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
+field_path = "C:/Users/ogras/Documents/GitHub/centrex-state-prep/src/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
 # field_path = "c:/Users/ogras/anaconda3/envs/centrex-eql/Lib/site-packages/state_prep/electric_fields/Electric field components vs z-position_SPA_ExpeVer.csv"
 
 function reorder_evecs!(
