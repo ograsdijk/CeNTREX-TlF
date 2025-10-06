@@ -14,6 +14,7 @@ __all__ = [
     "J2",
     "J4",
     "J6",
+    "Jz",
     "I1z",
     "I2z",
     "Jp",
@@ -46,10 +47,9 @@ def J2(psi: CoupledBasisState, *args) -> CoupledState: ...
 
 def J2(psi, *args):
     if isinstance(psi, CoupledBasisState):
-        psi_class = CoupledState
+        return CoupledState([(psi.J * (psi.J + 1), psi)])
     else:
-        psi_class = UncoupledState
-    return psi_class([(psi.J * (psi.J + 1), psi)])
+        return UncoupledState([(psi.J * (psi.J + 1), psi)])
 
 
 @overload
@@ -62,10 +62,9 @@ def J4(psi: CoupledBasisState, *args) -> CoupledState: ...
 
 def J4(psi, *args):
     if isinstance(psi, CoupledBasisState):
-        psi_class = CoupledState
+        return CoupledState([((psi.J * (psi.J + 1)) ** 2, psi)])
     else:
-        psi_class = UncoupledState
-    return psi_class([((psi.J * (psi.J + 1)) ** 2, psi)])
+        return UncoupledState([((psi.J * (psi.J + 1)) ** 2, psi)])
 
 
 @overload
@@ -78,62 +77,27 @@ def J6(psi: CoupledBasisState, *args) -> CoupledState: ...
 
 def J6(psi, *args):
     if isinstance(psi, CoupledBasisState):
-        psi_class = CoupledState
+        return CoupledState([((psi.J * (psi.J + 1)) ** 3, psi)])
     else:
-        psi_class = UncoupledState
-    return psi_class([((psi.J * (psi.J + 1)) ** 3, psi)])
+        return UncoupledState([((psi.J * (psi.J + 1)) ** 3, psi)])
 
 
-@overload
-def Jz(psi: UncoupledBasisState, *args) -> UncoupledState: ...
+def Jz(psi: UncoupledBasisState, *args) -> UncoupledState:
+    return UncoupledState([(psi.mJ, psi)])
 
 
-@overload
-def Jz(psi: CoupledBasisState, *args) -> CoupledState: ...
+def I1z(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I1z operator - only defined for UncoupledBasisState (requires m1 quantum number)."""
+    return UncoupledState([(psi.m1, psi)])
 
 
-def Jz(psi, *args):
-    if isinstance(psi, CoupledBasisState):
-        psi_class = CoupledState
-    else:
-        psi_class = UncoupledState
-    return psi_class([(psi.mJ, psi)])
-
-
-@overload
-def I1z(psi: UncoupledBasisState, *args) -> UncoupledState: ...
-
-
-@overload
-def I1z(psi: CoupledBasisState, *args) -> CoupledState: ...
-
-
-def I1z(psi, *args):
-    if isinstance(psi, CoupledBasisState):
-        psi_class = CoupledState
-    else:
-        psi_class = UncoupledState
-    return psi_class([(psi.m1, psi)])
-
-
-@overload
-def I2z(psi: UncoupledBasisState, *args) -> UncoupledState: ...
-
-
-@overload
-def I2z(psi: CoupledBasisState, *args) -> CoupledState: ...
-
-
-def I2z(psi, *args):
-    if isinstance(psi, CoupledBasisState):
-        psi_class = CoupledState
-    else:
-        psi_class = UncoupledState
-    return psi_class([(psi.m2, psi)])
+def I2z(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I2z operator - only defined for UncoupledBasisState (requires m2 quantum number)."""
+    return UncoupledState([(psi.m2, psi)])
 
 
 ########################################################
-#
+# Ladder operators
 ########################################################
 
 
@@ -234,7 +198,7 @@ def I2m(psi: UncoupledBasisState, *args) -> UncoupledState:
 
 
 ########################################################
-###
+# Cartesian operators (defined in terms of ladder operators)
 ########################################################
 
 

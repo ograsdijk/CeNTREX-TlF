@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterable
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -36,9 +35,9 @@ def generate_uncoupled_states_ground(
                 int(J),
                 mJ,
                 I_Tl,
-                m1,
+                float(m1),
                 I_F,
-                m2,
+                float(m2),
                 Omega=0,
                 P=parity_X(J),
                 electronic_state=ElectronicState.X,
@@ -66,9 +65,9 @@ def generate_uncoupled_states_excited(
                 J,
                 mJ,
                 I_Tl,
-                m1,
+                float(m1),
                 I_F,
-                m2,
+                float(m2),
                 Omega=Ω,
                 electronic_state=ElectronicState.B,
                 basis=Basis.Uncoupled,
@@ -94,7 +93,7 @@ def generate_coupled_states_ground(
             CoupledBasisState(
                 F,
                 mF,
-                F1,
+                float(F1),
                 J,
                 I_F,
                 I_Tl,
@@ -105,8 +104,8 @@ def generate_coupled_states_ground(
             )
             for J in Js
             for F1 in np.arange(np.abs(J - I_F), J + I_F + 1)
-            for F in np.arange(np.abs(F1 - I_Tl), F1 + I_Tl + 1)
-            for mF in np.arange(-F, F + 1)
+            for F in range(int(abs(F1 - I_Tl)), int(F1 + I_Tl + 1))
+            for mF in range(-F, F + 1)
         ]
     )
     return QN
@@ -131,57 +130,35 @@ def generate_coupled_states_excited(
     else:
         _Omegas = list(Omegas)
 
-    if len(_Omegas) > 1 and Ps is not None:
-        raise ValueError("Cannot supply both Ω and P, need to pick a basis")
-    elif Ps is not None and len(_Omegas) > 1:
-        raise ValueError("Cannot supply both Ω and P, need to pick a basis")
+    # Check for conflicting basis specification
+    if len(_Ps) > 1 and len(_Omegas) > 1:
+        raise ValueError(
+            "Cannot supply both multiple Ω and multiple P values, need to pick a basis"
+        )
 
-    if basis == Basis.CoupledΩ:
-        QN = np.array(
-            [
-                CoupledBasisState(
-                    F,
-                    mF,
-                    F1,
-                    J,
-                    I_F,
-                    I_Tl,
-                    electronic_state=ElectronicState.B,
-                    P=P,
-                    Omega=Omega,
-                    basis=basis,
-                )
-                for J in Js
-                for F1 in np.arange(np.abs(J - I_F), J + I_F + 1)
-                for F in np.arange(np.abs(F1 - I_Tl), F1 + I_Tl + 1)
-                for mF in np.arange(-F, F + 1)
-                for P in _Ps
-                for Omega in _Omegas
-            ]
-        )
-    else:
-        QN = np.array(
-            [
-                CoupledBasisState(
-                    F,
-                    mF,
-                    F1,
-                    J,
-                    I_F,
-                    I_Tl,
-                    electronic_state=ElectronicState.B,
-                    P=P,
-                    Omega=Omega,
-                    basis=basis,
-                )
-                for J in Js
-                for F1 in np.arange(np.abs(J - I_F), J + I_F + 1)
-                for F in np.arange(np.abs(F1 - I_Tl), F1 + I_Tl + 1)
-                for mF in np.arange(-F, F + 1)
-                for P in _Ps
-                for Omega in _Omegas
-            ]
-        )
+    # Single comprehension works for both bases - no need to duplicate
+    QN = np.array(
+        [
+            CoupledBasisState(
+                F,
+                mF,
+                float(F1),
+                J,
+                I_F,
+                I_Tl,
+                electronic_state=ElectronicState.B,
+                P=P,
+                Omega=Omega,
+                basis=basis,
+            )
+            for J in Js
+            for F1 in np.arange(np.abs(J - I_F), J + I_F + 1)
+            for F in range(int(abs(F1 - I_Tl)), int(F1 + I_Tl + 1))
+            for mF in range(-F, F + 1)
+            for P in _Ps
+            for Omega in _Omegas
+        ]
+    )
     return QN
 
 
@@ -193,28 +170,38 @@ def generate_coupled_states_base(
     """generate CoupledBasisStates for the quantum numbers given by qn_selector
 
     Args:
-        qn_selector (QuantumSelector): quantum numbers to use to generate the
-                                        CoupledBasisStates
+        qn_selector: QuantumSelector with quantum numbers to use for generation
+        nuclear_spins: Nuclear spin values for Tl and F
+        basis: Basis to use for the states
 
     Returns:
-        np.ndarray: array of CoupledBasisStates for the excited state
-    """
-    if (basis is not None) and (basis is not basis.CoupledΩ):
-        assert qn_selector.P is not None, "function requires a parity to be set"
-    assert qn_selector.J is not None, (
-        "function requires a rotational quantum number to be set"
-    )
-    assert qn_selector.electronic is not None, (
-        "function requires electronic state to be set"
-    )
-    assert qn_selector.Ω is not None, "function requires Ω to be set"
+        List of CoupledBasisStates for the specified quantum numbers
 
-    # generate all combinations
+    Raises:
+        ValueError: If required quantum numbers are not set
+    """
+    # Validate required quantum numbers
+    if (basis is not None) and (basis != Basis.CoupledΩ):
+        if qn_selector.P is None:
+            raise ValueError("function requires a parity to be set for this basis")
+
+    if qn_selector.J is None:
+        raise ValueError("function requires a rotational quantum number J to be set")
+
+    if qn_selector.electronic is None:
+        raise ValueError("function requires electronic state to be set")
+
+    if qn_selector.Ω is None:
+        raise ValueError("function requires Ω to be set")
+
+    # Generate all combinations
     quantum_numbers = []
-    for par in ["J", "F1", "F", "mF", "electronic", "P", "Ω"]:
-        par_val = getattr(qn_selector, par)
+    for field_name in ["J", "F1", "F", "mF", "electronic", "P", "Ω"]:
+        field_val = getattr(qn_selector, field_name)
         quantum_numbers.append(
-            [par_val] if not isinstance(par_val, (list, tuple, np.ndarray)) else par_val
+            [field_val]
+            if not isinstance(field_val, (list, tuple, np.ndarray))
+            else list(field_val)
         )
 
     I_Tl = nuclear_spins.I_Tl
@@ -230,29 +217,32 @@ def generate_coupled_states_base(
             for F1 in F1sl:
                 if F1 not in F1_allowed:
                     continue
-                Fs_allowed = np.arange(np.abs(F1 - I_Tl), F1 + I_Tl + 1)
+                Fs_allowed = range(int(abs(F1 - I_Tl)), int(F1 + I_Tl + 1))
                 Fsl = Fs if Fs[0] is not None else Fs_allowed
                 for F in Fsl:
                     if F not in Fs_allowed:
                         continue
-                    mF_allowed = np.arange(-F, F + 1)
+                    mF_allowed = range(-F, F + 1)
                     mFsl = mFs if mFs[0] is not None else mF_allowed
                     for mF in mFsl:
                         if mF not in mF_allowed:
                             continue
-                        for P in Ps:
-                            P = P if not callable(P) else P(J)
+                        for P_val in Ps:
+                            # Handle callable P (e.g., parity_X function)
+                            P_resolved: Optional[int] = (
+                                P_val(J) if callable(P_val) else P_val
+                            )  # type: ignore[assignment]
                             for Ω in Ωs:
                                 QN.append(
                                     CoupledBasisState(
                                         F,
                                         mF,
-                                        F1,
+                                        float(F1),
                                         J,
                                         I_F,
                                         I_Tl,
                                         electronic_state=estate,
-                                        P=P,
+                                        P=P_resolved,
                                         Ω=Ω,
                                         basis=basis,
                                     )
@@ -304,16 +294,30 @@ def generate_coupled_states_X(
         )
 
 
-def check_B_basis(P, Ω):
+def check_B_basis(
+    P: Union[int, Callable, Sequence[int], npt.NDArray[np.int_], None],
+    Ω: Union[int, Sequence[int], npt.NDArray[np.int_], None],
+) -> None:
+    """Validate that P and Ω specifications are compatible for B state basis.
+
+    Args:
+        P: Parity quantum number(s) or callable
+        Ω: Omega quantum number(s)
+
+    Raises:
+        ValueError: If both P and Ω specifications conflict or are missing
+    """
     if P is None and Ω is None:
-        raise ValueError("Need to supply P and Ω to determine the basis")
-    elif isinstance(Ω, Iterable):
-        if isinstance(P, Iterable) and len(P) > 1:
-            raise ValueError("Cannot supply both Ω and P, need to pick a basis")
-        elif P is not None:
-            raise ValueError("Cannot supply both Ω and P, need to pick a basis")
-    else:
-        return
+        raise ValueError("Need to supply either P or Ω to determine the basis")
+
+    # Check if both have multiple values (conflicting basis specification)
+    P_is_multi = isinstance(P, (list, tuple)) and len(P) > 1
+    Ω_is_multi = isinstance(Ω, (list, tuple)) and len(Ω) > 1
+
+    if P_is_multi and Ω_is_multi:
+        raise ValueError(
+            "Cannot supply both multiple P and multiple Ω values, need to pick a basis"
+        )
 
 
 def generate_coupled_states_B(

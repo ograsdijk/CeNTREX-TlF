@@ -129,9 +129,12 @@ class CoupledBasisState(BasisState):
         else:
             self.P = None
         #     raise AssertionError("need to supply parity P")
-        assert isinstance(
+        if electronic_state is not None and not isinstance(
             electronic_state, ElectronicState
-        ), f"Supply electronic state as ElectronicState enum, not {type(electronic_state)}"
+        ):
+            raise TypeError(
+                f"Supply electronic state as ElectronicState enum, not {type(electronic_state)}"
+            )
         self.electronic_state = electronic_state
         self.energy = energy
         self.isCoupled = True
@@ -189,7 +192,13 @@ class CoupledBasisState(BasisState):
             else:
                 return 0
         else:
-            return UncoupledState([(1, other)]) @ self.transform_to_uncoupled()
+            # other is UncoupledBasisState, cast for type checker
+            from typing import cast
+
+            other_uncoupled = cast(UncoupledBasisState, other)
+            return (
+                UncoupledState([(1, other_uncoupled)]) @ self.transform_to_uncoupled()
+            )
 
     # superposition: addition
     def __add__(self, other: Self) -> CoupledState:
@@ -255,12 +264,12 @@ class CoupledBasisState(BasisState):
     def _format_quantum_numbers_helper(
         self,
     ) -> tuple[
-        sp.core.numbers.Rational,
-        sp.core.numbers.Rational,
-        sp.core.numbers.Rational,
-        sp.core.numbers.Rational,
-        sp.core.numbers.Rational,
-        sp.core.numbers.Rational,
+        sp.Rational,
+        sp.Rational,
+        sp.Rational,
+        sp.Rational,
+        sp.Rational,
+        sp.Rational,
         Optional[str],
         Optional[int],
         Optional[int],
@@ -271,6 +280,7 @@ class CoupledBasisState(BasisState):
         J = sp.S(str(self.J), rational=True)
         I1 = sp.S(str(self.I1), rational=True)
         I2 = sp.S(str(self.I2), rational=True)
+        P: Optional[str] = None
         if self.P is not None:
             if self.P == 1:
                 P = "+"
@@ -330,7 +340,7 @@ class CoupledBasisState(BasisState):
         Omega = self.Omega
 
         mF1s = np.arange(-F1, F1 + 1, 1)
-        mJs = np.arange(-J, J + 1, 1)
+        mJs = range(-round(J, 0), round(J, 0) + 1, 1)
         m1s = np.arange(-I1, I1 + 1, 1)
         m2s = np.arange(-I2, I2 + 1, 1)
 
@@ -345,9 +355,9 @@ class CoupledBasisState(BasisState):
                             J,
                             mJ,
                             I1,
-                            m1,
+                            float(m1),
                             I2,
-                            m2,
+                            float(m2),
                             P=P,
                             Omega=Omega,
                             electronic_state=electronic_state,
@@ -371,9 +381,9 @@ class CoupledBasisState(BasisState):
         Omega = self.Omega
 
         assert self.basis is not None, "Unknown basis state, can't transform to Ω basis"
-        assert (
-            P is not None
-        ), "Can't transform state to Omega basis if parity is not known"
+        assert P is not None, (
+            "Can't transform state to Omega basis if parity is not known"
+        )
 
         # Check that not already in omega basis
         if self.basis == Basis.CoupledP and self.electronic_state == ElectronicState.B:
@@ -502,7 +512,7 @@ class CoupledBasisState(BasisState):
         else:
             state = 1 * self
 
-        return state
+        return state  # type: ignore[return-value]
 
 
 # Class for uncoupled basis states
@@ -633,7 +643,7 @@ class UncoupledBasisState(BasisState):
         self, name: str
     ) -> tuple[
         str,
-        Optional[sp.core.numbers.Rational | int],
+        Optional[sp.Rational | int | str],
     ]:
         if name == "J":
             return ("J", sp.S(str(self.J), rational=True))
@@ -648,6 +658,7 @@ class UncoupledBasisState(BasisState):
         elif name == "m2":
             return ("m₂", sp.S(str(self.m2), rational=True))
         elif name == "P":
+            P: str = ""
             if self.P == 1:
                 P = "+"
             elif self.P == -1:
@@ -702,12 +713,12 @@ class UncoupledBasisState(BasisState):
 
         # Loop over possible values of F1, F and m_F
         for F1 in np.arange(J - I1, J + I1 + 1):
-            for F in np.arange(F1 - I2, F1 + I2 + 1):
+            for F in range(int(round(F1 - I2, 0)), int(round(F1 + I2, 0)) + 1):
                 if np.abs(mF) <= F:
                     coupled_state = CoupledBasisState(
                         F,
                         mF,
-                        F1,
+                        float(F1),
                         J,
                         I1,
                         I2,
@@ -856,7 +867,7 @@ class State(Generic[S]):
         result = 0
         for amp1, psi1 in self:
             for amp2, psi2 in other:
-                result += amp1.conjugate() * amp2 * (psi1 @ psi2)
+                result += amp1.conjugate() * amp2 * (psi1 @ psi2)  # type: ignore[operator]
         return result
 
     # iterator methods
@@ -1009,7 +1020,7 @@ class State(Generic[S]):
         # Generate density matrix from state vector
         density_matrix = np.tensordot(state_vec.conj(), state_vec, axes=0)
 
-        return density_matrix
+        return density_matrix.astype(np.complex128)
 
     # Method for transforming all basis states to omega basis
     def transform_to_omega_basis(self) -> Self:

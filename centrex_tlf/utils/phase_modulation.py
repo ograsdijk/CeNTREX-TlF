@@ -4,6 +4,8 @@ import numpy as np
 import numpy.typing as npt
 from scipy import special
 
+__all__ = ["sideband_spectrum"]
+
 
 def sideband_spectrum(
     β: float, ω: float, kmax: int
@@ -11,35 +13,49 @@ def sideband_spectrum(
     """
     Generate the sideband spectrum of a phase modulation EOM.
 
-    The spectrum is generated using:
-        J₀(β) + Σ Jₖ(β) + Σ (-1)ᵏ Jₖ(β),
-    summing over k from 0 to kmax, where the first sum is for peaks at positive detuning
-    and the second sum is for peaks at negative detuning.
+    The spectrum is generated using Bessel functions of the first kind:
+        Amplitude(k·ω) = Jₖ(β) for k ≥ 0
+        Amplitude(-k·ω) = (-1)ᵏ Jₖ(β) for k > 0
+
+    where Jₖ is the Bessel function of the first kind of order k.
 
     Args:
-        β (float): Modulation index.
-        ω (float): Frequency of the modulation (rad/s).
-        kmax (int): Maximum number of sidebands to compute.
+        β (float): Modulation index (dimensionless).
+        ω (float): Angular frequency of the modulation (rad/s).
+        kmax (int): Maximum sideband order to compute (non-negative integer).
 
     Returns:
-        Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-            - Array of frequencies (rad/s).
-            - Array of sideband amplitudes.
+        Tuple containing:
+            - frequencies: Array of sideband frequencies (rad/s), shape (2*kmax + 1,)
+            - amplitudes: Array of corresponding sideband amplitudes, shape (2*kmax + 1,)
+
+    Raises:
+        ValueError: If kmax is negative, or if β or ω are negative.
+        TypeError: If kmax is not an integer.
     """
     # Input validation
+    if not isinstance(kmax, (int, np.integer)):
+        raise TypeError(f"kmax must be an integer, got {type(kmax).__name__}")
     if kmax < 0:
-        raise ValueError("kmax must be a non-negative integer.")
-    if β < 0 or ω < 0:
-        raise ValueError("β and ω must be non-negative.")
+        raise ValueError(f"kmax must be non-negative, got {kmax}")
+    if β < 0:
+        raise ValueError(f"β must be non-negative, got {β}")
+    if ω < 0:
+        raise ValueError(f"ω must be non-negative, got {ω}")
 
-    # Generate sideband indices and frequencies
-    ks = np.arange(-kmax, kmax + 1, 1)
-    ωs = ks * ω
+    # Generate sideband indices from -kmax to +kmax
+    ks = np.arange(-kmax, kmax + 1, dtype=np.int64)
 
-    # Compute sideband amplitudes
-    negative_indices = ks < 0
+    # Calculate frequencies for each sideband
+    frequencies = (ks * ω).astype(np.float64)
+
+    # Compute sideband amplitudes using Bessel functions
+    # For negative orders: J_{-k}(β) = (-1)^k J_k(β)
     ks_abs = np.abs(ks)
-    sidebands = special.jv(ks_abs, β)
-    sidebands[negative_indices] *= (-1) ** ks[negative_indices]
+    amplitudes = special.jv(ks_abs, β).astype(np.float64)
 
-    return ωs, sidebands.astype(np.float64)
+    # Apply phase factor for negative sidebands
+    negative_mask = ks < 0
+    amplitudes[negative_mask] *= (-1) ** ks_abs[negative_mask]
+
+    return frequencies, amplitudes

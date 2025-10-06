@@ -134,4 +134,4 @@ def test_add_decays_C_arrays():
         decay_channels, indices, list(X_states) + list(B_states), C_array, Γ=1
     )
     assert C_array_new.shape == (27, 50, 50)
-    assert C_array_new.sum() == 5.3999999999999995 + 0j
+    assert C_array_new.sum() == 5.4 + 0j

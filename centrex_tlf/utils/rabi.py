@@ -1,4 +1,4 @@
-from typing import TypeVar, overload
+from typing import TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -90,9 +90,18 @@ def intensity_to_electric_field(intensity: T) -> T:
         intensity (float): intensity [W/m^2]
 
     Returns:
-        float: electric field
+        float: electric field [V/m]
+
+    Raises:
+        ValueError: If intensity is negative
+
+    Note:
+        Uses the relationship: E = sqrt(2*I / (c*ε₀))
+        where I is intensity, c is speed of light, and ε₀ is permittivity of free space.
     """
-    return np.sqrt((2 / (cst.c * cst.epsilon_0)) * intensity)
+    if np.any(intensity < 0):
+        raise ValueError("Intensity must be non-negative")
+    return np.sqrt((2 / (cst.c * cst.epsilon_0)) * intensity)  # type: ignore[return-value]
 
 
 def electric_field_to_rabi(electric_field: T, coupling: float, D: float) -> T:

@@ -11,6 +11,7 @@ __all__ = [
     "thermal_population",
     "generate_uniform_population_state_indices",
     "generate_uniform_population_states",
+    "generate_thermal_population_states",
     "get_diagonal_indices_flattened",
 ]
 
@@ -86,15 +87,30 @@ def generate_uniform_population_state_indices(
     state_indices: Sequence[int], levels: int
 ) -> npt.NDArray[np.complex128]:
     """
-    spread population uniformly over the given state indices
+    Spread population uniformly over the given state indices.
 
     Args:
-        state_indices (Sequence[int]): indices to put population into
-        levels (int): total states involved
+        state_indices (Sequence[int]): Indices to put population into.
+        levels (int): Total number of states involved.
 
     Returns:
-        npt.NDArray[np.complex128]: density matrix
+        npt.NDArray[np.complex128]: Density matrix.
+
+    Raises:
+        ValueError: If levels is non-positive or if any index is out of bounds.
     """
+    if levels <= 0:
+        raise ValueError(f"levels must be positive, got {levels}")
+    if not state_indices:
+        raise ValueError("state_indices cannot be empty")
+
+    state_indices_array = np.asarray(state_indices)
+    if np.any(state_indices_array < 0) or np.any(state_indices_array >= levels):
+        raise ValueError(
+            f"All indices must be in range [0, {levels}), "
+            f"got min={state_indices_array.min()}, max={state_indices_array.max()}"
+        )
+
     ρ = np.zeros([levels, levels], dtype=complex)
     for ids in state_indices:
         ρ[ids, ids] = 1
@@ -115,7 +131,13 @@ def generate_uniform_population_states(
 
     Returns:
         npt.NDArray[np.complex128]: Density matrix.
+
+    Raises:
+        ValueError: If QN is empty or if no states are selected.
     """
+    if not QN:
+        raise ValueError("QN sequence cannot be empty.")
+
     levels = len(QN)
     ρ = np.zeros([levels, levels], dtype=complex)
 
@@ -152,7 +174,10 @@ def generate_thermal_population_states(
     levels = len(QN)
     ρ = np.zeros([levels, levels], dtype=complex)
 
-    assert isinstance(QN[0], states.CoupledState), "No State objects supplied."
+    if not QN:
+        raise ValueError("QN sequence cannot be empty.")
+    if not isinstance(QN[0], states.CoupledState):
+        raise TypeError(f"Expected CoupledState objects, got {type(QN[0]).__name__}.")
 
     j_levels = np.unique([qn.largest.J for qn in QN])
 
@@ -168,9 +193,12 @@ def generate_thermal_population_states(
         if qn.largest.electronic_state == states.ElectronicState.X
     ]
 
-    assert len(np.unique(quantum_numbers, axis=0)) == len(quantum_numbers), (
-        "Duplicate quantum numbers."
-    )
+    unique_qn = np.unique(quantum_numbers, axis=0)
+    if len(unique_qn) != len(quantum_numbers):
+        raise ValueError(
+            f"Duplicate quantum numbers found: expected {len(quantum_numbers)} "
+            f"unique states but got {len(unique_qn)}."
+        )
 
     for idx, qn in enumerate(QN):
         if qn.largest.electronic_state != states.ElectronicState.X:
