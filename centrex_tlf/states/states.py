@@ -16,6 +16,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 
@@ -76,7 +77,7 @@ class BasisState(abc.ABC):
     def __rmul__(self, a: Union[float, complex, int]):
         raise NotImplementedError
 
-    def __matmul__(self, other: BasisState) -> int | float | complex:
+    def __matmul__(self, other) -> int | float | complex:
         raise NotImplementedError
 
     def __add__(self, other):
@@ -196,8 +197,6 @@ class CoupledBasisState(BasisState):
                 return 0
         else:
             # other is UncoupledBasisState, cast for type checker
-            from typing import cast
-
             other_uncoupled = cast(UncoupledBasisState, other)
             return (
                 UncoupledState([(1, other_uncoupled)]) @ self.transform_to_uncoupled()
@@ -242,12 +241,9 @@ class CoupledBasisState(BasisState):
         return self * a
 
     def __hash__(self) -> int:
-        if self.P is not None:
-            P = self.P
-        else:
-            # parity 2 for the hash if the parity isn't defined
-            P = 2
+        P = self.P if self.P is not None else 2
         ev = self.electronic_state.value if self.electronic_state is not None else 0
+        v = self.v if self.v is not None else -1
         quantum_numbers = (
             int(self.J),
             float(self.F1),
@@ -258,8 +254,9 @@ class CoupledBasisState(BasisState):
             int(P),
             int(self.Omega),
             ev,
+            v,
         )
-        return int(hashlib.md5(json.dumps(quantum_numbers).encode()).hexdigest(), 16)
+        return hash(quantum_numbers)
 
     def __repr__(self) -> str:
         return self.state_string()
@@ -384,9 +381,9 @@ class CoupledBasisState(BasisState):
         Omega = self.Omega
 
         assert self.basis is not None, "Unknown basis state, can't transform to Ω basis"
-        assert P is not None, (
-            "Can't transform state to Omega basis if parity is not known"
-        )
+        assert (
+            P is not None
+        ), "Can't transform state to Omega basis if parity is not known"
 
         # Check that not already in omega basis
         if self.basis == Basis.CoupledP and self.electronic_state == ElectronicState.B:
@@ -534,16 +531,23 @@ class UncoupledBasisState(BasisState):
         electronic_state: Optional[ElectronicState] = None,
         energy: Optional[float] = None,
         basis: Optional[Basis] = None,
+        v: Optional[int] = None,
     ):
         self.J, self.mJ = J, mJ
         self.I1, self.m1 = I1, m1
         self.I2, self.m2 = I2, m2
-        self.Omega = Omega
+        if Omega is not None:
+            self.Omega = Omega
+        else:
+            raise ValueError("need to supply Omega")
         if P is not None:
             self.P = P
         else:
-            raise AssertionError("need to supply parity P")
-        self.electronic_state = electronic_state
+            raise ValueError("need to supply parity P")
+        if electronic_state is not None:
+            self.electronic_state = electronic_state
+        else:
+            raise ValueError("need to supply electronic state")
         self.isCoupled = False
         self.isUncoupled = True
 
@@ -551,6 +555,8 @@ class UncoupledBasisState(BasisState):
             self.basis = basis
         else:
             self.basis = Basis.Uncoupled
+
+        self.v = v
 
         self.energy = energy
 
@@ -625,7 +631,7 @@ class UncoupledBasisState(BasisState):
     def __rmul__(self, a: Union[float, complex, int]) -> UncoupledState:
         return self * a
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         quantum_numbers = (
             int(self.J),
             int(self.mJ),
@@ -636,8 +642,9 @@ class UncoupledBasisState(BasisState):
             int(self.P),
             int(self.Omega),
             self.electronic_state.value,
+            self.v if self.v is not None else -1,
         )
-        return int(hashlib.md5(json.dumps(quantum_numbers).encode()).hexdigest(), 16)
+        return hash(quantum_numbers)
 
     def __repr__(self) -> str:
         return self.state_string()
@@ -706,6 +713,7 @@ class UncoupledBasisState(BasisState):
         electronic_state = self.electronic_state
         P = self.P
         Omega = 0 if self.Omega is None else self.Omega
+        v = self.v if self.v is not None else None
 
         # Determine what mF has to be
         mF = int(mJ + m1 + m2)
@@ -728,6 +736,7 @@ class UncoupledBasisState(BasisState):
                         Omega=Omega,
                         P=P,
                         electronic_state=electronic_state,
+                        v=self.v,
                     )
                     amp = uncoupled_state @ coupled_state
                     data.append((amp, coupled_state))
@@ -749,7 +758,7 @@ class UncoupledBasisState(BasisState):
         Omega = 0 if self.Omega is None else self.Omega
 
         # Check that not already in omega basis
-        if P is not None and not electronic_state == "X":
+        if P is not None and not electronic_state == ElectronicState.X:
             state_minus = 1 * UncoupledBasisState(
                 J,
                 mJ,
