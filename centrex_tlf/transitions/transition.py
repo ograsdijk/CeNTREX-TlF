@@ -25,6 +25,12 @@ class OpticalTransitionType(IntEnum):
 class MicrowaveTransition:
     """
     Pure‐rotational (microwave) J→J′ transition within the same electronic manifold.
+
+    Attributes:
+        J_ground: Rotational quantum number of the ground state (non-negative)
+        J_excited: Rotational quantum number of the excited state (non-negative)
+        electronic_ground: Electronic state of the ground level (default: X)
+        electronic_excited: Electronic state of the excited level (default: X)
     """
 
     J_ground: int
@@ -84,6 +90,19 @@ class OpticalTransition:
     """
     Electronic (optical) transition with fine/hyperfine labels.
     J_excited is J_ground + branch shift t.value.
+
+    Attributes:
+        t: Transition type (O, P, Q, R, or S branch)
+        J_ground: Rotational quantum number of the ground state (non-negative)
+        F1_excited: Intermediate angular momentum quantum number F1 of excited state
+                   (can be half-integer, e.g., 1.5 for 3/2)
+        F_excited: Total angular momentum quantum number F of excited state (non-negative)
+        electronic_ground: Electronic state of the ground level (default: X)
+        electronic_excited: Electronic state of the excited level (default: B)
+
+    Note:
+        The F1_excited parameter accepts floats representing half-integer values.
+        For example, use 1.5 or 3/2 for F1=3/2.
     """
 
     t: OpticalTransitionType
@@ -114,7 +133,8 @@ class OpticalTransition:
 
     @property
     def name(self) -> str:
-        F1rat = sympy.Rational(str(self.F1_excited))
+        # Convert float to Rational for exact representation (e.g., 1.5 → 3/2)
+        F1rat = sympy.Rational(self.F1_excited).limit_denominator()
         return f"{self.t.name}({self.J_ground}) F1'={F1rat} F'={self.F_excited}"
 
     @property

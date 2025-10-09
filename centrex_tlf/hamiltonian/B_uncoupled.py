@@ -76,7 +76,7 @@ def H_c1p(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
     # Need Jprime = J+1 ... |J-1|
     for Jprime in range(np.abs(J - 1), J + 2):
         # Loop over possible values of mJprime and m1prime
-        for mJprime in np.arange(-Jprime, Jprime + 1):
+        for mJprime in range(-Jprime, Jprime + 1):
             # Must have mJ+m1 = mJprime + m1prime
             m1prime = mJ + m1 - mJprime
             if np.abs(m1prime <= I1):
@@ -166,7 +166,7 @@ def H_mhf_Tl(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledSta
     # Loop over the possible values of quantum numbers for which the matrix element can
     # be non-zero
     # Need Jprime = J+1 ... |J-1|
-    for Jprime in np.arange(np.abs(J - 1), J + 2):
+    for Jprime in range(np.abs(J - 1), J + 2):
         # Evaluate the part of the matrix element that is common for all p
         common_coefficient = (
             coefficients.h1_Tl
@@ -175,7 +175,7 @@ def H_mhf_Tl(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledSta
         )
 
         # Loop over the spherical tensor components of I1:
-        for p in np.arange(-1, 2):
+        for p in range(-1, 2):
             # To have non-zero matrix element need mJ-p = mJprime
             mJprime = mJ + p
 
@@ -224,7 +224,7 @@ def H_mhf_F(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledStat
     # Loop over the possible values of quantum numbers for which the matrix element can
     # be non-zero
     # Need Jprime = J+1 ... |J-1|
-    for Jprime in np.arange(np.abs(J - 1), J + 2):
+    for Jprime in range(np.abs(J - 1), J + 2):
         # Evaluate the part of the matrix element that is common for all p
         common_coefficient = (
             coefficients.h1_F
@@ -233,7 +233,7 @@ def H_mhf_F(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledStat
         )
 
         # Loop over the spherical tensor components of I2:
-        for p in np.arange(-1, 2):
+        for p in range(-1, 2):
             # To have non-zero matrix element need mJ-p = mJprime
             mJprime = mJ + p
 

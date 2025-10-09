@@ -76,6 +76,9 @@ class BasisState(abc.ABC):
     def __rmul__(self, a: Union[float, complex, int]):
         raise NotImplementedError
 
+    def __matmul__(self, other: BasisState) -> int | float | complex:
+        raise NotImplementedError
+
     def __add__(self, other):
         raise NotImplementedError
 

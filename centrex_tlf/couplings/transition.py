@@ -97,11 +97,20 @@ def generate_transition_selectors(
                 1 * s
                 for s in states.generate_coupled_states_X(transition.qn_select_excited)
             ]
+        else:
+            raise TypeError(
+                f"Transition must be OpticalTransition or MicrowaveTransition, "
+                f"got {type(transition).__name__}"
+            )
 
         if phase_modulations is None:
             phase_modulation = False
         else:
             phase_modulation = phase_modulations[idt]
+
+        # Initialize main states
+        ground_main: Optional[states.CoupledState] = None
+        excited_main: Optional[states.CoupledState] = None
         if ground_mains is None:
             ground_main, excited_main = select_main_states(
                 ground_states_approx, excited_states_approx, polarization[0].vector
@@ -146,7 +155,7 @@ def get_possible_optical_transitions(
         ΔJ = transition_type.value
         J_excited = J + ΔJ
         _transitions = [
-            OpticalTransition(transition_type, J, F1, F)
+            OpticalTransition(transition_type, J, float(F1), int(F))
             for F1 in np.arange(np.abs(J_excited - I1), J_excited + I1 + 1)
             for F in np.arange(np.abs(F1 - I2), F1 + I2 + 1, dtype=int)
         ]

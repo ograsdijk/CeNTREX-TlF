@@ -1,3 +1,15 @@
+"""Hamiltonian operators for the X (ground) electronic state of TlF in the uncoupled basis.
+
+This module implements the various terms of the molecular Hamiltonian including:
+- Hyperfine coupling terms (Hc1, Hc2, Hc3, Hc4)
+- Field-free Hamiltonian (Hff)
+- Zeeman interaction terms (HZx, HZy, HZz)
+- Stark interaction terms (HSx, HSy, HSz)
+- Spherical tensor operators (R10, R1p, R1m)
+
+All functions operate on uncoupled basis states and return UncoupledState objects.
+"""
+
 from functools import lru_cache
 
 import numpy as np
@@ -26,20 +38,27 @@ from .quantum_operators import (
 )
 
 __all__ = [
+    # Hyperfine coupling terms
     "Hc1",
     "Hc2",
-    "Hc4",
     "Hc3a",
     "Hc3b",
     "Hc3c",
     "Hc3",
+    "Hc4",
+    # Field-free Hamiltonian
     "Hff",
+    # Zeeman terms
     "HZx",
     "HZy",
     "HZz",
+    # Stark terms
     "HSx",
     "HSy",
     "HSz",
+    # Spherical tensor operators
+    "R10",
+    "R1m",
     "R1p",
 ]
 
@@ -49,6 +68,15 @@ __all__ = [
 
 
 def Hc1(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Thallium spin-rotation coupling term: c1 * I1 · J.
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Resulting state after applying the operator
+    """
     return coefficients.c1 * (
         com(I1z, Jz, psi, coefficients)
         + (1 / 2) * (com(I1p, Jm, psi, coefficients) + com(I1m, Jp, psi, coefficients))
@@ -56,6 +84,15 @@ def Hc1(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def Hc2(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Fluorine spin-rotation coupling term: c2 * I2 · J.
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Resulting state after applying the operator
+    """
     return coefficients.c2 * (
         com(I2z, Jz, psi, coefficients)
         + (1 / 2) * (com(I2p, Jm, psi, coefficients) + com(I2m, Jp, psi, coefficients))
@@ -63,6 +100,15 @@ def Hc2(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def Hc4(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Nuclear spin-spin coupling term: c4 * I1 · I2.
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Resulting state after applying the operator
+    """
     return coefficients.c4 * (
         com(I1z, I2z, psi, coefficients)
         + (1 / 2)
@@ -71,6 +117,15 @@ def Hc4(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def Hc3a(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """First component of tensor spin-spin coupling: c3 term with I1·J and I2·J.
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Resulting state after applying the operator
+    """
     return (
         15
         * coefficients.c3
@@ -82,6 +137,15 @@ def Hc3a(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def Hc3b(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Second component of tensor spin-spin coupling: c3 term with I2·J and I1·J.
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Resulting state after applying the operator
+    """
     return (
         15
         * coefficients.c3
@@ -93,6 +157,15 @@ def Hc3b(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def Hc3c(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Third component of tensor spin-spin coupling: c3 term with I1·I2 and rotation.
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Resulting state after applying the operator
+    """
     return (
         -10
         * coefficients.c3
@@ -104,6 +177,15 @@ def Hc3c(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def Hc3(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Complete tensor spin-spin coupling term: Hc3 = Hc3a + Hc3b + Hc3c.
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Resulting state after applying the operator
+    """
     return Hc3a(psi, coefficients) + Hc3b(psi, coefficients) + Hc3c(psi, coefficients)
 
 
@@ -113,6 +195,18 @@ def Hc3(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def Hff(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Complete field-free Hamiltonian for X state.
+
+    Includes rotational energy and all hyperfine coupling terms:
+    H = H_rot + H_c1 + H_c2 + H_c3a + H_c3b + H_c3c + H_c4
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Resulting state after applying the complete field-free Hamiltonian
+    """
     return (
         Hrot(psi, coefficients)
         + Hc1(psi, coefficients)
@@ -131,6 +225,20 @@ def Hff(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HZx(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Zeeman interaction with magnetic field in x-direction.
+
+    H_Zx = -μ_J·J_x - μ_Tl·I1_x - μ_F·I2_x
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants with magnetic moments
+
+    Returns:
+        Resulting state after applying the Zeeman operator
+
+    Note:
+        Cached for performance. For J=0 states, only nuclear terms contribute.
+    """
     if psi.J != 0:
         return (
             -coefficients.μ_J / psi.J * Jx(psi)
@@ -145,6 +253,20 @@ def HZx(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HZy(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Zeeman interaction with magnetic field in y-direction.
+
+    H_Zy = -μ_J·J_y - μ_Tl·I1_y - μ_F·I2_y
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants with magnetic moments
+
+    Returns:
+        Resulting state after applying the Zeeman operator
+
+    Note:
+        Cached for performance. For J=0 states, only nuclear terms contribute.
+    """
     if psi.J != 0:
         return (
             -coefficients.μ_J / psi.J * Jy(psi)
@@ -159,6 +281,20 @@ def HZy(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HZz(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Zeeman interaction with magnetic field in z-direction.
+
+    H_Zz = -μ_J·J_z - μ_Tl·I1_z - μ_F·I2_z
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants with magnetic moments
+
+    Returns:
+        Resulting state after applying the Zeeman operator
+
+    Note:
+        Cached for performance. For J=0 states, only nuclear terms contribute.
+    """
     if psi.J != 0:
         return (
             -coefficients.μ_J / psi.J * Jz(psi)
@@ -178,6 +314,20 @@ def HZz(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HSx(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Stark interaction with electric field in x-direction.
+
+    H_Sx = -D·E_x = -D·(R_{1,-1} - R_{1,+1})/√2
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants with dipole moment D_TlF
+
+    Returns:
+        Resulting state after applying the Stark operator
+
+    Note:
+        Cached for performance.
+    """
     return (
         -coefficients.D_TlF
         * (R1m(psi, coefficients) - R1p(psi, coefficients))
@@ -187,6 +337,20 @@ def HSx(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HSy(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Stark interaction with electric field in y-direction.
+
+    H_Sy = -D·E_y = -iD·(R_{1,-1} + R_{1,+1})/√2
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants with dipole moment D_TlF
+
+    Returns:
+        Resulting state after applying the Stark operator
+
+    Note:
+        Cached for performance.
+    """
     return (
         -coefficients.D_TlF
         * 1j
@@ -197,13 +361,40 @@ def HSy(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HSz(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Stark interaction with electric field in z-direction.
+
+    H_Sz = -D·E_z = -D·R_{1,0}
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants with dipole moment D_TlF
+
+    Returns:
+        Resulting state after applying the Stark operator
+
+    Note:
+        Cached for performance.
+    """
     return -coefficients.D_TlF * R10(psi, coefficients)
 
 
-# Old functions from Jakobs original Hamiltonian
+########################################################
+# Spherical tensor operators
+########################################################
 
 
 def R10(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Rank-1 spherical tensor operator R_{1,0}.
+
+    Connects states with ΔJ = ±1, Δm_J = 0 (π transition).
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Linear combination of states with J±1 and same m_J
+    """
     amp1 = np.sqrt(2) * np.sqrt(
         (psi.J - psi.mJ) * (psi.J + psi.mJ) / (8 * psi.J**2 - 2)
     )
@@ -236,6 +427,17 @@ def R10(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def R1m(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Rank-1 spherical tensor operator R_{1,-1}.
+
+    Connects states with ΔJ = ±1, Δm_J = -1 (σ⁻ transition).
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Linear combination of states with J±1 and m_J-1
+    """
     amp1 = (
         -0.5
         * np.sqrt(2)
@@ -274,6 +476,17 @@ def R1m(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 
 
 def R1p(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
+    """Rank-1 spherical tensor operator R_{1,+1}.
+
+    Connects states with ΔJ = ±1, Δm_J = +1 (σ⁺ transition).
+
+    Args:
+        psi: Uncoupled basis state
+        coefficients: X state molecular constants
+
+    Returns:
+        Linear combination of states with J±1 and m_J+1
+    """
     amp1: float = (
         -0.5
         * np.sqrt(2)

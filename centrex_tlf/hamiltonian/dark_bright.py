@@ -3,7 +3,7 @@ from itertools import combinations, product
 from typing import Sequence
 
 import sympy as smp
-from sympy.utilities.iterables import flatten
+from sympy.matrices.dense import MutableDenseMatrix
 
 
 @dataclass
@@ -11,7 +11,7 @@ class DarkBrightTransformation:
     n_levels: int
     a_symbols: list
     Δ_symbols: list
-    T: smp.matrices.dense.MutableDenseMatrix
+    T: MutableDenseMatrix
 
 
 def generate_transform_matrix_symbolic(
@@ -70,4 +70,5 @@ def generate_transform_matrix_symbolic(
     sol = smp.solve(eqns, *solve_symbols)
     T = T.subs([(s, v) for s, v in zip(solve_symbols, sol[0])])
 
+    return DarkBrightTransformation(n_levels, a, Δ, T)
     return DarkBrightTransformation(n_levels, a, Δ, T)

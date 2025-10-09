@@ -1,6 +1,6 @@
 import warnings
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Sequence, Tuple, Union, cast
+from typing import Callable, Iterator, List, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -62,6 +62,7 @@ def generate_diagonalized_hamiltonian(
     _ = np.linalg.eigh(hamiltonian)
     D: npt.NDArray[np.complex128] = _[0]
     V: npt.NDArray[np.complex128] = _[1]
+    V_ref: Optional[npt.NDArray[np.complex128]] = None
     if keep_order:
         V_ref = np.eye(V.shape[0], dtype=np.complex128)
         D, V = reorder_evecs(V, D, V_ref)
@@ -84,13 +85,26 @@ class ReducedHamiltonian:
     V: npt.NDArray[np.complex128]
     QN_basis: List[CoupledState]
     QN_construct: List[CoupledBasisState]
-    hamiltonian: Hamiltonian
+    hamiltonian: Hamiltonian | None = None
     transform: npt.NDArray[np.complex128] | None = None
     QN_pretransform: Sequence[UncoupledBasisState] | None = None
 
-    def __iter__(self):
-        # support for legacy code
-        return iter((self.QN_basis, self.H))
+    def __iter__(
+        self,
+    ) -> Iterator[Union[List[CoupledState], npt.NDArray[np.complex128]]]:
+        """Support for legacy code unpacking: ground_states, H_X_red = X_hamiltonian.
+
+        Yields QN_basis first, then H to allow unpacking as:
+            ground_states, H_X_red = X_hamiltonian
+
+        Note: Due to limitations in Python's type system, type checkers cannot infer
+        position-specific types from this iterator. For fully type-safe code,
+        prefer accessing attributes directly:
+            ground_states = X_hamiltonian.QN_basis
+            H_X_red = X_hamiltonian.H
+        """
+        yield self.QN_basis
+        yield self.H
 
 
 def generate_reduced_X_hamiltonian(
@@ -154,6 +168,7 @@ def generate_reduced_X_hamiltonian(
     QNc = generate_coupled_states_ground(
         Js=np.arange(_Jmin, _Jmax + 1), nuclear_spins=nuclear_spins
     )
+    H_X_uc: Optional[Hamiltonian] = None
     if H_func is None:
         H_X_uc = generate_uncoupled_hamiltonian_X(QN, constants=constants)
         H_X_uc_func = generate_uncoupled_hamiltonian_X_function(H_X_uc)
@@ -207,8 +222,8 @@ def generate_reduced_X_hamiltonian(
 
 def generate_reduced_B_hamiltonian(
     B_states_approx: Sequence[CoupledBasisState],
-    E: npt.NDArray[np.float64] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-5]),
+    E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
     rtol: Optional[float] = None,
     stol: float = 1e-3,
     Jmin: Optional[int] = None,
@@ -267,6 +282,7 @@ def generate_reduced_B_hamiltonian(
         )
     QN_B = list(generate_coupled_states_B(qn_select, nuclear_spins=nuclear_spins))
 
+    H_B: Optional[Hamiltonian] = None
     if H_func is None:
         H_B = generate_coupled_hamiltonian_B(QN_B, constants=constants)
         H_B_func = generate_coupled_hamiltonian_B_function(H_B)
@@ -420,6 +436,8 @@ def generate_total_reduced_hamiltonian(
         transform=transform,
     )
     ground_states, H_X_red = X_hamiltonian
+    ground_states = cast(List[CoupledState], ground_states)
+    H_X_red = cast(npt.NDArray[np.complex128], H_X_red)
 
     if use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
         _B_states_approx = cast(
@@ -488,8 +506,8 @@ def generate_total_reduced_hamiltonian(
 
 def generate_reduced_hamiltonian_transitions(
     transitions: Sequence[Union[OpticalTransition, MicrowaveTransition]],
-    E: npt.NDArray[np.float64] = np.array([0.0, 0.0, 0.0]),
-    B: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1e-5]),
+    E: npt.NDArray[np.floating] = np.array([0.0, 0.0, 0.0]),
+    B: npt.NDArray[np.floating] = np.array([0.0, 0.0, 1e-5]),
     rtol: Optional[float] = None,
     stol: float = 1e-3,
     Jmin_X: Optional[int] = None,
@@ -524,6 +542,7 @@ def generate_reduced_hamiltonian_transitions(
                 constants=Bconstants,
                 nuclear_spins=nuclear_spins,
             )
+            excited_states = cast(List[CoupledState], excited_states)
 
             # figure out which excited states are involved
             excited_states = [

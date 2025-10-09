@@ -166,7 +166,7 @@ def check_transition_coupled_allowed_polarization(
 def assert_transition_coupled_allowed(
     ground_state: states.CoupledBasisState,
     excited_state: states.CoupledBasisState,
-    ΔmF_allowed: int,
+    ΔmF_allowed: int | Iterable[int],
 ) -> bool:
     """Check whether the transition is allowed based on the quantum numbers.
     Raises an AssertionError if the transition is not allowed.
