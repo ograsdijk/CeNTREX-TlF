@@ -35,15 +35,15 @@ def threej_f(
             ⎝ m1  m2  m3 ⎠
 
     Args:
-        j1: First angular momentum quantum number
-        j2: Second angular momentum quantum number
-        j3: Third angular momentum quantum number
-        m1: First magnetic quantum number
-        m2: Second magnetic quantum number
-        m3: Third magnetic quantum number
+        j1 (float | int): First angular momentum quantum number
+        j2 (float | int): Second angular momentum quantum number
+        j3 (float | int): Third angular momentum quantum number
+        m1 (float | int): First magnetic quantum number
+        m2 (float | int): Second magnetic quantum number
+        m3 (float | int): Third magnetic quantum number
 
     Returns:
-        Complex value of the Wigner 3j symbol (though mathematically real)
+        complex: Wigner 3j symbol value (though mathematically real)
 
     Note:
         Results are cached for performance. The function accepts half-integer
@@ -81,15 +81,15 @@ def sixj_f(
             ⎩ j4  j5  j6 ⎭
 
     Args:
-        j1: First angular momentum quantum number
-        j2: Second angular momentum quantum number
-        j3: Third angular momentum quantum number
-        j4: Fourth angular momentum quantum number
-        j5: Fifth angular momentum quantum number
-        j6: Sixth angular momentum quantum number
+        j1 (float | int): First angular momentum quantum number
+        j2 (float | int): Second angular momentum quantum number
+        j3 (float | int): Third angular momentum quantum number
+        j4 (float | int): Fourth angular momentum quantum number
+        j5 (float | int): Fifth angular momentum quantum number
+        j6 (float | int): Sixth angular momentum quantum number
 
     Returns:
-        Complex value of the Wigner 6j symbol (though mathematically real)
+        complex: Wigner 6j symbol value (though mathematically real)
 
     Note:
         Results are cached for performance. The function accepts half-integer

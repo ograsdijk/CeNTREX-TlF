@@ -25,6 +25,17 @@ __all__ = [
 
 
 def Hrot(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
+    """Rotational Hamiltonian for B state in coupled basis.
+    
+    H_rot = B·J² - D·J⁴ + H·J⁶
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants (B_rot, D_rot, H_const)
+    
+    Returns:
+        CoupledState: Rotational energy contribution
+    """
     return (
         constants.B_rot * J2(psi)
         - constants.D_rot * J4(psi)
@@ -38,6 +49,19 @@ def Hrot(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
 
 def H_LD(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
+    """Lambda-doubling Hamiltonian for B state in coupled basis.
+    
+    Describes the splitting of rotational levels with Λ≠0 due to the coupling
+    between electronic orbital angular momentum and molecular rotation. Mixes
+    states with opposite parity (P=±1).
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF,P⟩
+        constants (BConstants): B state molecular constants (q parameter)
+    
+    Returns:
+        CoupledState: Lambda-doubling contribution coupling P=+1 and P=-1 states
+    """
     J = psi.J
     I1 = psi.I1
     I2 = psi.I2
@@ -91,6 +115,18 @@ def H_LD(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def H_mhf_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
+    """Magnetic hyperfine interaction for Tl nucleus in B state.
+    
+    Describes the interaction between the electronic angular momentum and the
+    nuclear spin of Tl (I₁). Uses Fermi contact (b) and dipolar (c) terms.
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants (b_Tl, c_Tl)
+    
+    Returns:
+        CoupledState: Magnetic hyperfine energy contribution for Tl nucleus
+    """
     # Find the quantum numbers of the input state
     J = psi.J
     I1 = psi.I1
@@ -150,6 +186,18 @@ def H_mhf_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
+    """Magnetic hyperfine interaction for F nucleus in B state.
+    
+    Describes the interaction between the electronic angular momentum and the
+    nuclear spin of F (I₂). Uses Fermi contact (b) and dipolar (c) terms.
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants (h1_F)
+    
+    Returns:
+        CoupledState: Magnetic hyperfine energy contribution for F nucleus
+    """
     # Find the quantum numbers of the input state
     J = psi.J
     I1 = psi.I1
@@ -220,6 +268,18 @@ def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
 
 def H_c_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
+    """Nuclear electric quadrupole interaction for Tl nucleus in B state.
+    
+    Describes the interaction between the Tl nuclear quadrupole moment and the
+    electric field gradient at the nucleus. Couples states with ΔF₁ = 0, ±1, ±2.
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants (c_Tl)
+    
+    Returns:
+        CoupledState: Nuclear quadrupole energy contribution for Tl nucleus
+    """
     # Find the quantum numbers of the input state
     J = psi.J
     I1 = psi.I1
@@ -268,6 +328,18 @@ def H_c_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def H_cp1_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
+    """Nuclear spin-rotation interaction for Tl nucleus in B state.
+    
+    Describes the coupling between the nuclear spin of Tl and the molecular
+    rotation. This is typically a small correction term.
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants (cp1_Tl)
+    
+    Returns:
+        CoupledState: Nuclear spin-rotation energy contribution for Tl nucleus
+    """
     # Find the quantum numbers of the input state
     J = psi.J
     I1 = psi.I1
@@ -356,6 +428,19 @@ def H_cp1_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
+    """Spherical component p of magnetic moment operator for Zeeman effect.
+    
+    Calculates the matrix elements of the magnetic moment operator in spherical
+    basis: μₚ for p ∈ {-1, 0, +1}. Used to construct Zeeman Hamiltonian components.
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        p (int): Spherical component index (-1, 0, or +1)
+        constants (BConstants): B state molecular constants (μ_B Bohr magneton)
+    
+    Returns:
+        CoupledState: State representing μₚ|ψ⟩
+    """
     """
     Operates on psi using the pth spherical tensor component of the magnetic
     dipole operator.
@@ -429,33 +514,67 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HZx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Zeeman Hamiltonian operator for x-component of magnetic field
+    """Zeeman Hamiltonian for x-component of magnetic field in B state.
+    
+    H_Zx = -(μ₋₁ - μ₊₁)/√2
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants
+    
+    Returns:
+        CoupledState: Zeeman interaction for Bₓ field component
     """
     return -(mu_p(psi, -1, constants) - mu_p(psi, +1, constants)) / np.sqrt(2)
 
 
 @lru_cache(maxsize=int(1e6))
 def HZy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Zeeman Hamiltonian operator for y-component of magnetic field
+    """Zeeman Hamiltonian for y-component of magnetic field in B state.
+    
+    H_Zy = -i(μ₋₁ + μ₊₁)/√2
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants
+    
+    Returns:
+        CoupledState: Zeeman interaction for Bᵧ field component
     """
     return -1j * (mu_p(psi, -1, constants) + mu_p(psi, +1, constants)) / np.sqrt(2)
 
 
 @lru_cache(maxsize=int(1e6))
 def HZz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Zeeman Hamiltonian for z-component of magnetic field
+    """Zeeman Hamiltonian for z-component of magnetic field in B state.
+    
+    H_Zz = μ₀
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants
+    
+    Returns:
+        CoupledState: Zeeman interaction for Bz field component
     """
     return -mu_p(psi, 0, constants)
 
 
 @lru_cache(maxsize=int(1e6))
 def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
-    """
-    Operates on psi using the pth spherical tensor component of the
-    dipole operator.
+    """Spherical component p of electric dipole operator for Stark effect.
+    
+    Calculates the matrix elements of the electric dipole operator in spherical
+    basis: dₚ for p ∈ {-1, 0, +1}. Used to construct Stark Hamiltonian components.
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        p (int): Spherical component index (-1, 0, or +1)
+        constants (BConstants): B state molecular constants (μ_E electric dipole 
+            moment)
+    
+    Returns:
+        CoupledState: State representing dₚ|ψ⟩
     """
     # Find the quantum numbers of the input state
     Jp = psi.J
@@ -521,23 +640,47 @@ def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HSx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Stark Hamiltonian operator for x-component of electric field
+    """Stark Hamiltonian for x-component of electric field in B state.
+    
+    H_Sx = -(d₋₁ - d₊₁)/√2
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants (μ_E dipole moment)
+    
+    Returns:
+        CoupledState: Stark interaction for Eₓ field component
     """
     return -(d_p(psi, -1, constants) - d_p(psi, +1, constants)) / np.sqrt(2)
 
 
 @lru_cache(maxsize=int(1e6))
 def HSy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Stark Hamiltonian operator for y-component of electric field
+    """Stark Hamiltonian for y-component of electric field in B state.
+    
+    H_Sy = -i(d₋₁ + d₊₁)/√2
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants (μ_E dipole moment)
+    
+    Returns:
+        CoupledState: Stark interaction for Eᵧ field component
     """
     return -1j * (d_p(psi, -1, constants) + d_p(psi, +1, constants)) / np.sqrt(2)
 
 
 @lru_cache(maxsize=int(1e6))
 def HSz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Stark Hamiltonian for z-component of electric field
+    """Stark Hamiltonian for z-component of electric field in B state.
+    
+    H_Sz = -d₀
+    
+    Args:
+        psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
+        constants (BConstants): B state molecular constants (μ_E dipole moment)
+    
+    Returns:
+        CoupledState: Stark interaction for Ez field component
     """
     return -d_p(psi, 0, constants)

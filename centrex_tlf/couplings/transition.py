@@ -1,3 +1,9 @@
+"""Transition selection and organization for optical Bloch equations.
+
+This module provides tools for defining and organizing optical and microwave transitions
+including their polarizations, symbolically-defined Rabi frequencies and detunings,
+and the quantum states involved.
+"""
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Union
 
@@ -24,6 +30,23 @@ __all__ = [
 
 @dataclass
 class TransitionSelector:
+    """Describes a laser-driven transition with associated parameters.
+    
+    Attributes:
+        ground (Sequence[CoupledState]): Ground states involved in the transition
+        excited (Sequence[CoupledState]): Excited states involved in the transition
+        polarizations (Sequence[npt.NDArray[np.complex128]]): Polarization vectors for
+            each field component
+        polarization_symbols (List[smp.Symbol]): Symbolic variables for polarization
+            amplitudes
+        Ω (smp.Symbol): Symbolic Rabi frequency
+        δ (smp.Symbol): Symbolic detuning from resonance
+        description (str | None): Human-readable description of the transition
+        type (str | None): Type of transition (e.g., "optical", "microwave")
+        ground_main (CoupledState | None): Main ground state for the transition
+        excited_main (CoupledState | None): Main excited state for the transition
+        phase_modulation (bool): Whether phase modulation is applied. Defaults to False.
+    """
     ground: Sequence[states.CoupledState]
     excited: Sequence[states.CoupledState]
     polarizations: Sequence[npt.NDArray[np.complex128]]
@@ -52,22 +75,33 @@ def generate_transition_selectors(
     excited_mains: Optional[Sequence[states.CoupledState]] = None,
     phase_modulations: Optional[Sequence[bool]] = None,
 ) -> List[TransitionSelector]:
-    """
-    Generate a list of TransitionSelectors from Transition(s) and Polarization(s).
+    """Generate TransitionSelector objects from transition and polarization specs.
+    
+    Creates a list of TransitionSelector objects that describe the laser-driven
+    transitions in an optical Bloch equation system. Each selector includes the
+    ground and excited states, polarization vectors, and symbolic parameters (Rabi
+    frequency Ω and detuning δ) for use in symbolic calculations.
 
     Args:
-        transitions (Sequence[Union[OpticalTransition, MicrowaveTransition]]):
-                                                    transitions to include in the system
-        polarizations (Sequence[Sequence[Polarization]]): polarization, list of
-                                                        polarizations per transition.
-        ground_mains (Optional[Sequence[States]]): Sequence of a main ground state to
-                                                    use per transition
-        excited_mains (Optional[Sequence[States]]): Sequence of a a main excited state
-                                                    to use per transition
-        excited_mains:
+        transitions (Sequence[OpticalTransition | MicrowaveTransition]): Transitions
+            to include in the system
+        polarizations (Sequence[Sequence[Polarization]]): List of polarizations for
+            each transition. Inner sequence contains polarizations for a single
+            transition (e.g., [pol_x, pol_y] for two-polarization transition).
+        ground_mains (Sequence[CoupledState] | None): Optional main ground state for
+            each transition. Used to identify the primary coupling. Defaults to None.
+        excited_mains (Sequence[CoupledState] | None): Optional main excited state for
+            each transition. Used to identify the primary coupling. Defaults to None.
+        phase_modulations (Sequence[bool] | None): Whether each transition has phase
+            modulation applied. Defaults to None (no modulation).
 
     Returns:
-        List[TransitionSelector]: List of TransitionSelectors
+        List[TransitionSelector]: List of TransitionSelector objects, one per transition
+        
+    Example:
+        >>> transitions = [OpticalTransition(J_ground=0, J_excited=1)]
+        >>> pols = [[polarization_X, polarization_Y]]
+        >>> selectors = generate_transition_selectors(transitions, pols)
     """
     transition_selectors = []
 
@@ -144,8 +178,8 @@ def get_possible_optical_transitions(
     J = ground_state.J
     # F1 = ground_state.F1
     # F = ground_state.F
-    I1 = ground_state.I1
-    I2 = ground_state.I2
+    I1 = float(ground_state.I1)
+    I2 = float(ground_state.I2)
 
     if transition_types is None:
         transition_types = [t for t in OpticalTransitionType]

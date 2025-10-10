@@ -1,3 +1,15 @@
+"""Zeeman effect Hamiltonian operators for B state in coupled Omega basis.
+
+This module implements the interaction between molecular magnetic moment and external
+magnetic fields (Zeeman effect). The electronic magnetic moment in the B state
+(²Π₁/₂) couples to magnetic fields through the orbital angular momentum projection Ω.
+
+The Zeeman interaction is important for understanding magnetic field effects on
+molecular energy levels and for experiments using magnetic fields for state manipulation.
+"""
+
+from __future__ import annotations
+
 from functools import lru_cache
 
 import numpy as np
@@ -10,13 +22,54 @@ from ..wigner import sixj_f, threej_f
 
 @lru_cache(maxsize=int(1e6))
 def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
+    """Magnetic dipole operator (pth spherical tensor component) for B state.
+
+    Applies the pth component (p = -1, 0, +1) of the magnetic dipole operator in
+    spherical tensor form. For molecules in ²Π states, the electronic magnetic moment
+    is primarily due to orbital angular momentum, with g_L ≈ 1.
+
+    The operator couples rotational states through the electronic magnetic moment,
+    which is proportional to the projection Ω of electronic angular momentum along
+    the internuclear axis. This Omega-dependence is characteristic of molecules
+    with non-zero electronic angular momentum.
+
+    Args:
+        psi: Input coupled basis state |J,F₁,F,mF,I₁,I₂,Ω⟩ in B electronic state.
+        p: Spherical tensor component index. Must be -1, 0, or +1:
+            - p = +1: σ⁺ component (increases mF by 1)
+            - p =  0: π component (preserves mF)
+            - p = -1: σ⁻ component (decreases mF by 1)
+        constants: Molecular constants for TlF B state, requires μ_B parameter
+            (Bohr magneton in Hz/Gauss, ≈1.4 MHz/Gauss).
+
+    Returns:
+        CoupledState containing superposition over all allowed final states with
+        J' = J-1, J, J+1; F₁' varying according to |J'-I₁| ≤ F₁' ≤ J'+I₁;
+        F' varying according to |F₁'-I₂| ≤ F' ≤ F₁'+I₂; and mF' = mF + p.
+        Zero-amplitude terms are excluded.
+
+    Notes:
+        - Selection rules: ΔJ = 0, ±1; ΔF₁ = 0, ±1; ΔF = 0, ±1; ΔmF = p; ΔΩ = 0
+        - g_L = 1 (orbital g-factor) appropriate for ²Π₁/₂ state
+        - Amplitude proportional to Ω (vanishes for Σ states with Ω=0)
+        - For TlF B state: μ_B ≈ 1.4 MHz/Gauss
+        - Spin contribution neglected (g_S terms small for ²Π₁/₂)
+        - Matrix elements similar to electric dipole but with magnetic coupling
+
+    References:
+        Brown, J. M., & Carrington, A. (2003). "Rotational Spectroscopy of Diatomic
+        Molecules." Cambridge University Press. Chapter 8 on Zeeman effect.
+        Ramsey, N. F. (1956). "Molecular Beams." Oxford University Press.
+
+    Example:
+        >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
+        >>> constants = BConstants(μ_B=1400000.0)
+        >>> result_pi = mu_p(state, 0, constants)      # π component
+        >>> result_sp = mu_p(state, +1, constants)     # σ⁺ component
+        >>> result_sm = mu_p(state, -1, constants)     # σ⁻ component
     """
-    Operates on psi using the pth spherical tensor component of the magnetic
-    dipole operator.
-    mu_B = Bohr magneton in Hz/Gauss
-    """
-    # Some constants
-    gL = 1
+    # Electronic orbital g-factor (appropriate for ²Π₁/₂ state)
+    gL = 1.0
 
     # Find the quantum numbers of the input state
     Jp = psi.J
@@ -84,23 +137,105 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
 
 @lru_cache(maxsize=int(1e6))
 def HZx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Zeeman Hamiltonian operator for x-component of magnetic field
+    """Zeeman Hamiltonian for magnetic field along x-axis (laboratory frame).
+
+    Calculates the interaction energy with a magnetic field pointing along the
+    laboratory x-direction. Constructed from spherical tensor components as:
+        H_Zx = -(μ₋₁ - μ₊₁)/√2
+
+    This operator mixes states with ΔmF = ±1, corresponding to transverse magnetic
+    field interactions. Important for experiments with rotating or transverse fields.
+
+    Args:
+        psi: Input coupled basis state |J,F₁,F,mF,I₁,I₂,Ω⟩ in B electronic state.
+        constants: Molecular constants for TlF B state (requires μ_B).
+
+    Returns:
+        CoupledState containing superposition of states mixed by x-component of
+        magnetic field.
+
+    Notes:
+        - Couples states with ΔmF = ±1
+        - For quantization along z, this represents transverse field
+        - The factor 1/√2 normalizes the Cartesian-to-spherical transformation
+        - Used in rotating frame calculations and RF/microwave transitions
+
+    Example:
+        >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
+        >>> constants = BConstants(μ_B=1400000.0)
+        >>> result = HZx(state, constants)
     """
     return -(mu_p(psi, -1, constants) - mu_p(psi, +1, constants)) / np.sqrt(2)
 
 
 @lru_cache(maxsize=int(1e6))
 def HZy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Zeeman Hamiltonian operator for y-component of magnetic field
+    """Zeeman Hamiltonian for magnetic field along y-axis (laboratory frame).
+
+    Calculates the interaction energy with a magnetic field pointing along the
+    laboratory y-direction. Constructed from spherical tensor components as:
+        H_Zy = -i(μ₋₁ + μ₊₁)/√2
+
+    This operator mixes states with ΔmF = ±1, corresponding to transverse magnetic
+    field interactions. The factor of i reflects the phase relationship between
+    Cartesian and spherical components.
+
+    Args:
+        psi: Input coupled basis state |J,F₁,F,mF,I₁,I₂,Ω⟩ in B electronic state.
+        constants: Molecular constants for TlF B state (requires μ_B).
+
+    Returns:
+        CoupledState containing superposition of states mixed by y-component of
+        magnetic field. The amplitudes are complex due to the phase factor i.
+
+    Notes:
+        - Couples states with ΔmF = ±1
+        - Returns complex amplitudes (imaginary factor i)
+        - For quantization along z, this represents transverse field
+        - The factor i and 1/√2 normalize the Cartesian-to-spherical transformation
+        - Used in rotating frame calculations and RF/microwave transitions
+
+    Example:
+        >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
+        >>> constants = BConstants(μ_B=1400000.0)
+        >>> result = HZy(state, constants)
+        >>> # Result has complex amplitudes
     """
     return -1j * (mu_p(psi, -1, constants) + mu_p(psi, +1, constants)) / np.sqrt(2)
 
 
 @lru_cache(maxsize=int(1e6))
 def HZz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """
-    Zeeman Hamiltonian for z-component of magnetic field
+    """Zeeman Hamiltonian for magnetic field along z-axis (quantization axis).
+
+    Calculates the interaction energy with a magnetic field pointing along the
+    laboratory z-direction (quantization axis). This is simply the μ₀ component:
+        H_Zz = -μ₀
+
+    This operator preserves mF (ΔmF = 0), corresponding to the energy shift in
+    a longitudinal magnetic field. This is the most commonly used component for
+    Zeeman shift calculations in aligned DC magnetic fields.
+
+    Args:
+        psi: Input coupled basis state |J,F₁,F,mF,I₁,I₂,Ω⟩ in B electronic state.
+        constants: Molecular constants for TlF B state (requires μ_B).
+
+    Returns:
+        CoupledState containing superposition of states mixed by z-component of
+        magnetic field. All coupled states have the same mF as input.
+
+    Notes:
+        - Preserves mF (ΔmF = 0)
+        - For quantization along z, this represents longitudinal field
+        - Creates linear Zeeman shift: E_Zeeman = -μ_z·B_z
+        - Most important component for DC magnetic field experiments
+        - Energy shifts proportional to mF for weak fields
+        - Used for magnetic substate selection and manipulation
+
+    Example:
+        >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
+        >>> constants = BConstants(μ_B=1400000.0)
+        >>> result = HZz(state, constants)
+        >>> # All coupled states have mF=0
     """
     return -mu_p(psi, 0, constants)

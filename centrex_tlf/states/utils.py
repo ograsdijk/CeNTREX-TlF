@@ -10,10 +10,36 @@ __all__ = ["CGc", "parity_X", "reorder_evecs"]
 
 @lru_cache(maxsize=int(1e6))
 def CGc(j1: float, m1: float, j2: float, m2: float, j3: float, m3: float) -> complex:
+    """Calculate Clebsch-Gordan coefficient.
+
+    Computes ⟨j1 m1 j2 m2 | j3 m3⟩ using sympy's quantum CG coefficient.
+    Results are cached for performance.
+
+    Args:
+        j1: First angular momentum quantum number
+        m1: First magnetic quantum number
+        j2: Second angular momentum quantum number
+        m2: Second magnetic quantum number
+        j3: Total angular momentum quantum number
+        m3: Total magnetic quantum number
+
+    Returns:
+        Complex Clebsch-Gordan coefficient
+    """
     return complex(CG(j1, m1, j2, m2, j3, m3).doit())
 
 
 def parity_X(J: int) -> int:
+    """Calculate parity of X electronic state for given J.
+
+    The parity of the ground X¹Σ⁺ state is (-1)^J.
+
+    Args:
+        J: Rotational quantum number
+
+    Returns:
+        Parity: +1 or -1
+    """
     return (-1) ** J
 
 

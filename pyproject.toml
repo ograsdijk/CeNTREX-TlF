@@ -41,6 +41,7 @@ module = [
     "sympy.utilities.iterables",
     "sympy.physics.wigner",
     "sympy.physics.quantum.cg",
+    "sympy.matrices.dense"
 ]
 ignore_missing_imports = true
 

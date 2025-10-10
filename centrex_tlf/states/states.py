@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import abc
-import hashlib
-import json
 import sys
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -140,7 +138,6 @@ class CoupledBasisState(BasisState):
                 f"Supply electronic state as ElectronicState enum, not {type(electronic_state)}"
             )
         self.electronic_state = electronic_state
-        self.energy = energy
         self.isCoupled = True
         self.isUncoupled = False
 
@@ -244,19 +241,11 @@ class CoupledBasisState(BasisState):
         P = self.P if self.P is not None else 2
         ev = self.electronic_state.value if self.electronic_state is not None else 0
         v = self.v if self.v is not None else -1
-        quantum_numbers = (
-            int(self.J),
-            float(self.F1),
-            int(self.F),
-            int(self.mF),
-            float(self.I1),
-            float(self.I2),
-            int(P),
-            int(self.Omega),
-            ev,
-            v,
-        )
-        return hash(quantum_numbers)
+        basis_val = self.basis.value if self.basis is not None else 0
+        # Use string representation to avoid tuple hash collisions
+        # Format ensures each value is clearly separated and distinguishable
+        hash_string = f"{self.J}|{self.F1}|{self.F}|{self.mF}|{self.I1}|{self.I2}|{P}|{self.Omega}|{ev}|{v}|{basis_val}"
+        return hash(hash_string)
 
     def __repr__(self) -> str:
         return self.state_string()
@@ -323,12 +312,28 @@ class CoupledBasisState(BasisState):
         return "|" + string + ">"
 
     def print_quantum_numbers(self, printing: bool = False) -> str:
+        """Print or return the string representation of quantum numbers.
+
+        Args:
+            printing: If True, print to stdout. Defaults to False.
+
+        Returns:
+            String representation of the state
+        """
         if printing:
             print(self.state_string())
         return self.state_string()
 
-    # A method to transform from coupled to uncoupled basis
     def transform_to_uncoupled(self) -> UncoupledState:
+        """Transform from coupled to uncoupled basis representation.
+
+        Converts a coupled basis state |J F1 F mF⟩ to an uncoupled basis
+        representation as a sum of |J mJ I1 m1 I2 m2⟩ states using
+        Clebsch-Gordan coefficients.
+
+        Returns:
+            UncoupledState: Normalized uncoupled basis representation
+        """
         F = self.F
         mF = self.mF
         F1 = self.F1
@@ -368,8 +373,15 @@ class CoupledBasisState(BasisState):
 
         return uncoupled_state.normalize()
 
-    # Method for transforming parity eigenstate to Omega eigenstate basis
     def transform_to_omega_basis(self) -> CoupledState:
+        """Transform parity eigenstate to Omega eigenstate basis.
+
+        Converts a parity basis state to an Omega basis representation.
+        For ground X state (Omega=0), returns the state unchanged.
+
+        Returns:
+            CoupledState in Omega basis representation
+        """
         F = self.F
         mF = self.mF
         F1 = self.F1
@@ -380,10 +392,12 @@ class CoupledBasisState(BasisState):
         P = self.P
         Omega = self.Omega
 
-        assert self.basis is not None, "Unknown basis state, can't transform to Ω basis"
-        assert (
-            P is not None
-        ), "Can't transform state to Omega basis if parity is not known"
+        if self.basis is None:
+            raise ValueError("Unknown basis state, can't transform to Ω basis")
+        if P is None:
+            raise ValueError(
+                "Can't transform state to Omega basis if parity is not known"
+            )
 
         # Check that not already in omega basis
         if self.basis == Basis.CoupledP and self.electronic_state == ElectronicState.B:
@@ -424,6 +438,17 @@ class CoupledBasisState(BasisState):
             raise ValueError("Cannot transform to Omega basis")
 
     def transform_to_parity_basis(self) -> CoupledState:
+        """Transform Omega eigenstate to parity eigenstate basis.
+
+        Converts an Omega basis state to a parity basis representation.
+        The transformation uses: |J Ω P⟩ = (|J Ω⟩ + P(-1)^J |J -Ω⟩) / √2
+
+        Returns:
+            CoupledState in parity basis representation
+
+        Raises:
+            ValueError: If state cannot be transformed (e.g., already in parity basis)
+        """
         """
         Transforms self from Omega eigenstate basis (i.e. signed Omega) to
         parity eigenstate basis (unsigned Omega, P is good quantum number).
@@ -544,10 +569,12 @@ class UncoupledBasisState(BasisState):
             self.P = P
         else:
             raise ValueError("need to supply parity P")
-        if electronic_state is not None:
-            self.electronic_state = electronic_state
-        else:
+        if electronic_state is None or not isinstance(
+            electronic_state, ElectronicState
+        ):
             raise ValueError("need to supply electronic state")
+        else:
+            self.electronic_state = electronic_state
         self.isCoupled = False
         self.isUncoupled = True
 
@@ -557,8 +584,6 @@ class UncoupledBasisState(BasisState):
             self.basis = Basis.Uncoupled
 
         self.v = v
-
-        self.energy = energy
 
     # equality testing
     def __eq__(self, other: object) -> bool:
@@ -576,6 +601,7 @@ class UncoupledBasisState(BasisState):
                 and self.P == other.P
                 and self.electronic_state == other.electronic_state
                 and self.basis == other.basis
+                and self.v == other.v
             )
 
     @overload
@@ -632,19 +658,13 @@ class UncoupledBasisState(BasisState):
         return self * a
 
     def __hash__(self) -> int:
-        quantum_numbers = (
-            int(self.J),
-            int(self.mJ),
-            float(self.I1),
-            float(self.m1),
-            float(self.I2),
-            float(self.m2),
-            int(self.P),
-            int(self.Omega),
-            self.electronic_state.value,
-            self.v if self.v is not None else -1,
-        )
-        return hash(quantum_numbers)
+        ev = self.electronic_state.value if self.electronic_state is not None else 0
+        v = self.v if self.v is not None else -1
+        basis_val = self.basis.value if self.basis is not None else 0
+        # Use string representation to avoid tuple hash collisions
+        # Format ensures each value is clearly separated and distinguishable
+        hash_string = f"{self.J}|{self.mJ}|{self.I1}|{self.m1}|{self.I2}|{self.m2}|{self.P}|{self.Omega}|{ev}|{v}|{basis_val}"
+        return hash(hash_string)
 
     def __repr__(self) -> str:
         return self.state_string()
@@ -696,24 +716,37 @@ class UncoupledBasisState(BasisState):
         return "|" + string + ">"
 
     def print_quantum_numbers(self, printing: bool = False) -> str:
+        """Print or return the string representation of quantum numbers.
+
+        Args:
+            printing: If True, print to stdout. Defaults to False.
+
+        Returns:
+            String representation of the state
+        """
         if printing:
             print(self.state_string())
         return self.state_string()
 
-    # Method for converting to coupled basis
     def transform_to_coupled(self) -> CoupledState:
+        """Transform from uncoupled to coupled basis representation.
+
+        Converts an uncoupled basis state |J mJ I1 m1 I2 m2⟩ to a coupled basis
+        representation as a sum of |J F1 F mF⟩ states using Clebsch-Gordan coefficients.
+
+        Returns:
+            CoupledState: Normalized coupled basis representation
+        """
         # Determine quantum numbers
         J = self.J
         mJ = self.mJ
         I1 = self.I1
         m1 = self.m1
-        I2 = self.I1
+        I2 = self.I2
         m2 = self.m2
-        Omega = self.Omega
+        Omega = 0 if self.Omega is None else self.Omega
         electronic_state = self.electronic_state
         P = self.P
-        Omega = 0 if self.Omega is None else self.Omega
-        v = self.v if self.v is not None else None
 
         # Determine what mF has to be
         mF = int(mJ + m1 + m2)
@@ -743,19 +776,28 @@ class UncoupledBasisState(BasisState):
 
         return CoupledState(data)
 
-    # Method for transforming parity eigenstate to Omega eigenstate basis
     def transform_to_omega_basis(self) -> UncoupledState:
+        """Transform parity eigenstate to Omega eigenstate basis.
+
+        Converts an uncoupled parity basis state to an Omega basis representation.
+        For ground X state (Omega=0), returns the state unchanged.
+
+        Returns:
+            UncoupledState in Omega basis representation
+
+        Raises:
+            ValueError: If state is already in Omega basis or cannot be transformed
+        """
         # Determine quantum numbers
         J = self.J
         mJ = self.mJ
         I1 = self.I1
         m1 = self.m1
-        I2 = self.I1
+        I2 = self.I2
         m2 = self.m2
-        Omega = self.Omega
+        Omega = 0 if self.Omega is None else self.Omega
         electronic_state = self.electronic_state
         P = self.P
-        Omega = 0 if self.Omega is None else self.Omega
 
         # Check that not already in omega basis
         if P is not None and not electronic_state == ElectronicState.X:
@@ -793,6 +835,9 @@ S = TypeVar("S", bound=BasisState)
 
 
 class State(Generic[S]):
+    # Set high priority to ensure our __mul__ and __rmul__ are called instead of numpy's
+    __array_priority__ = 1000
+
     def __init__(
         self,
         data: Sequence[
@@ -804,13 +849,11 @@ class State(Generic[S]):
         remove_zero_amp_cpts: bool = True,
     ):
         # remove components with zero amplitudes
+        # Ensure data is a list, not a numpy array or other sequence type
         if remove_zero_amp_cpts:
             self.data = [(amp, cpt) for amp, cpt in data if amp != 0]
         else:
             self.data = list(data)
-
-        # for iteration over the State
-        self.index = len(self.data)
 
     def _create_new_instance(
         self,
@@ -825,36 +868,40 @@ class State(Generic[S]):
         return self.__class__(data, remove_zero_amp_cpts)
 
     # superposition: addition
-    # (highly inefficient and ugly but should work)
     def __add__(self, other: Self) -> Self:
-        data: List[Tuple[Union[float, complex], S]] = []
-        # add components that are in self but not in other
-        for amp1, cpt1 in self.data:
-            only_in_self = True
-            for amp2, cpt2 in other.data:
-                if cpt2 == cpt1:
-                    only_in_self = False
-                    break
-            if only_in_self:
-                data.append((amp1, cpt1))
-        # add components that are in other but not in self
-        for amp1, cpt1 in other.data:
-            only_in_other = True
-            for amp2, cpt2 in self.data:
-                if cpt2 == cpt1:
-                    only_in_other = False
-                    break
-            if only_in_other:
-                data.append((amp1, cpt1))
-        # add components that are both in self and in other
-        for amp1, cpt1 in self.data:
-            for amp2, cpt2 in other.data:
-                if cpt2 == cpt1:
-                    data.append((amp1 + amp2, cpt1))
-                    break
-        return self._create_new_instance(data)
+        """Add two states by combining amplitudes of common basis states.
 
-    # superposition: subtraction
+        Preserves order from self, then adds new states from other.
+
+        Args:
+            other: State to add to this state
+
+        Returns:
+            New state with combined amplitudes
+        """
+        # Build a dictionary for quick lookup but preserve order using a list
+        data: List[Tuple[Union[int, float, complex], S]] = []
+        seen_states: dict[S, int] = {}  # Maps basis_state to index in data
+
+        # Add all components from self
+        for amp, basis_state in self.data:
+            seen_states[basis_state] = len(data)
+            data.append((amp, basis_state))
+
+        # Add/combine components from other
+        for amp, basis_state in other.data:
+            if basis_state in seen_states:
+                # Update amplitude of existing basis state
+                idx = seen_states[basis_state]
+                old_amp = data[idx][0]
+                data[idx] = (old_amp + amp, basis_state)
+            else:
+                # Add new basis state
+                seen_states[basis_state] = len(data)
+                data.append((amp, basis_state))
+
+        return self._create_new_instance(data)  # superposition: subtraction
+
     def __sub__(self, other: Self) -> Self:
         return self + -1 * other
 
@@ -884,81 +931,118 @@ class State(Generic[S]):
 
     # iterator methods
     def __iter__(self):
-        return ((amp, state) for amp, state in self.data)
+        """Iterate over (amplitude, basis_state) tuples."""
+        return iter(self.data)
 
-    def __next__(self):
-        if self.index == 0:
-            raise StopIteration
-        self.index -= 1
-        return self.data[self.index]
+    def __len__(self) -> int:
+        """Return the number of components in the state."""
+        return len(self.data)
 
     def __eq__(self, other: object) -> bool:
-        """
-        __eq__ method
-        iterates through all amplitudes and states, can be slow
+        """Check equality of two states.
+
+        Two states are equal if they have the same basis states with the same amplitudes.
+        Order of components doesn't matter.
 
         Args:
-            other (object): object to compare to
+            other: Object to compare to
 
         Returns:
-            bool: True if equal, False if not
+            True if equal, False if not
         """
         if not isinstance(other, self.__class__):
             return False
-        else:
-            S1 = self.order_by_amp()
-            S2 = other.order_by_amp()
-            for (a1, s1), (a2, s2) in zip(S1, S2):
-                if a1 != a2:
-                    return False
-                elif s1 != s2:
-                    return False
-            return True
 
-    # direct access to a component
+        # Quick length check
+        if len(self.data) != len(other.data):
+            return False
+
+        # For each component in self, check if it exists in other with same amplitude
+        for amp1, basis_state1 in self.data:
+            found = False
+            for amp2, basis_state2 in other.data:
+                if basis_state1 == basis_state2:
+                    # Use numpy's allclose for robust floating point comparison
+                    if np.allclose(amp1, amp2, rtol=1e-15, atol=1e-15):
+                        found = True
+                        break
+                    else:
+                        return False  # Same basis state but different amplitude
+            if not found:
+                return False  # Basis state in self not found in other
+
+        return True  # direct access to a component
+
     def __getitem__(self, i: int) -> Tuple[Union[complex, float, int], BasisState]:
         return self.data[i]
 
     def __repr__(self) -> str:
+        """String representation showing largest amplitude components.
+
+        Returns:
+            String representation of state (up to 5 largest components)
+        """
+        if not self.data:
+            return "<Empty State>"
+
         ordered = self.order_by_amp()
         idx = 0
         string = ""
-        amp_max = np.max(np.abs(list(zip(*ordered))[0]))
+        amp_max = np.max(np.abs([amp for amp, _ in ordered.data]))
+
         for amp, state in ordered:
             if np.abs(amp) < amp_max * 1e-3:
                 continue
             string += f"{amp:.2f} x {state}"
             idx += 1
-            if (idx > 5) or (idx == len(ordered.data)):
+            if (idx >= 5) or (idx == len(ordered.data)):
                 break
             string += "\n"
-        if idx == 0:
-            return ""
-        else:
-            return string
+
+        return string if string else "<Empty State>"
 
     def state_string_custom(self, quantum_numbers: list[str]) -> str:
+        """Custom string representation with specified quantum numbers.
+
+        Args:
+            quantum_numbers: List of quantum number names to include
+
+        Returns:
+            String representation of state (up to 5 largest components)
+        """
+        if not self.data:
+            return "<Empty State>"
+
         ordered = self.order_by_amp()
         idx = 0
         string = ""
-        amp_max = np.max(np.abs(list(zip(*ordered))[0]))
+        amp_max = np.max(np.abs([amp for amp, _ in ordered.data]))
+
         for amp, state in ordered:
             if np.abs(amp) < amp_max * 1e-3:
                 continue
             string += f"{amp:.2f} x {state.state_string_custom(quantum_numbers)}"
             idx += 1
-            if (idx > 5) or (idx == len(ordered.data)):
+            if (idx >= 5) or (idx == len(ordered.data)):
                 break
             string += "\n"
-        if idx == 0:
-            return ""
-        else:
-            return string
+
+        return string if string else "<Empty State>"
 
     def find_largest_component(self) -> S:
+        """Find the basis state with the largest amplitude.
+
+        Returns:
+            Basis state with largest amplitude
+
+        Raises:
+            ValueError: If state has no components
+        """
+        if not self.data:
+            raise ValueError("Cannot find largest component of empty state")
+
         # Order the state by amplitude
         state = self.order_by_amp()
-
         return state.data[0][1]
 
     @property
@@ -966,51 +1050,83 @@ class State(Generic[S]):
         return self.find_largest_component()
 
     def normalize(self) -> Self:
-        data = []
-        N = np.sqrt(self @ self)
-        for amp, basis_state in self.data:
-            data.append((amp / N, basis_state))
+        """Normalize the state so that ⟨ψ|ψ⟩ = 1.
 
+        Returns:
+            Normalized state
+
+        Raises:
+            ValueError: If state has zero norm
+        """
+        if not self.data:
+            raise ValueError("Cannot normalize empty state")
+
+        norm_squared = self @ self
+        if norm_squared == 0:
+            raise ValueError("Cannot normalize state with zero norm")
+
+        N = np.sqrt(norm_squared)
+        data = [(amp / N, basis_state) for amp, basis_state in self.data]
         return self._create_new_instance(data)
 
-    # Method that removes components that are smaller than tolerance from the state
     def remove_small_components(self, tol: float = 1e-3) -> Self:
-        purged_data = []
-        for amp, basis_state in self.data:
-            if np.abs(amp) > tol:
-                purged_data.append((amp, basis_state))
+        """Remove components with amplitudes smaller than tolerance.
 
+        Args:
+            tol: Amplitude threshold (default: 1e-3)
+
+        Returns:
+            New state with small components removed
+        """
+        purged_data = [
+            (amp, basis_state) for amp, basis_state in self.data if np.abs(amp) > tol
+        ]
         return self._create_new_instance(purged_data)
 
-    # Method for ordering states in descending order of amp^2
     def order_by_amp(self) -> Self:
-        data = self.data
-        amp_array = np.zeros(len(data))
+        """Order state components in descending order of |amplitude|².
 
-        # Make an numpy array of the amplitudes
-        for i, d in enumerate(data):
-            amp_array[i] = np.abs((data[i][0])) ** 2
-
-        # Find ordering of array in descending order
-        index = np.argsort(-1 * amp_array)
-
-        # Reorder data
-        reordered_data = data
-        reordered_data = [reordered_data[i] for i in index]
-
+        Returns:
+            New state with components ordered by amplitude
+        """
+        # Sort using Python's built-in sort with key function (more efficient)
+        reordered_data = sorted(
+            self.data, key=lambda x: np.abs(x[0]) ** 2, reverse=True
+        )
         return self._create_new_instance(reordered_data)
 
-    # Method for printing largest component basis states
     def print_largest_components(self, n: int = 1) -> str:
+        """Print the n largest component basis states.
+
+        Args:
+            n: Number of components to print (default: 1)
+
+        Returns:
+            String containing the quantum numbers of the n largest components
+
+        Raises:
+            ValueError: If n is greater than the number of components
+        """
+        if not self.data:
+            return "<Empty State>"
+
+        if n > len(self.data):
+            raise ValueError(
+                f"Cannot print {n} components; state only has {len(self.data)} components"
+            )
+
         # Order the state by amplitude
         state = self.order_by_amp()
 
-        # Initialize an empty string
+        # Build string with quantum numbers
         string = ""
-
-        for i in range(0, n):
+        for i in range(n):
             basis_state = state.data[i][1]
-            basis_state.print_quantum_numbers()
+            amp = state.data[i][0]
+            string += f"Component {i + 1} (|amp|²={np.abs(amp) ** 2:.4f}): "
+            string += basis_state.print_quantum_numbers()
+            if i < n - 1:
+                string += "\n"
 
         return string
 
@@ -1018,14 +1134,31 @@ class State(Generic[S]):
         self,
         QN: Sequence[S],
     ) -> npt.NDArray[np.complex128]:
+        """Generate state vector representation in the given basis.
+
+        Args:
+            QN: Sequence of basis states defining the basis
+
+        Returns:
+            Complex array representing the state vector in the given basis
+        """
         state_vector = [1 * state @ self for state in QN]
         return np.array(state_vector, dtype=complex)
 
-    # Method that generates a density matrix from state
     def density_matrix(
         self,
         QN: Sequence[S],
     ) -> npt.NDArray[np.complex128]:
+        """Generate density matrix representation from state.
+
+        Creates the density matrix ρ = |ψ⟩⟨ψ| in the given basis.
+
+        Args:
+            QN: Sequence of basis states defining the basis
+
+        Returns:
+            Complex 2D array representing the density matrix
+        """
         # Get state vector
         state_vec = self.state_vector(QN)
 
@@ -1034,16 +1167,24 @@ class State(Generic[S]):
 
         return density_matrix.astype(np.complex128)
 
-    # Method for transforming all basis states to omega basis
     def transform_to_omega_basis(self) -> Self:
+        """Transform all basis states to the Omega basis.
+
+        Returns:
+            New state with all components transformed to Omega basis
+        """
         state = self._create_new_instance(data=[])
         for amp, basis_state in self.data:
             state += amp * basis_state.transform_to_omega_basis()
 
         return state
 
-    # Method for transforming all basis states to parity basis
     def transform_to_parity_basis(self) -> Self:
+        """Transform all basis states to the parity basis.
+
+        Returns:
+            New state with all components transformed to parity basis
+        """
         state = self._create_new_instance(data=[])
         for amp, basis_state in self.data:
             state += amp * basis_state.transform_to_parity_basis()
@@ -1054,10 +1195,15 @@ class State(Generic[S]):
 class CoupledState(State):
     def __init__(
         self,
-        data: Sequence[Tuple[Union[int, float, complex], CoupledBasisState]] = [],
+        data: Optional[
+            Sequence[Tuple[Union[int, float, complex], CoupledBasisState]]
+        ] = None,
         remove_zero_amp_cpts: bool = True,
     ):
-        super().__init__(data=data, remove_zero_amp_cpts=remove_zero_amp_cpts)
+        super().__init__(
+            data=data if data is not None else [],
+            remove_zero_amp_cpts=remove_zero_amp_cpts,
+        )
 
     def _create_new_instance(
         self,
@@ -1107,10 +1253,15 @@ class CoupledState(State):
 class UncoupledState(State):
     def __init__(
         self,
-        data: Sequence[Tuple[Union[int, float, complex], UncoupledBasisState]] = [],
+        data: Optional[
+            Sequence[Tuple[Union[int, float, complex], UncoupledBasisState]]
+        ] = None,
         remove_zero_amp_cpts: bool = True,
     ):
-        super().__init__(data=data, remove_zero_amp_cpts=remove_zero_amp_cpts)
+        super().__init__(
+            data=data if data is not None else [],
+            remove_zero_amp_cpts=remove_zero_amp_cpts,
+        )
 
     def _create_new_instance(
         self,

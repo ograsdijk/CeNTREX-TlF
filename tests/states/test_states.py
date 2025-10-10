@@ -150,6 +150,7 @@ def test_state_add():
 
 
 def test_hash():
+    # Test that all states have unique hashes (no collisions)
     s = states.generate_uncoupled_states_ground(np.arange(0, 15))
     assert (
         len([si.__hash__() for si in s]) == np.unique([si.__hash__() for si in s]).size
@@ -160,8 +161,104 @@ def test_hash():
     )
 
     s = states.generate_coupled_states_excited(
-        np.arange(0, 15), Ps=None, Omegas=[-1, 1]
+        np.arange(0, 15),
+        Ps=None,
+        Omegas=[-1, 1],  # type: ignore[arg-type]
     )
     assert (
         len([si.__hash__() for si in s]) == np.unique([si.__hash__() for si in s]).size
     )
+
+
+def test_hash_stability_and_uniqueness():
+    """Test that hash values are stable and unique for both CoupledBasisState and UncoupledBasisState.
+    
+    This test verifies:
+    1. Hash values are consistent across multiple calls
+    2. Equal states produce equal hashes
+    3. Different states produce different hashes
+    4. No collisions occur in large state spaces
+    """
+    # Test CoupledBasisState hash stability
+    state1 = states.CoupledBasisState(
+        F=1, mF=0, F1=1/2, J=0, I1=1/2, I2=1/2, Omega=0, P=1
+    )
+    hash1_call1 = hash(state1)
+    hash1_call2 = hash(state1)
+    assert hash1_call1 == hash1_call2, "Hash should be stable across calls"
+    
+    # Test equal states have equal hashes
+    state1_copy = states.CoupledBasisState(
+        F=1, mF=0, F1=1/2, J=0, I1=1/2, I2=1/2, Omega=0, P=1
+    )
+    assert hash(state1) == hash(state1_copy), "Equal states must have equal hashes"
+    assert state1 == state1_copy, "States should be equal"
+    
+    # Test different states have different hashes
+    state2 = states.CoupledBasisState(
+        F=1, mF=1, F1=1/2, J=0, I1=1/2, I2=1/2, Omega=0, P=1
+    )
+    assert hash(state1) != hash(state2), "Different states should have different hashes"
+    assert state1 != state2, "States should not be equal"
+    
+    # Test UncoupledBasisState hash stability
+    ustate1 = states.UncoupledBasisState(
+        J=0, mJ=0, I1=1/2, m1=1/2, I2=1/2, m2=-1/2, P=1, Omega=0,
+        electronic_state=states.ElectronicState.X
+    )
+    uhash1_call1 = hash(ustate1)
+    uhash1_call2 = hash(ustate1)
+    assert uhash1_call1 == uhash1_call2, "Hash should be stable across calls"
+    
+    # Test equal uncoupled states have equal hashes
+    ustate1_copy = states.UncoupledBasisState(
+        J=0, mJ=0, I1=1/2, m1=1/2, I2=1/2, m2=-1/2, P=1, Omega=0,
+        electronic_state=states.ElectronicState.X
+    )
+    assert hash(ustate1) == hash(ustate1_copy), "Equal states must have equal hashes"
+    assert ustate1 == ustate1_copy, "States should be equal"
+    
+    # Test different uncoupled states have different hashes
+    ustate2 = states.UncoupledBasisState(
+        J=0, mJ=0, I1=1/2, m1=-1/2, I2=1/2, m2=-1/2, P=1, Omega=0,
+        electronic_state=states.ElectronicState.X
+    )
+    assert hash(ustate1) != hash(ustate2), "Different states should have different hashes"
+    assert ustate1 != ustate2, "States should not be equal"
+    
+    # Test no collisions in large state space for coupled states
+    coupled_ground = states.generate_coupled_states_ground(np.arange(0, 15))
+    coupled_hashes = [hash(s) for s in coupled_ground]
+    assert len(coupled_hashes) == len(set(coupled_hashes)), (
+        f"Found hash collisions in coupled ground states: "
+        f"{len(coupled_hashes)} states, {len(set(coupled_hashes))} unique hashes"
+    )
+    
+    # Test no collisions in large state space for uncoupled states
+    uncoupled_ground = states.generate_uncoupled_states_ground(np.arange(0, 15))
+    uncoupled_hashes = [hash(s) for s in uncoupled_ground]
+    assert len(uncoupled_hashes) == len(set(uncoupled_hashes)), (
+        f"Found hash collisions in uncoupled ground states: "
+        f"{len(uncoupled_hashes)} states, {len(set(uncoupled_hashes))} unique hashes"
+    )
+    
+    # Test no collisions in excited states with various quantum numbers
+    coupled_excited = states.generate_coupled_states_excited(
+        np.arange(0, 10), Ps=None, Omegas=[-1, 1]  # type: ignore[arg-type]
+    )
+    excited_hashes = [hash(s) for s in coupled_excited]
+    assert len(excited_hashes) == len(set(excited_hashes)), (
+        f"Found hash collisions in coupled excited states: "
+        f"{len(excited_hashes)} states, {len(set(excited_hashes))} unique hashes"
+    )
+    
+    # Test that states can be used in sets (requires proper __hash__ and __eq__)
+    state_set = {state1, state1_copy, state2}
+    assert len(state_set) == 2, "Set should contain only unique states"
+    assert state1 in state_set
+    assert state2 in state_set
+    
+    # Test that states can be used as dictionary keys
+    state_dict = {state1: "first", state2: "second"}
+    assert state_dict[state1_copy] == "first", "Equal states should access same dict entry"
+    assert state_dict[state2] == "second"

@@ -59,6 +59,23 @@ def generate_diagonalized_hamiltonian(
     return_V_ref: bool = False,
     rtol: Optional[float] = None,
 ) -> HamiltonianDiagonalized:
+    """Diagonalize a Hamiltonian matrix.
+
+    Diagonalizes the Hamiltonian and optionally maintains state ordering
+    using reference eigenvectors.
+
+    Args:
+        hamiltonian: Hamiltonian matrix to diagonalize
+        keep_order: If True, reorder eigenvectors for consistent state tracking.
+            Defaults to True.
+        return_V_ref: If True, return reference eigenvectors. Defaults to False.
+        rtol: Relative tolerance for zeroing small matrix elements. If provided,
+            elements smaller than rtol * max(|H|) are set to zero.
+
+    Returns:
+        HamiltonianDiagonalized: Dataclass containing diagonalized Hamiltonian (H),
+            eigenvectors (V), and optionally reference eigenvectors (V_ref)
+    """
     _ = np.linalg.eigh(hamiltonian)
     D: npt.NDArray[np.complex128] = _[0]
     V: npt.NDArray[np.complex128] = _[1]
@@ -120,42 +137,37 @@ def generate_reduced_X_hamiltonian(
     transform: Optional[npt.NDArray[np.complex128]] = None,
     H_func: Optional[Callable] = None,
 ) -> ReducedHamiltonian:
-    """
-    Generate the reduced X state hamiltonian.
-    Generates the Hamiltonian for all X states from Jmin to Jmax, if provided. Otherwise
-    uses the min/max J found in X_states_approx. Then selects the part of the
-    hamiltonian that corresponds to X_states_approx.
-    The Hamiltonian is diagonal and the returned states are the states corresponding to
-    X_states_approx in the basis of the Hamiltonian.
+    """Generate reduced X state Hamiltonian for specified ground states.
+
+    Constructs the Hamiltonian for all X states from Jmin to Jmax, then reduces it to
+    only the subspace corresponding to X_states_approx. The X state Hamiltonian is
+    constructed in the uncoupled basis, transformed to coupled basis, diagonalized,
+    and then the eigenstates corresponding to X_states_approx are identified and used
+    to build the reduced Hamiltonian.
 
     Args:
-        ground_states_approx (Sequence[CoupledBasisState]): States
-        E (npt.NDArray[np.float64], optional): Electric field in V/cm. Defaults to
-                                                            np.array([0.0, 0.0, 0.0]).
-        B (npt.NDArray[np.float64], optional): Magnetic field in G. Defaults to
-                                                np.array([0.0, 0.0, 1e-3]). If smaller
-                                                than 1e-5 some states become degenerate
-                                                again.
-        rtol (Optional[float], optional): Remove components smaller than rtol in the
-                                                        hamiltonian. Defaults to None.
-        stol: (float): Remove superpositions with amplitude smaller than stol from each
-                        state. Defaults to 1e-3.
-        Jmin (Optional[int], optional): Minimum J to include in the Hamiltonian.
-                                        Defaults to None.
-        Jmax (Optional[int], optional): Maximum J to include in the Hamiltonian.
-                                        Defaults to None.
-        constants (XConstants, optional): X state constants. Defaults to XConstants().
-        nuclear_spins (TlFNuclearSpins, optional): TlF nuclear spins. Defaults to
-                                                                    TlFNuclearSpins().
-        transform (npt.NDArray[np.complex128], optional): Transformation matrix from
-                                                        uncoupled to coupled for J
-                                                        states from Jmin to Jmax.
-                                                        Defaults to None.
-        H_func (Optional[Callable], optional): Function to generate the Hamiltonian
-                                                depending on E and B. Defaults to None.
+        X_states_approx: Approximate X (ground) states defining the reduced subspace
+        E: Electric field in V/cm. Defaults to np.array([0.0, 0.0, 0.0]).
+        B: Magnetic field in G. Defaults to np.array([0.0, 0.0, 1e-3]). If smaller
+            than 1e-5, some states become degenerate.
+        rtol: Remove Hamiltonian components smaller than rtol * max(|H|). Defaults to
+            None.
+        stol: Remove state components with amplitude smaller than stol. Defaults to
+            1e-3.
+        Jmin: Minimum J to include in full Hamiltonian construction. Defaults to None
+            (uses minimum J from X_states_approx).
+        Jmax: Maximum J to include in full Hamiltonian construction. Defaults to None
+            (uses maximum J from X_states_approx).
+        constants: X state molecular constants. Defaults to XConstants().
+        nuclear_spins: TlF nuclear spin values. Defaults to TlFNuclearSpins().
+        transform: Transformation matrix from uncoupled to coupled basis for J states
+            from Jmin to Jmax. If None, generated automatically. Defaults to None.
+        H_func: Function to generate the Hamiltonian as function of (E, B). If None,
+            uses default X state Hamiltonian. Defaults to None.
 
     Returns:
-        ReducedHamiltonian: States and Hamiltonian
+        ReducedHamiltonian: Dataclass containing the reduced Hamiltonian matrix,
+            eigenvectors, identified states, and construction information
     """
 
     # need to generate the other states in case of mixing
@@ -207,7 +219,11 @@ def generate_reduced_X_hamiltonian(
     )
     ground_states = [gs.remove_small_components(stol) for gs in ground_states]
 
-    H_X_red = reduced_basis_hamiltonian(QN_diag, H_diagonalized.H, ground_states)
+    H_X_red = reduced_basis_hamiltonian(
+        [qn.remove_small_components(stol) for qn in QN_diag],
+        H_diagonalized.H,
+        ground_states,
+    )
 
     return ReducedHamiltonian(
         H=H_X_red,
@@ -311,7 +327,11 @@ def generate_reduced_B_hamiltonian(
         )
         excited_states = [es.remove_small_components(stol) for es in excited_states]
 
-    H_B_red = reduced_basis_hamiltonian(QN_B_diag, H_diagonalized.H, excited_states)
+    H_B_red = reduced_basis_hamiltonian(
+        [qn.remove_small_components(stol) for qn in QN_B_diag],
+        H_diagonalized.H,
+        excited_states,
+    )
 
     return ReducedHamiltonian(
         H=H_B_red,
@@ -327,6 +347,23 @@ def compose_reduced_hamiltonian(
     H_B_red: npt.NDArray[np.complex128],
     element_limit: float = 0.1,
 ) -> Tuple[npt.NDArray[np.complex128], npt.NDArray[np.complex128]]:
+    """Compose total reduced Hamiltonian from X and B state Hamiltonians.
+
+    Creates a block diagonal Hamiltonian combining the X (ground) and B (excited)
+    state Hamiltonians. Small matrix elements below element_limit are set to zero
+    for numerical stability.
+
+    Args:
+        H_X_red: Reduced X state Hamiltonian matrix
+        H_B_red: Reduced B state Hamiltonian matrix
+        element_limit: Threshold below which matrix elements are set to zero.
+            Defaults to 0.1.
+
+    Returns:
+        Tuple containing:
+            - H_int: Block diagonal Hamiltonian [H_X_red, H_B_red]
+            - V_ref_int: Identity matrix for state ordering reference
+    """
     H_X_red[np.abs(H_X_red) < element_limit] = 0
     H_B_red[np.abs(H_B_red) < element_limit] = 0
 
@@ -521,6 +558,41 @@ def generate_reduced_hamiltonian_transitions(
     minimum_coupling: float = 1e-3,
     use_omega_basis: bool = True,
 ) -> ReducedHamiltonianTotal:
+    """Generate reduced Hamiltonian automatically from transition definitions.
+
+    Analyzes optical and microwave transitions to determine which rotational states
+    are coupled and automatically constructs a reduced Hamiltonian containing only
+    the relevant states. For optical transitions, calculates electric dipole matrix
+    elements to identify strongly coupled states. For microwave transitions, includes
+    the specified J levels.
+
+    Args:
+        transitions: Sequence of optical or microwave transitions defining the system
+        E: Electric field in V/cm. Defaults to np.array([0.0, 0.0, 0.0]).
+        B: Magnetic field in G. Defaults to np.array([0.0, 0.0, 1e-5]).
+        rtol: Remove Hamiltonian components smaller than rtol * max(|H|). Defaults to
+            None.
+        stol: Remove state components with amplitude smaller than stol. Defaults to
+            1e-3.
+        Jmin_X: Minimum J for X state Hamiltonian. Defaults to None.
+        Jmax_X: Maximum J for X state Hamiltonian. Defaults to None (determined
+            automatically from transitions).
+        Jmin_B: Minimum J for B state Hamiltonian. Defaults to None.
+        Jmax_B: Maximum J for B state Hamiltonian. Defaults to None (determined
+            automatically from transitions).
+        Xconstants: X state molecular constants. Defaults to XConstants().
+        Bconstants: B state molecular constants. Defaults to BConstants().
+        nuclear_spins: TlF nuclear spin values. Defaults to TlFNuclearSpins().
+        minimum_amplitude: Minimum amplitude to keep state components. Defaults to
+            5e-3.
+        minimum_coupling: Minimum electric dipole coupling strength to include ground
+            states. Defaults to 1e-3.
+        use_omega_basis: Use Ω basis for B state calculation (faster). Defaults to
+            True.
+
+    Returns:
+        ReducedHamiltonianTotal: Complete reduced Hamiltonian with X and B states
+    """
     _J_ground: List[int] = []
     excited_states_selectors = []
 

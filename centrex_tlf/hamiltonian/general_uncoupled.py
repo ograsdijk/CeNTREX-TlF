@@ -13,4 +13,15 @@ __all__ = ["Hrot"]
 def Hrot(
     psi: UncoupledBasisState, coefficients: HamiltonianConstants
 ) -> UncoupledState:
+    """Rotational Hamiltonian in uncoupled basis.
+    
+    H_rot = B·J²
+    
+    Args:
+        psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂⟩
+        coefficients (HamiltonianConstants): Molecular constants (B_rot)
+    
+    Returns:
+        UncoupledState: Rotational energy contribution
+    """
     return coefficients.B_rot * J2(psi)

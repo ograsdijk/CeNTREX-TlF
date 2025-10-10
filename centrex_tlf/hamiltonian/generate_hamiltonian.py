@@ -35,6 +35,18 @@ def HMatElems(
     ],
     constants: HamiltonianConstants,
 ) -> npt.NDArray[np.complex128]:
+    """Calculate Hamiltonian matrix elements in basis QN.
+
+    Computes ⟨i|H|j⟩ for all basis states i,j in QN using the Hamiltonian operator H.
+
+    Args:
+        H (Callable): Hamiltonian operator function H(state, constants) -> State
+        QN (Sequence[BasisState] | npt.NDArray): Basis states
+        constants (HamiltonianConstants): Molecular constants
+
+    Returns:
+        npt.NDArray[np.complex128]: Hamiltonian matrix with elements ⟨i|H|j⟩
+    """
     result = np.zeros((len(QN), len(QN)), dtype=complex)
     for i, a in enumerate(QN):
         for j in range(i, len(QN)):
@@ -51,6 +63,19 @@ def HMatElemsBCoupledP(
     QN: Union[Sequence[CoupledState], npt.NDArray[Any]],
     constants: HamiltonianConstants,
 ) -> npt.NDArray[np.complex128]:
+    """Calculate Hamiltonian matrix elements for mixed (superposition) states.
+
+    Computes ⟨ψᵢ|H|ψⱼ⟩ where ψᵢ and ψⱼ are superpositions of basis states.
+    Used for B state in parity basis when computing in Omega representation.
+
+    Args:
+        H (Callable): Hamiltonian operator function H(state, constants) -> State
+        QN (Sequence[CoupledState] | npt.NDArray): Mixed/superposition states
+        constants (HamiltonianConstants): Molecular constants
+
+    Returns:
+        npt.NDArray[np.complex128]: Hamiltonian matrix with elements ⟨ψᵢ|H|ψⱼ⟩
+    """
     result = np.zeros((len(QN), len(QN)), dtype=complex)
     for i, a in enumerate(QN):
         for j in range(i, len(QN)):
@@ -119,15 +144,19 @@ def generate_uncoupled_hamiltonian_X(
     ],
     constants: XConstants = XConstants(),
 ) -> HamiltonianUncoupledX:
-    """
-    Generate the uncoupled X state hamiltonian for the supplied set of
-    basis states.
+    """Generate the uncoupled X state Hamiltonian for the supplied basis states.
+
+    Constructs all Hamiltonian terms (field-free, Stark, Zeeman) in the uncoupled
+    basis for the X (ground) electronic state.
 
     Args:
-        QN (array): array of UncoupledBasisStates
+        QN (Sequence[UncoupledBasisState] | npt.NDArray): Array of uncoupled basis
+            states |J,mJ,I₁,m₁,I₂,m₂⟩
+        constants (XConstants): X state molecular constants. Defaults to XConstants().
 
     Returns:
-        HamiltonianUncoupledX: dataclass to hold uncoupled X hamiltonian terms
+        HamiltonianUncoupledX: Dataclass containing all X state Hamiltonian
+            matrix terms (Hff, HSx, HSy, HSz, HZx, HZy, HZz)
     """
     for qn in QN:
         assert qn.isUncoupled, "supply list with UncoupledBasisStates"
@@ -147,14 +176,22 @@ def generate_coupled_hamiltonian_B(
     QN: Union[Sequence[CoupledBasisState], npt.NDArray[Any]],
     constants: BConstants = BConstants(),
 ) -> Union[HamiltonianCoupledBP, HamiltonianCoupledBOmega]:
-    """Calculate the coupled B state hamiltonian for the supplied set of
-    basis states.
+    """Generate the coupled B state Hamiltonian for the supplied basis states.
+
+    Constructs all Hamiltonian terms (rotational, hyperfine, lambda-doubling, Stark,
+    Zeeman) in the coupled basis for the B (excited) electronic state. Supports both
+    parity (P) and Omega (Ω) basis representations.
 
     Args:
-        QN (array): array of CoupledBasisStates
+        QN (Sequence[CoupledBasisState] | npt.NDArray): Array of coupled basis
+            states. Can be in parity basis |J,F,F₁,mF,P⟩ or Omega basis
+            |J,F,F₁,mF,Ω⟩
+        constants (BConstants): B state molecular constants. Defaults to BConstants().
 
     Returns:
-        HamiltonianCoupledB: dataclass to hold coupled B hamiltonian terms
+        HamiltonianCoupledBP | HamiltonianCoupledBOmega: Dataclass containing all
+            B state Hamiltonian matrix terms. Returns HamiltonianCoupledBP for
+            parity basis or HamiltonianCoupledBOmega for Omega basis.
     """
     for qn in QN:
         assert qn.isCoupled, "supply list withCoupledBasisStates"
@@ -218,6 +255,17 @@ def _uncoupled_ham_func_X(
 
 
 def generate_uncoupled_hamiltonian_X_function(H: HamiltonianUncoupledX) -> Callable:
+    """Create function for X state Hamiltonian that depends on E and B fields.
+
+    Returns a function H(E, B) that computes the total X state Hamiltonian for
+    given electric and magnetic field vectors.
+
+    Args:
+        H (HamiltonianUncoupledX): Pre-computed X state Hamiltonian terms
+
+    Returns:
+        Callable: Function H(E, B) -> Hamiltonian matrix
+    """
     return partial(_uncoupled_ham_func_X, H=H)
 
 
@@ -249,4 +297,16 @@ def _coupled_ham_func_B(
 def generate_coupled_hamiltonian_B_function(
     H: Union[HamiltonianCoupledBP, HamiltonianCoupledBOmega],
 ) -> Callable:
+    """Create function for B state Hamiltonian that depends on E and B fields.
+
+    Returns a function H(E, B) that computes the total B state Hamiltonian for
+    given electric and magnetic field vectors.
+
+    Args:
+        H (HamiltonianCoupledBP | HamiltonianCoupledBOmega): Pre-computed B state
+            Hamiltonian terms
+
+    Returns:
+        Callable: Function H(E, B) -> Hamiltonian matrix
+    """
     return partial(_coupled_ham_func_B, H=H)

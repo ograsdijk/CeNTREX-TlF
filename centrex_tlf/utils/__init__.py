@@ -1,3 +1,11 @@
+"""Utility functions for TlF molecular spectroscopy calculations.
+
+This module provides utilities for:
+- Doppler shifts and velocity-to-detuning conversions
+- Multipass beam geometry and intensity profiles
+- Thermal and uniform population distributions
+- Rabi frequency and beam power calculations
+"""
 from . import detuning, multipass, population, rabi
 
 __all__ = detuning.__all__

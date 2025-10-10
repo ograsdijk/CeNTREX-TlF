@@ -26,6 +26,21 @@ def generate_uncoupled_states_ground(
     Js: Union[List[int], npt.NDArray[np.int_]],
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
 ) -> npt.NDArray[Any]:
+    """Generate uncoupled basis states for the X (ground) electronic state.
+
+    Creates all possible uncoupled basis states for specified rotational levels J
+    of the ground X electronic state, including all combinations of mJ, m1 (Tl nuclear
+    spin projection), and m2 (F nuclear spin projection).
+
+    Args:
+        Js (Union[List[int], npt.NDArray[np.int_]]): Rotational quantum numbers J to
+            generate states for
+        nuclear_spins (TlFNuclearSpins, optional): Nuclear spin values for Tl and F.
+            Defaults to TlFNuclearSpins().
+
+    Returns:
+        npt.NDArray[Any]: Array of UncoupledBasisState objects for the ground state
+    """
     I_Tl = nuclear_spins.I_Tl
     I_F = nuclear_spins.I_F
     # convert J to int(J); np.int with (-1)**J throws an exception for negative J
@@ -57,6 +72,23 @@ def generate_uncoupled_states_excited(
     Ωs: List[int] = [-1, 1],
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
 ) -> npt.NDArray[Any]:
+    """Generate uncoupled basis states for the B (excited) electronic state.
+
+    Creates all possible uncoupled basis states for specified rotational levels J
+    and Ω values of the excited B electronic state, including all combinations of
+    mJ, m1 (Tl nuclear spin projection), and m2 (F nuclear spin projection).
+
+    Args:
+        Js (Union[List[int], npt.NDArray[np.int_]]): Rotational quantum numbers J to
+            generate states for
+        Ωs (List[int], optional): Projection of electronic angular momentum on
+            internuclear axis. Defaults to [-1, 1].
+        nuclear_spins (TlFNuclearSpins, optional): Nuclear spin values for Tl and F.
+            Defaults to TlFNuclearSpins().
+
+    Returns:
+        npt.NDArray[Any]: Array of UncoupledBasisState objects for the excited state
+    """
     I_Tl = nuclear_spins.I_Tl
     I_F = nuclear_spins.I_F
     QN = np.array(
@@ -86,6 +118,21 @@ def generate_coupled_states_ground(
     Js: Union[List[int], npt.NDArray[np.int_]],
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
 ) -> npt.NDArray[Any]:
+    """Generate coupled basis states for the X (ground) electronic state.
+
+    Creates all possible coupled basis states for specified rotational levels J
+    of the ground X electronic state. States are coupled in the |F, mF, F1, J⟩ basis
+    where F1 = J + I_F and F = F1 + I_Tl (hyperfine structure).
+
+    Args:
+        Js (Union[List[int], npt.NDArray[np.int_]]): Rotational quantum numbers J to
+            generate states for
+        nuclear_spins (TlFNuclearSpins, optional): Nuclear spin values for Tl and F.
+            Defaults to TlFNuclearSpins().
+
+    Returns:
+        npt.NDArray[Any]: Array of CoupledBasisState objects for the ground state
+    """
     I_Tl = nuclear_spins.I_Tl
     I_F = nuclear_spins.I_F
     QN = np.array(
@@ -118,6 +165,29 @@ def generate_coupled_states_excited(
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
     basis: Optional[Basis] = None,
 ) -> npt.NDArray[Any]:
+    """Generate coupled basis states for the B (excited) electronic state.
+
+    Creates all possible coupled basis states for specified rotational levels J,
+    parities P, and Ω values of the excited B electronic state. Can generate states
+    in either parity basis (P) or Ω basis.
+
+    Args:
+        Js (Union[List[int], npt.NDArray[np.int_]]): Rotational quantum numbers J to
+            generate states for
+        Ps (Union[int, List[int], Tuple[int]], optional): Parity quantum number(s).
+            Defaults to 1.
+        Omegas (Union[int, List[int], Tuple[int]], optional): Projection of electronic
+            angular momentum on internuclear axis. Defaults to 1.
+        nuclear_spins (TlFNuclearSpins, optional): Nuclear spin values for Tl and F.
+            Defaults to TlFNuclearSpins().
+        basis (Optional[Basis], optional): Basis to use for states. Defaults to None.
+
+    Returns:
+        npt.NDArray[Any]: Array of CoupledBasisState objects for the excited state
+
+    Raises:
+        ValueError: If both multiple P and multiple Ω values are provided
+    """
     I_Tl = nuclear_spins.I_Tl
     I_F = nuclear_spins.I_F
 
@@ -167,18 +237,25 @@ def generate_coupled_states_base(
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
     basis: Optional[Basis] = None,
 ) -> List[CoupledBasisState]:
-    """generate CoupledBasisStates for the quantum numbers given by qn_selector
+    """Generate CoupledBasisStates for quantum numbers specified by qn_selector.
+
+    Base function that generates all coupled basis states matching the criteria in
+    qn_selector. Handles all combinations of quantum numbers and validates that
+    physically allowed combinations are generated (e.g., F1 must satisfy angular
+    momentum coupling rules).
 
     Args:
-        qn_selector: QuantumSelector with quantum numbers to use for generation
-        nuclear_spins: Nuclear spin values for Tl and F
-        basis: Basis to use for the states
+        qn_selector (QuantumSelector): QuantumSelector with quantum numbers to use
+            for generation
+        nuclear_spins (TlFNuclearSpins, optional): Nuclear spin values for Tl and F.
+            Defaults to TlFNuclearSpins().
+        basis (Optional[Basis], optional): Basis to use for the states. Defaults to None.
 
     Returns:
-        List of CoupledBasisStates for the specified quantum numbers
+        List[CoupledBasisState]: List of CoupledBasisStates for the specified quantum numbers
 
     Raises:
-        ValueError: If required quantum numbers are not set
+        ValueError: If required quantum numbers (P, J, electronic state, or Ω) are not set
     """
     # Validate required quantum numbers
     if (basis is not None) and (basis != Basis.CoupledΩ):
@@ -255,16 +332,25 @@ def generate_coupled_states_X(
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
     basis: Basis = Basis.Coupled,
 ) -> List[CoupledBasisState]:
-    """generate ground X state CoupledBasisStates for the quantum numbers given
-    by qn_selector
+    """Generate ground X state CoupledBasisStates for quantum numbers in qn_selector.
+
+    Convenience function that automatically sets Ω=0, P=parity_X(J), and electronic
+    state to X for the provided quantum selectors, then generates the corresponding
+    coupled basis states.
 
     Args:
-        qn_selector (Union[QuantumSelector, list, np.ndarray]): QuantumSelector
-            or list/array of QuantumSelectors to use for generating the
-            CoupledBasisStates
+        qn_selector (Union[QuantumSelector, Sequence[QuantumSelector], npt.NDArray[Any]]):
+            QuantumSelector or sequence of QuantumSelectors specifying quantum numbers
+            to generate states for
+        nuclear_spins (TlFNuclearSpins, optional): Nuclear spin values for Tl and F.
+            Defaults to TlFNuclearSpins().
+        basis (Basis, optional): Basis to use for the states. Defaults to Basis.Coupled.
 
     Returns:
-        np.ndarray: array of CoupledBasisStates for the excited state
+        List[CoupledBasisState]: List of unique CoupledBasisStates for the ground X state
+
+    Raises:
+        AssertionError: If qn_selector is not a QuantumSelector, list, or np.ndarray
     """
     if isinstance(qn_selector, QuantumSelector):
         qns = copy.copy(qn_selector)
@@ -300,12 +386,17 @@ def check_B_basis(
 ) -> None:
     """Validate that P and Ω specifications are compatible for B state basis.
 
+    Checks that either P or Ω is specified (but not both with multiple values),
+    ensuring a unique basis is chosen for the B state.
+
     Args:
-        P: Parity quantum number(s) or callable
-        Ω: Omega quantum number(s)
+        P (Union[int, Callable, Sequence[int], npt.NDArray[np.int_], None]): Parity
+            quantum number(s) or callable returning parity
+        Ω (Union[int, Sequence[int], npt.NDArray[np.int_], None]): Projection of
+            electronic angular momentum quantum number(s)
 
     Raises:
-        ValueError: If both P and Ω specifications conflict or are missing
+        ValueError: If neither P nor Ω is specified, or if both have multiple values
     """
     if P is None and Ω is None:
         raise ValueError("Need to supply either P or Ω to determine the basis")
@@ -325,16 +416,26 @@ def generate_coupled_states_B(
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
     basis: Optional[Basis] = None,
 ) -> List[CoupledBasisState]:
-    """generate excited B state CoupledBasisStates for the quantum numbers given
-    by qn_selector
+    """Generate excited B state CoupledBasisStates for quantum numbers in qn_selector.
+
+    Convenience function that automatically sets electronic state to B, defaults Ω to 1
+    if not specified, validates basis compatibility, and generates the corresponding
+    coupled basis states.
 
     Args:
-        qn_selector (Union[QuantumSelector, list, np.ndarray]): QuantumSelector
-            or list/array of QuantumSelectors to use for generating the
-            CoupledBasisStates
+        qn_selector (Union[QuantumSelector, Sequence[QuantumSelector], npt.NDArray[Any]]):
+            QuantumSelector or sequence of QuantumSelectors specifying quantum numbers
+            to generate states for
+        nuclear_spins (TlFNuclearSpins, optional): Nuclear spin values for Tl and F.
+            Defaults to TlFNuclearSpins().
+        basis (Optional[Basis], optional): Basis to use for the states. Defaults to None.
 
     Returns:
-        np.ndarray: array of CoupledBasisStates for the excited state
+        List[CoupledBasisState]: List of unique CoupledBasisStates for the excited B state
+
+    Raises:
+        AssertionError: If qn_selector is not a QuantumSelector, list, or np.ndarray
+        ValueError: If P and Ω specifications are incompatible (via check_B_basis)
     """
     if isinstance(qn_selector, QuantumSelector):
         qns = copy.copy(qn_selector)

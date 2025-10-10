@@ -1,3 +1,17 @@
+"""State finding and quantum number selection utilities.
+
+This module provides tools for:
+- Selecting subsets of quantum states using QuantumSelector
+- Finding eigenstates that best match approximate reference states
+- Optimal assignment of approximate states to exact eigenstates using Hungarian algorithm
+- Extracting unique basis states from state collections
+
+The main use cases are:
+1. Finding dressed eigenstates from bare states after field interactions
+2. Tracking state evolution across parameter sweeps
+3. Filtering states by quantum numbers for reduced Hilbert spaces
+"""
+
 import warnings
 from dataclasses import dataclass
 from itertools import product
@@ -43,23 +57,53 @@ __all__ = [
 
 @dataclass
 class QuantumSelector:
-    """Class for setting quantum numbers for selecting a subset of states
-    from a larger set of states
+    """Selector for filtering quantum states by quantum numbers.
 
-    Args:
-        J: Rotational quantum number (int or sequence of ints)
-        F1: Intermediate hyperfine quantum number (float or sequence of floats)
-        F: Total hyperfine quantum number (int or sequence of ints)
-        mF: Magnetic quantum number (int/float or sequence)
-        electronic: Electronic state (ElectronicState or sequence)
-        P: Parity quantum number (int, callable, or sequence). Can be None, 1, -1,
-           or a callable that takes a state and returns bool
-        Ω: Omega quantum number (currently not supported in get_indices)
+    Provides flexible state selection by specifying quantum number constraints.
+    Each quantum number can be:
+    - None: matches all values (no filtering)
+    - Single value: matches only that value
+    - Sequence: matches any value in the sequence
+
+    Multiple quantum numbers are combined with AND logic (state must match all
+    specified criteria). Multiple selectors can be combined with OR logic using
+    get_indices_quantumnumbers().
+
+    Attributes:
+        J (int | Sequence[int] | None): Rotational quantum number(s). Defaults to None.
+        F1 (float | Sequence[float] | None): Intermediate hyperfine quantum number(s)
+            for coupled representation. Can be half-integer. Defaults to None.
+        F (int | Sequence[int] | None): Total angular momentum quantum number(s).
+            Defaults to None.
+        mF (int | float | Sequence | None): Magnetic quantum number(s). Can be
+            half-integer for half-integer F. Defaults to None.
+        electronic (ElectronicState | Sequence[ElectronicState] | None): Electronic
+            state(s) (X, B, etc.). Defaults to None.
+        P (int | Callable | Sequence[int] | None): Parity quantum number. Can be:
+            - None: match all parities
+            - 1 or -1: match specific parity
+            - Callable: function taking state and returning bool
+            - Sequence: match any parity in sequence
+            Defaults to None.
+        Ω (int | Sequence[int] | None): Projection of electronic angular momentum.
+            Currently not supported in get_indices (reserved for future use).
+            Defaults to None.
+
+    Example:
+        >>> # Select all J=0 states in X electronic state
+        >>> selector = QuantumSelector(J=0, electronic=ElectronicState.X)
+        >>> indices = selector.get_indices(QN)
+        >>>
+        >>> # Select J=0 or J=1, with even parity only
+        >>> selector = QuantumSelector(J=[0, 1], P=1)
+        >>>
+        >>> # Use callable for complex selection logic
+        >>> selector = QuantumSelector(P=lambda s: s.largest.J % 2 == 0)
 
     Note:
-        Any quantum number set to None will match all states (no filtering on that number).
-        Quantum numbers can be single values or sequences (list, tuple, array) to match
-        multiple possible values.
+        For CoupledState objects, quantum numbers are extracted from the largest
+        component (s.largest). This works well for states that are predominantly
+        one basis state.
     """
 
     J: Optional[Union[Sequence[int], npt.NDArray[np.int_], int]] = None
@@ -79,6 +123,22 @@ class QuantumSelector:
         ],
         mode: str = "python",
     ) -> npt.NDArray[np.int_]:
+        """Find indices of states matching the quantum number criteria.
+
+        Args:
+            QN (Sequence[CoupledState] | Sequence[CoupledBasisState]): States to
+                search through.
+            mode (str): Indexing convention. "python" for 0-based (default),
+                "julia" for 1-based.
+
+        Returns:
+            npt.NDArray[np.int_]: Array of matching state indices.
+
+        Example:
+            >>> selector = QuantumSelector(J=0, F=1)
+            >>> indices = selector.get_indices(ground_states)
+            >>> selected_states = [ground_states[i] for i in indices]
+        """
         return get_indices_quantumnumbers_base(self, QN, mode)
 
 
@@ -88,22 +148,38 @@ def find_state_idx_from_state(
     QN: Sequence[CoupledState],
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
 ) -> int:
-    """Determine the index of the state vector most closely corresponding to an
-    input state.
+    """Find eigenstate index with highest overlap to reference state.
+
+    Diagonalizes the Hamiltonian and finds which eigenstate has maximum overlap
+    |<reference|eigenstate>|² with the given reference state. Useful for tracking
+    a single state across parameter sweeps.
 
     Args:
-        H: Hamiltonian matrix to diagonalize
-        reference_state: State to find closest eigenstate match for
-        QN: List of state objects defining the basis for H
-        V_ref: Optional reference eigenvectors for consistent ordering
+        H (npt.NDArray[np.complex128]): Hamiltonian matrix of shape (N, N) where
+            N = len(QN).
+        reference_state (CoupledState): Reference state to match against eigenstates.
+        QN (Sequence[CoupledState]): Basis states used to construct H.
+        V_ref (npt.NDArray[np.complex128] | None): Reference eigenvectors for
+            consistent phase/ordering across multiple calls. Shape (N, N).
+            Defaults to None.
 
     Returns:
-        Index of the eigenstate with highest overlap with reference_state
+        int: Index of the eigenstate with maximum overlap probability.
+
+    Example:
+        >>> # Track ground state across magnetic field sweep
+        >>> H_B0 = generate_hamiltonian(B=0)
+        >>> ground_idx = find_state_idx_from_state(H_B0, ground_state_approx, QN)
+        >>> tracked_state = QN[ground_idx]
+
+    Warning:
+        This function uses a greedy argmax approach. If finding multiple states,
+        use find_exact_states_indices() which uses optimal assignment to prevent
+        multiple states mapping to the same eigenstate.
 
     Note:
-        This function uses a greedy approach (argmax). For finding multiple
-        states simultaneously, consider using find_exact_states_indices which
-        uses optimal assignment to prevent duplicates.
+        Overlap probability is computed as |<ψ_ref|ψ_exact>|² where ψ_ref is the
+        reference state vector and ψ_exact is an eigenstate.
     """
     # Determine state vector of reference state
     reference_state_vec = reference_state.state_vector(QN)
@@ -127,16 +203,30 @@ def find_state_idx_from_state(
 def find_closest_vector_idx(
     state_vec: npt.NDArray[np.complex128], vector_array: npt.NDArray[np.complex128]
 ) -> int:
-    """Function that finds the index of the vector in vector_array that most closely
-    matches state_vec. vector_array is array where each column is a vector, typically
-    corresponding to an eigenstate of some Hamiltonian.
+    """Find index of vector in array with maximum overlap to given vector.
 
-    inputs:
-    state_vec = Numpy array, 1D
-    vector_array = Numpy array, 2D
+    Computes |<state_vec|column_i>| for each column in vector_array and returns
+    the index with maximum overlap. Typically used for matching states to eigenvectors.
 
-    returns:
-    idx = index that corresponds to closest matching vector
+    Args:
+        state_vec (npt.NDArray[np.complex128]): Target state vector of shape (N,).
+        vector_array (npt.NDArray[np.complex128]): Array of vectors where each
+            column is a candidate vector. Shape (N, M) where M is number of vectors.
+
+    Returns:
+        int: Column index (0 to M-1) with highest overlap to state_vec.
+
+    Example:
+        >>> # Find which eigenstate matches ground state
+        >>> E, V = np.linalg.eigh(H)
+        >>> ground_vec = ground_state.state_vector(QN)
+        >>> idx = find_closest_vector_idx(ground_vec, V)
+        >>> ground_eigenstate = V[:, idx]
+        >>> ground_energy = E[idx]
+
+    Note:
+        Uses absolute value of overlap, so relative phase between vectors is ignored.
+        Overlap is computed as |<state_vec†|column>| without squaring.
     """
 
     overlaps = np.abs(state_vec.conj().T @ vector_array)
@@ -146,21 +236,32 @@ def find_closest_vector_idx(
 
 
 def check_approx_state_exact_state(approx: CoupledState, exact: CoupledState) -> None:
-    """Check if the exact found states match the approximate states.
+    """Validate that exact eigenstate matches expected approximate state.
 
-    The exact states are found from the eigenvectors of the hamiltonian and are
-    often a superposition of various states. The approximate states are used in
-    initial setup of the hamiltonian. This function validates that the largest
-    component of the exact state matches the approximate state's quantum numbers.
+    Checks that the largest (dominant) component of an exact eigenstate has the same
+    quantum numbers as the approximate (bare) state. Used to verify state assignment
+    is correct after diagonalization.
 
     Args:
-        approx: Approximate state to validate against
-        exact: Exact eigenstate found from diagonalization
+        approx (CoupledState): Approximate/bare state with expected quantum numbers.
+        exact (CoupledState): Exact eigenstate from Hamiltonian diagonalization.
 
     Raises:
-        TypeError: If the largest components are not both CoupledBasisState
-        ValueError: If quantum numbers don't match
-        NotImplementedError: If state types are not supported
+        TypeError: If largest components have mismatched types (e.g., one CoupledBasisState,
+            one UncoupledBasisState).
+        ValueError: If quantum numbers don't match. Separate error for each QN:
+            electronic_state, J, F, F1, or mF.
+        NotImplementedError: If state type is not CoupledBasisState.
+
+    Example:
+        >>> # Verify state assignment after field is applied
+        >>> approx_state = ground_states[0]  # Bare state
+        >>> exact_state = find_exact_states([approx_state], ...)[0]
+        >>> check_approx_state_exact_state(approx_state, exact_state)  # Raises if mismatch
+
+    Note:
+        Only the dominant (largest amplitude) components are compared. For strongly
+        mixed states, this check may not be meaningful.
     """
     approx_largest = approx.find_largest_component()
     exact_largest = exact.find_largest_component()
@@ -241,35 +342,55 @@ def find_exact_states_indices(
     overlap_threshold: float = 0.5,
     use_optimal_assignment: bool = True,
 ) -> npt.NDArray[np.int_]:
-    """
-    Find the indices for the closest approximate eigenstates corresponding to
-    states_approx for a Hamiltonian constructed from the quantum states QN_construct.
+    """Find optimal eigenstate indices matching approximate states.
 
-    Uses the Hungarian algorithm (linear_sum_assignment) to find the optimal one-to-one
-    mapping between approximate states and eigenstates that maximizes total overlap.
+    Uses the Hungarian algorithm (linear sum assignment) to find the best one-to-one
+    mapping between approximate (bare) states and exact eigenstates that maximizes
+    total overlap. This prevents multiple approximate states from being assigned to
+    the same eigenstate, which can occur with greedy matching.
 
     Args:
-        states_approx (Sequence[State]): approximate states to find the indices for
-        QN_construct (Sequence[State]): basis states from which H was constructed
-        H (Optional[npt.NDArray[np.complex128]], optional): Hamiltonian matrix.
+        states_approx (Sequence[CoupledState] | Sequence[UncoupledState]): Approximate
+            states to match to eigenstates.
+        QN_construct (Sequence[BasisState]): Basis states used to construct H.
+        H (npt.NDArray[np.complex128] | None): Hamiltonian matrix of shape (N, N).
             Must be provided if V is None. Defaults to None.
-        V (Optional[npt.NDArray[np.complex128]], optional): Eigenvectors of H in the
-            construction basis. If None, computed from H. Defaults to None.
-        V_ref (Optional[npt.NDArray[np.complex128]], optional): Reference eigenvectors
-            for consistent ordering across calculations. Defaults to None.
-        overlap_threshold (float, optional): Minimum overlap to warn about poor state
-            matching. Defaults to 0.5.
-        use_optimal_assignment (bool, optional): If True, use linear_sum_assignment
-            for optimal one-to-one mapping. If False, use greedy argmax approach
-            (kept for backward compatibility). Defaults to True.
+        V (npt.NDArray[np.complex128] | None): Pre-computed eigenvectors of H,
+            shape (N, N). If None, computed from H. Defaults to None.
+        V_ref (npt.NDArray[np.complex128] | None): Reference eigenvectors for
+            consistent ordering/phase across multiple calculations. Defaults to None.
+        overlap_threshold (float): Minimum overlap probability to warn about poor
+            matching. Overlaps below this trigger UserWarning. Defaults to 0.5.
+        use_optimal_assignment (bool): If True, use Hungarian algorithm for optimal
+            assignment. If False, use greedy argmax (legacy behavior, may produce
+            duplicates). Defaults to True.
 
     Returns:
-        npt.NDArray[np.int_]: Array of indices mapping each state in states_approx
-            to its closest match in the eigenvectors.
+        npt.NDArray[np.int_]: Array of shape (len(states_approx),) containing
+            eigenstate index for each approximate state.
 
     Raises:
-        ValueError: If neither H nor V is provided, or if optimal assignment fails.
+        ValueError: If neither H nor V is provided.
+        ValueError: If more approximate states than eigenstates (when using optimal
+            assignment).
+        ValueError: If greedy assignment produces duplicates (when not using optimal
+            assignment).
         UserWarning: If any overlap is below overlap_threshold.
+
+    Example:
+        >>> # Find dressed states from bare states
+        >>> ground_indices = find_exact_states_indices(
+        ...     states_approx=ground_states_bare,
+        ...     QN_construct=basis_states,
+        ...     H=hamiltonian_with_fields
+        ... )
+        >>> dressed_states = [eigenstates[i] for i in ground_indices]
+
+    Note:
+        - Overlap probability is |<approx|exact>|²
+        - Hungarian algorithm minimizes total cost = Σ(1 - overlap_i)
+        - For n approximate states and m eigenstates with n ≤ m, guarantees unique assignment
+        - V_ref helps maintain consistent eigenstate ordering across parameter sweeps
     """
     if V is None and H is None:
         raise ValueError("Must provide either H (Hamiltonian) or V (eigenvectors)")
@@ -395,35 +516,51 @@ def find_exact_states(
     overlap_threshold: float = 0.5,
     use_optimal_assignment: bool = True,
 ):
-    """Find the closest eigenstates to a set of approximate states.
+    """Find exact eigenstates corresponding to approximate states.
 
-    This function maps approximate quantum states to their closest representation
-    in the eigenstate basis of a given Hamiltonian using optimal assignment.
+    Maps approximate (bare/unperturbed) quantum states to their exact eigenstate
+    representations in the presence of interactions (fields, couplings). Returns
+    the actual State objects rather than just indices.
 
     Args:
-        states_approx (list): List of State objects to find the closest match to
-        QN_construct (list): List of BasisState objects from which H was constructed
-            (construction basis)
-        QN_basis (list): List of State objects defining the eigenstate basis of H
-        H (np.ndarray, optional): Hamiltonian matrix. Must be provided if V is None.
-        V (np.ndarray, optional): Eigenvectors of H. If None, computed from H.
-        V_ref (np.ndarray, optional): Reference eigenvectors for consistent ordering.
-        overlap_threshold (float, optional): Minimum overlap threshold for warnings.
-            Defaults to 0.5.
-        use_optimal_assignment (bool, optional): If True, use linear_sum_assignment
-            for optimal one-to-one mapping. Defaults to True.
+        states_approx (Sequence[CoupledState] | Sequence[UncoupledState]): Approximate
+            states to match against eigenstates.
+        QN_construct (Sequence[BasisState]): Basis states used to construct H.
+        QN_basis (Sequence[CoupledState] | Sequence[UncoupledState]): Complete set of
+            eigenstate objects. These are the states to select from.
+        H (npt.NDArray[np.complex128] | None): Hamiltonian matrix. Must be provided
+            if V is None. Defaults to None.
+        V (npt.NDArray[np.complex128] | None): Pre-computed eigenvectors. If None,
+            computed from H. Defaults to None.
+        V_ref (npt.NDArray[np.complex128] | None): Reference eigenvectors for
+            consistent ordering. Defaults to None.
+        overlap_threshold (float): Minimum overlap probability for warning. Defaults to 0.5.
+        use_optimal_assignment (bool): Use Hungarian algorithm for optimal assignment.
+            Defaults to True.
 
     Returns:
-        list: List of eigenstates from QN_basis that best match states_approx.
+        List[CoupledState] | List[UncoupledState]: List of eigenstates from QN_basis
+            that best match states_approx, in the same order as states_approx.
 
     Example:
-        >>> # Find exact eigenstates from approximate states
-        >>> exact_states = find_exact_states(
-        ...     states_approx=ground_states,
-        ...     QN_construct=basis_states,
+        >>> # Find dressed states after applying electric field
+        >>> bare_states = generate_coupled_states_X(J_max=2)
+        >>> ground_states_bare = bare_states[:4]  # First 4 states
+        >>>
+        >>> H = generate_hamiltonian_with_field(E_field=1000)
+        >>> eigenstates = generate_coupled_states_X(J_max=2)  # Same basis
+        >>>
+        >>> dressed_states = find_exact_states(
+        ...     states_approx=ground_states_bare,
+        ...     QN_construct=bare_states,
         ...     QN_basis=eigenstates,
-        ...     H=hamiltonian
+        ...     H=H
         ... )
+        >>> # dressed_states[i] is the dressed version of ground_states_bare[i]
+
+    Note:
+        This is a convenience wrapper around find_exact_states_indices() that returns
+        the actual State objects instead of indices.
     """
     indices = find_exact_states_indices(
         states_approx,
@@ -442,34 +579,44 @@ def get_indices_quantumnumbers_base(
     QN: Union[Sequence[CoupledState], Sequence[CoupledBasisState], npt.NDArray[Any]],
     mode: str = "python",
 ) -> npt.NDArray[np.int_]:
-    """Return the indices corresponding to all states in QN that correspond to
-    the quantum numbers in QuantumSelector.
+    """Find state indices matching quantum number selection criteria.
 
-    Entries in QuantumSelector quantum numbers can be either single numbers or
-    lists/arrays. States with all possible combinations of quantum numbers in
-    QuantumSelector are found. Quantum numbers set to None will match all states
-    (no filtering on that quantum number).
+    Core implementation for filtering states by quantum numbers. Generates all
+    combinations of specified quantum numbers and returns indices of states matching
+    ANY combination (OR logic between combinations, AND logic within each combination).
 
     Args:
-        qn_selector: QuantumSelector class containing the quantum numbers to
-            find corresponding indices for
-        QN: List or array of CoupledState or CoupledBasisState objects
-        mode: Index mode - "python" for 0-based indexing (default),
-              "julia" for 1-based indexing
+        qn_selector (QuantumSelector): Quantum number selection criteria. Each field
+            can be None (match all), single value, or sequence of values.
+        QN (Sequence[CoupledState] | Sequence[CoupledBasisState]): States to filter.
+        mode (str): Indexing convention. "python" for 0-based (default), "julia"
+            for 1-based. Defaults to "python".
 
     Returns:
-        Array of indices corresponding to the quantum numbers in the
-        specified indexing mode.
+        npt.NDArray[np.int_]: Sorted array of matching state indices.
 
     Raises:
-        TypeError: If QN contains unsupported state types or qn_selector is wrong type
-        ValueError: If mode is not "python" or "julia"
+        TypeError: If qn_selector is not QuantumSelector, or if QN contains
+            unsupported state types (must be CoupledState or CoupledBasisState).
+        ValueError: If mode is not "python" or "julia".
+
+    Example:
+        >>> # Find all J=0 and J=1 states with mF=0
+        >>> selector = QuantumSelector(J=[0, 1], mF=0)
+        >>> indices = get_indices_quantumnumbers_base(selector, QN)
+        >>> selected_states = [QN[i] for i in indices]
+        >>>
+        >>> # Select using callable for complex logic
+        >>> selector = QuantumSelector(P=lambda s: s.largest.J % 2 == 0)
+        >>> even_J_indices = get_indices_quantumnumbers_base(selector, QN)
 
     Note:
-        - P (parity) quantum number is supported. Note that P can be None, 1, or -1.
-        - Ω quantum number in QuantumSelector is currently not supported and will be ignored.
-        - For CoupledState objects, P is extracted from the largest component.
-          If you need to filter by a callable P selector, states will be matched individually.
+        - For CoupledState objects, quantum numbers extracted from s.largest component
+        - Parity (P) can be: None, 1, -1, sequence [1, -1], or callable
+        - Omega (Ω) field in selector is currently ignored (reserved for future)
+        - Empty QN returns empty array
+        - Multiple selector values create OR logic: J=[0,1] matches J=0 OR J=1
+        - Multiple quantum numbers create AND logic: J=0, mF=0 matches J=0 AND mF=0
     """
     if not isinstance(qn_selector, QuantumSelector):
         raise TypeError(
@@ -608,25 +755,40 @@ def get_indices_quantumnumbers(
     qn_selector: Union[QuantumSelector, Sequence[QuantumSelector], npt.NDArray[Any]],
     QN: Union[Sequence[CoupledState], Sequence[CoupledBasisState], npt.NDArray[Any]],
 ) -> npt.NDArray[np.int_]:
-    """return the indices corresponding to all states in QN that correspond to
-    the quantum numbers in QuantumSelector or a list of QuantumSelector objects.
-    Entries in QuantumSelector quantum numbers can be either single numbers or
-    lists/arrays. States with all possible combinations of quantum numbers in
-    QuantumSelector are found
+    """Find state indices using single or multiple quantum number selectors.
+
+    Wrapper around get_indices_quantumnumbers_base() that handles both single
+    QuantumSelector and sequences of selectors. Multiple selectors are combined
+    with OR logic (union of matching states).
 
     Args:
-        qn_selector (Union[QuantumSelector, list, np.ndarray]):
-                    QuantumSelector class or list/array of QuantumSelectors
-                    containing the quantum numbers to find corresponding indices
-
-        QN (Union[list, np.ndarray]): list or array of states
-
-    Raises:
-        AssertionError: only supports State and CoupledBasisState types the States list
-        or array
+        qn_selector (QuantumSelector | Sequence[QuantumSelector]): Single selector
+            or sequence of selectors to apply.
+        QN (Sequence[CoupledState] | Sequence[CoupledBasisState]): States to filter.
 
     Returns:
-        np.ndarray: indices corresponding to the quantum numbers
+        npt.NDArray[np.int_]: Sorted array of unique matching state indices
+            (0-based Python indexing).
+
+    Raises:
+        AssertionError: If qn_selector is not QuantumSelector, list, or array.
+
+    Example:
+        >>> # Single selector
+        >>> selector = QuantumSelector(J=0)
+        >>> indices = get_indices_quantumnumbers(selector, QN)
+        >>>
+        >>> # Multiple selectors (OR logic)
+        >>> selector1 = QuantumSelector(J=0, mF=0)
+        >>> selector2 = QuantumSelector(J=1, mF=1)
+        >>> indices = get_indices_quantumnumbers([selector1, selector2], QN)
+        >>> # Returns states matching (J=0, mF=0) OR (J=1, mF=1)
+
+    Note:
+        When using multiple selectors, results are combined with OR:
+        - Single selector: match all criteria (AND within selector)
+        - Multiple selectors: match any selector (OR between selectors)
+        - Duplicates automatically removed via np.unique()
     """
     if isinstance(qn_selector, QuantumSelector):
         return get_indices_quantumnumbers_base(qn_selector, QN)
@@ -648,13 +810,29 @@ StateType = TypeVar("StateType")
 def get_unique_basisstates_from_basisstates(
     states: Sequence[StateType],
 ) -> List[StateType]:
-    """get a list/array of unique BasisStates in the states list/array
+    """Extract unique basis states from a sequence of basis states.
+
+    Removes duplicate basis states while preserving order. Useful for reducing
+    redundancy in basis state collections.
 
     Args:
-        states (Sequence): list/array of BasisStates
+        states (Sequence[StateType]): Sequence of BasisState objects (can be
+            CoupledBasisState, UncoupledBasisState, etc.).
 
     Returns:
-        List: list/array of unique BasisStates
+        List[StateType]: List of unique BasisState objects in order of first appearance.
+
+    Raises:
+        AssertionError: If states[0] is not a BasisState object.
+
+    Example:
+        >>> basis_states = [state1, state2, state1, state3, state2]
+        >>> unique_states = get_unique_basisstates_from_basisstates(basis_states)
+        >>> # Returns [state1, state2, state3]
+
+    Note:
+        Uses equality comparison to determine uniqueness. BasisStates with identical
+        quantum numbers are considered duplicates.
     """
     assert isinstance(states[0], BasisState), "Not a sequence of BasisState objects"
     return get_unique_list(states)
@@ -663,15 +841,34 @@ def get_unique_basisstates_from_basisstates(
 def get_unique_basisstates_from_states(
     states: Sequence[CoupledState],
 ) -> List[BasisState]:
-    """
-    get a Sequence of unique BasisStates in a sequence of State objects
+    """Extract all unique basis states from superposition states.
+
+    Decomposes State objects (which are superpositions of BasisStates) into their
+    constituent BasisStates and returns the unique set. Useful for finding the
+    minimal basis needed to represent a set of states.
 
     Args:
-        states (Sequence[State]): Sequence of State objects
+        states (Sequence[CoupledState]): Sequence of CoupledState objects. Each may
+            be a superposition of multiple basis states.
 
     Returns:
-        Sequence[BasisState]: Sequence of unique BasisStates that comprise the input
-                                States
+        List[BasisState]: List of unique BasisState objects that appear in any of
+            the input states, in order of first appearance.
+
+    Raises:
+        AssertionError: If states[0] is not a CoupledState object.
+
+    Example:
+        >>> # Each state is superposition: |ψ⟩ = Σ_i c_i |basis_i⟩
+        >>> state1 = CoupledState([(0.7, basis_a), (0.3, basis_b)])
+        >>> state2 = CoupledState([(0.6, basis_b), (0.4, basis_c)])
+        >>> unique_basis = get_unique_basisstates_from_states([state1, state2])
+        >>> # Returns [basis_a, basis_b, basis_c]
+
+    Note:
+        - Extracts all (amplitude, basis_state) pairs from state.data
+        - Keeps only unique basis states (amplitudes discarded)
+        - Useful for constructing minimal Hilbert space for calculations
     """
     assert isinstance(states[0], CoupledState), "Not a sequence of State objects"
     return get_unique_basisstates_from_basisstates(

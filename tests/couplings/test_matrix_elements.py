@@ -1,4 +1,4 @@
-from centrex_tlf import couplings, states
+from centrex_tlf import hamiltonian, states
 
 
 def test_ED_ME_coupled():
@@ -24,10 +24,10 @@ def test_ED_ME_coupled():
         P=-1,
         electronic_state=states.ElectronicState.X,
     )
-    dipole = couplings.ED_ME_coupled(ground_state, excited_state, rme_only=True)
+    dipole = hamiltonian.ED_ME_coupled(ground_state, excited_state, rme_only=True)
     assert dipole == 0.816496580927726 + 0j
 
-    dipole = couplings.ED_ME_coupled(ground_state, excited_state, rme_only=False)
+    dipole = hamiltonian.ED_ME_coupled(ground_state, excited_state, rme_only=False)
     assert dipole == (0 + 0j)
 
 
@@ -54,5 +54,5 @@ def test_generate_ED_ME_mixed_state():
         P=-1,
         electronic_state=states.ElectronicState.X,
     )
-    dipole = couplings.calculate_ED_ME_mixed_state(1 * ground_state, 1 * excited_state)
+    dipole = hamiltonian.generate_ED_ME_mixed_state(1 * ground_state, 1 * excited_state)
     assert dipole == (0.19245008972987523 + 0.19245008972987523j)

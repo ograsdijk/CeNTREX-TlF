@@ -22,21 +22,35 @@ def collapse_matrices(
         Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
     ] = None,
 ) -> npt.NDArray[np.floating]:
-    """
-    Function that generates the collapse matrix for given ground and excited states
-
-    inputs:
-    QN = list of states that defines the basis for the calculation
-    ground_states = list of ground states that are coupled to the excited states
-    excited_states = list of excited states that are coupled to the ground states
-    gamma = decay rate of excited states
-    tol = couplings smaller than tol/sqrt(gamma) are set to zero to speed up computation
-    qn_compact = list of QuantumSelectors or lists of QuantumSelectors with each
-                QuantumSelector containing the quantum numbers to compact into a
-                single state. Defaults to None.
-
-    outputs:
-    C_list = array of collapse matrices
+    """Generate collapse (jump) matrices for spontaneous emission from excited states.
+    
+    Creates Lindblad collapse operators C that describe spontaneous decay from excited
+    states to ground states via electric dipole transitions. Each operator has the form:
+        C[i,j] = √(BR * γ)
+    where BR is the branching ratio and γ is the decay rate. Couplings smaller than
+    tol are set to zero for computational efficiency.
+    
+    Args:
+        QN (Sequence[CoupledState]): Complete basis of states for the calculation
+        ground_states (Sequence[CoupledState]): Ground states coupled to excited states
+        excited_states (Sequence[CoupledState]): Excited states that can decay
+        gamma (float): Decay rate of excited states in rad/s. Defaults to 1.
+        tol (float): Threshold for keeping couplings. Couplings with √(BR) < tol are
+            set to zero. Defaults to 1e-4.
+        qn_compact (QuantumSelector | Sequence[QuantumSelector] | None): Quantum number
+            selectors for compacting multiple states into single manifolds. Defaults to
+            None.
+    
+    Returns:
+        npt.NDArray[np.floating]: Array of collapse matrices, shape (n_ops, n_states,
+            n_states), where n_ops is the number of non-zero transitions
+    
+    Warns:
+        UserWarning: If branching ratios sum to more than 1 (numerical error)
+    
+    Example:
+        >>> # Create collapse operators for X→B transitions
+        >>> C_array = collapse_matrices(QN, ground_states, excited_states, gamma=2π*36e6)
     """
     # Initialize list of collapse matrices
     C_list: List[npt.NDArray[np.floating]] = []

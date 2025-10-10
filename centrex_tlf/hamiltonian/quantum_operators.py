@@ -46,6 +46,17 @@ def J2(psi: CoupledBasisState, *args) -> CoupledState: ...
 
 
 def J2(psi, *args):
+    """J² operator: Square of total angular momentum.
+
+    Returns the eigenvalue J(J+1) times the input state.
+
+    Args:
+        psi: Basis state (coupled or uncoupled)
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with amplitude J(J+1)
+    """
     if isinstance(psi, CoupledBasisState):
         return CoupledState([(psi.J * (psi.J + 1), psi)])
     else:
@@ -61,6 +72,17 @@ def J4(psi: CoupledBasisState, *args) -> CoupledState: ...
 
 
 def J4(psi, *args):
+    """J⁴ operator: Fourth power of total angular momentum.
+
+    Returns the eigenvalue [J(J+1)]² times the input state.
+
+    Args:
+        psi: Basis state (coupled or uncoupled)
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with amplitude [J(J+1)]²
+    """
     if isinstance(psi, CoupledBasisState):
         return CoupledState([((psi.J * (psi.J + 1)) ** 2, psi)])
     else:
@@ -76,6 +98,17 @@ def J6(psi: CoupledBasisState, *args) -> CoupledState: ...
 
 
 def J6(psi, *args):
+    """J⁶ operator: Sixth power of total angular momentum.
+
+    Returns the eigenvalue [J(J+1)]³ times the input state.
+
+    Args:
+        psi: Basis state (coupled or uncoupled)
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with amplitude [J(J+1)]³
+    """
     if isinstance(psi, CoupledBasisState):
         return CoupledState([((psi.J * (psi.J + 1)) ** 3, psi)])
     else:
@@ -83,17 +116,50 @@ def J6(psi, *args):
 
 
 def Jz(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """Jz operator: z-component of total angular momentum.
+
+    Returns the eigenvalue mJ times the input state.
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with amplitude mJ
+    """
     return UncoupledState([(psi.mJ, psi)])
 
 
 def I1z(psi: UncoupledBasisState, *args) -> UncoupledState:
-    """I1z operator - only defined for UncoupledBasisState (requires m1 quantum number)."""
-    return UncoupledState([(psi.m1, psi)])
+    """I1z operator: z-component of first nuclear spin (Tl).
+
+    Returns the eigenvalue m1 times the input state.
+    Only defined for UncoupledBasisState (requires m1 quantum number).
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with amplitude m1
+    """
+    return UncoupledState([(float(psi.m1), psi)])
 
 
 def I2z(psi: UncoupledBasisState, *args) -> UncoupledState:
-    """I2z operator - only defined for UncoupledBasisState (requires m2 quantum number)."""
-    return UncoupledState([(psi.m2, psi)])
+    """I2z operator: z-component of second nuclear spin (F).
+
+    Returns the eigenvalue m2 times the input state.
+    Only defined for UncoupledBasisState (requires m2 quantum number).
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with amplitude m2
+    """
+    return UncoupledState([(float(psi.m2), psi)])
 
 
 ########################################################
@@ -102,6 +168,17 @@ def I2z(psi: UncoupledBasisState, *args) -> UncoupledState:
 
 
 def Jp(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """J+ operator: Raising operator for total angular momentum.
+
+    Raises mJ by 1 with amplitude √[J(J+1) - mJ(mJ+1)].
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with mJ increased by 1
+    """
     amp = math.sqrt((psi.J - psi.mJ) * (psi.J + psi.mJ + 1))
     ket = UncoupledBasisState(
         psi.J,
@@ -118,6 +195,17 @@ def Jp(psi: UncoupledBasisState, *args) -> UncoupledState:
 
 
 def Jm(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """J- operator: Lowering operator for total angular momentum.
+
+    Lowers mJ by 1 with amplitude √[J(J+1) - mJ(mJ-1)].
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with mJ decreased by 1
+    """
     amp = math.sqrt((psi.J + psi.mJ) * (psi.J - psi.mJ + 1))
     ket = UncoupledBasisState(
         psi.J,
@@ -134,6 +222,17 @@ def Jm(psi: UncoupledBasisState, *args) -> UncoupledState:
 
 
 def I1p(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I1+ operator: Raising operator for first nuclear spin (Tl).
+
+    Raises m1 by 1 with amplitude √[I1(I1+1) - m1(m1+1)].
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with m1 increased by 1
+    """
     amp = math.sqrt((psi.I1 - psi.m1) * (psi.I1 + psi.m1 + 1))
     ket = UncoupledBasisState(
         psi.J,
@@ -150,6 +249,17 @@ def I1p(psi: UncoupledBasisState, *args) -> UncoupledState:
 
 
 def I1m(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I1- operator: Lowering operator for first nuclear spin (Tl).
+
+    Lowers m1 by 1 with amplitude √[I1(I1+1) - m1(m1-1)].
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with m1 decreased by 1
+    """
     amp = math.sqrt((psi.I1 + psi.m1) * (psi.I1 - psi.m1 + 1))
     ket = UncoupledBasisState(
         psi.J,
@@ -166,6 +276,17 @@ def I1m(psi: UncoupledBasisState, *args) -> UncoupledState:
 
 
 def I2p(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I2+ operator: Raising operator for second nuclear spin (F).
+
+    Raises m2 by 1 with amplitude √[I2(I2+1) - m2(m2+1)].
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with m2 increased by 1
+    """
     amp = math.sqrt((psi.I2 - psi.m2) * (psi.I2 + psi.m2 + 1))
     ket = UncoupledBasisState(
         psi.J,
@@ -182,6 +303,17 @@ def I2p(psi: UncoupledBasisState, *args) -> UncoupledState:
 
 
 def I2m(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I2- operator: Lowering operator for second nuclear spin (F).
+
+    Lowers m2 by 1 with amplitude √[I2(I2+1) - m2(m2-1)].
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        State with m2 decreased by 1
+    """
     amp = math.sqrt((psi.I2 + psi.m2) * (psi.I2 - psi.m2 + 1))
     ket = UncoupledBasisState(
         psi.J,
@@ -203,26 +335,92 @@ def I2m(psi: UncoupledBasisState, *args) -> UncoupledState:
 
 
 def Jx(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """Jx operator: x-component of total angular momentum.
+
+    Defined as (J+ + J-)/2.
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        Linear combination of states from ladder operators
+    """
     return 0.5 * (Jp(psi) + Jm(psi))
 
 
 def Jy(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """Jy operator: y-component of total angular momentum.
+
+    Defined as -i(J+ - J-)/2.
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        Linear combination of states from ladder operators
+    """
     return -0.5j * (Jp(psi) - Jm(psi))
 
 
 def I1x(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I1x operator: x-component of first nuclear spin (Tl).
+
+    Defined as (I1+ + I1-)/2.
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        Linear combination of states from ladder operators
+    """
     return 0.5 * (I1p(psi) + I1m(psi))
 
 
 def I1y(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I1y operator: y-component of first nuclear spin (Tl).
+
+    Defined as -i(I1+ - I1-)/2.
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        Linear combination of states from ladder operators
+    """
     return -0.5j * (I1p(psi) - I1m(psi))
 
 
 def I2x(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I2x operator: x-component of second nuclear spin (F).
+
+    Defined as (I2+ + I2-)/2.
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        Linear combination of states from ladder operators
+    """
     return 0.5 * (I2p(psi) + I2m(psi))
 
 
 def I2y(psi: UncoupledBasisState, *args) -> UncoupledState:
+    """I2y operator: y-component of second nuclear spin (F).
+
+    Defined as -i(I2+ - I2-)/2.
+
+    Args:
+        psi: Uncoupled basis state
+        *args: Additional arguments (unused, for compatibility)
+
+    Returns:
+        Linear combination of states from ladder operators
+    """
     return -0.5j * (I2p(psi) - I2m(psi))
 
 
@@ -238,6 +436,23 @@ def com(
     psi: UncoupledBasisState,
     coefficients: HamiltonianConstants,
 ) -> UncoupledState:
+    """Compose two quantum operators: Apply A(B|ψ⟩).
+
+    Computes the action of operator A on the result of operator B acting on |ψ⟩.
+    Results are cached for performance.
+
+    Args:
+        A: First operator to apply
+        B: Second operator to apply (applied first)
+        psi: Uncoupled basis state
+        coefficients: Hamiltonian constants (physical parameters)
+
+    Returns:
+        State resulting from A(B|ψ⟩)
+
+    Note:
+        This is NOT the commutator [A,B]. For commutator, compute A(B|ψ⟩) - B(A|ψ⟩).
+    """
     ABpsi = UncoupledState()
     # operate with A on all components in B|psi>
     for amp, cpt in B(psi, coefficients):

@@ -18,35 +18,49 @@ __all__ = [
 
 
 def thermal_population(J: int, T: float, B: float = 6.66733e9, n: int = 100) -> float:
-    """calculate the thermal population of a given J sublevel
+    """Calculate the thermal population of a given J sublevel.
+
+    Uses Boltzmann distribution to calculate the relative population of a rotational
+    sublevel at a given temperature.
 
     Args:
-        J (int): rotational level
-        T (float): temperature [Kelvin]
-        B (float, optional): rotational constant. Defaults to 6.66733e9.
-        n (int, optional): number of rotational levels to normalize with.
-                            Defaults to 100.
+        J (int): Rotational level
+        T (float): Temperature in Kelvin
+        B (float, optional): Rotational constant in Hz. Defaults to 6.66733e9 (TlF ground state)
+        n (int, optional): Number of rotational levels to include in partition function normalization.
+                          Defaults to 100.
 
     Returns:
-        float: relative population in a rotational sublevel
+        float: Relative population in the rotational sublevel (normalized by partition function)
+
+    Raises:
+        ValueError: If T is non-positive
     """
+    if T <= 0:
+        raise ValueError(f"Temperature must be positive, got {T} K")
+
     c = 2 * np.pi * cst.hbar * B / (cst.k * T)
 
-    def a(J):
-        return -c * J * (J + 1)
+    def energy_factor(J_level: int) -> float:
+        """Calculate the Boltzmann factor for a given J level."""
+        return -c * J_level * (J_level + 1)
 
-    Z = np.sum([J_levels(i) * np.exp(a(i)) for i in range(n)])
-    return J_levels(J) * np.exp(a(J)) / Z
+    # Partition function
+    Z = np.sum([J_levels(i) * np.exp(energy_factor(i)) for i in range(n)])
+    return J_levels(J) * np.exp(energy_factor(J)) / Z
 
 
 def J_levels(J: int) -> int:
-    """calculate the number of hyperfine sublevels per J rotational level
+    """Calculate the number of hyperfine sublevels per J rotational level.
+
+    For TlF, each J level has 4*(2J+1) hyperfine sublevels due to the two nuclear
+    spins (I1=1/2 for Tl, I2=1/2 for F).
 
     Args:
-        J (int): rotational level
+        J (int): Rotational quantum number
 
     Returns:
-        int: number of levels
+        int: Number of hyperfine sublevels for the given J
     """
     return 4 * (2 * J + 1)
 
@@ -57,29 +71,37 @@ def generate_thermal_population_states(
     T: float,
     qn_compact: Optional[Union[Sequence[QuantumSelector], QuantumSelector]] = None,
 ) -> npt.NDArray[np.complex128]:
-    """Generate a thermal distrubtion over the states specified in
-    states_to_fill, a QuantumSelector or list of Quantumselectors
+    """Generate a thermal distribution over specified states.
+
+    Creates a density matrix with thermal (Boltzmann) population distribution over
+    the states specified by states_to_fill. Population is distributed uniformly within
+    each J manifold according to the thermal population of that J level.
 
     Args:
-        states_to_fill (QuantumSelector): Quantumselector specifying states to
-        fill
-        states (list, np.ndarray): all states used in simulation
-        T (float): temperature in Kelvin
-        qn_compact (Optional[Union[Sequence[QuantumSelector], QuantumSelector]]):
-            defaults to None. Quantum selector to specify which states are compacted
-            in the OBE system.
+        states_to_fill (Union[Sequence[QuantumSelector], QuantumSelector]): QuantumSelector
+            or sequence of QuantumSelectors specifying which states to populate thermally
+        states (Sequence[CoupledState]): All states used in the simulation
+        T (float): Temperature in Kelvin
+        qn_compact (Optional[Union[Sequence[QuantumSelector], QuantumSelector]], optional):
+            QuantumSelector(s) specifying states to compact in the OBE system. Population
+            in compacted states is summed together. Defaults to None.
 
     Returns:
-        np.ndarray: density matrix with trace normalized to 1
+        npt.NDArray[np.complex128]: Density matrix with trace normalized to 1
+
+    Raises:
+        ValueError: If states_to_fill doesn't have J levels defined
+        TypeError: If states_to_fill is not a QuantumSelector or sequence of them
     """
     # branch for single QuantumSelector use
     if isinstance(states_to_fill, QuantumSelector):
         # get all involved Js
         Js = states_to_fill.J
-        assert Js is not None, (
-            "states_to_fill needs rotational levels defined to generate the thermal "
-            "population density"
-        )
+        if Js is None:
+            raise ValueError(
+                "states_to_fill needs rotational levels (J) defined to generate "
+                "thermal population density"
+            )
         # check if J was a list
         _Js = (
             np.array([Js])
@@ -90,10 +112,10 @@ def generate_thermal_population_states(
         indices_to_fill = states_to_fill.get_indices(states)
     # branch for multiple QuantumSelectors use
     elif isinstance(states_to_fill, (list, np.ndarray, tuple)):
-        assert isinstance(states_to_fill[0], QuantumSelector), (
-            "need to supply a sequence of QuantumSelectors, not "
-            f"{type(states_to_fill[0])}"
-        )
+        if not isinstance(states_to_fill[0], QuantumSelector):
+            raise TypeError(
+                f"Need to supply a sequence of QuantumSelectors, not {type(states_to_fill[0])}"
+            )
         # get all involved Js
         _Js = np.array([], dtype=np.int_)
         for stf in states_to_fill:
@@ -104,15 +126,21 @@ def generate_thermal_population_states(
                     [J] if not isinstance(J, (np.ndarray, list, tuple, Sequence)) else J
                 )
                 _Js = np.append(_Js, _J)
-        assert (
-            len(_Js) != 0
-        ), "requires states_to_fill with QuantumSelectors with rotation levels defined"
+        if len(_Js) == 0:
+            raise ValueError(
+                "states_to_fill requires QuantumSelectors with rotational levels (J) defined"
+            )
         # get indices of states to fill
         indices_to_fill = np.array([], dtype=np.int_)
         for stf in states_to_fill:
             indices_to_fill = np.append(
                 indices_to_fill, stf.get_indices(states)
             ).astype(int)
+    else:
+        raise TypeError(
+            "states_to_fill required to be a QuantumsSelector or a Sequence of "
+            f"QuantumSelectors, not {type(states_to_fill)}"
+        )
 
     # remove duplicates from Js and indices_to_fill
     _Js = np.unique(_Js)
@@ -152,9 +180,9 @@ def generate_thermal_population_states(
             density[indices_compact[0]] = pop_compact
             states_compact = compact_QN_coupled_indices(states_compact, indices_compact)
         else:
-            raise AssertionError(
-                "qn_compact required to be a QuantumsSelector or a Sequence of "
-                f"QuantumSelectors, not {type(qn_compact)}"
+            raise TypeError(
+                f"qn_compact must be a QuantumSelector or a sequence of QuantumSelectors, "
+                f"not {type(qn_compact)}"
             )
 
     density = np.eye(len(density), dtype=np.complex128) * density
@@ -165,18 +193,30 @@ def generate_thermal_population_states(
 
 def generate_population_states(
     states: Union[List[int], npt.NDArray[np.int_]], levels: int
-):
-    """generate a uniform population distribution with population in the
-    specified states
+) -> npt.NDArray[np.complex128]:
+    """Generate a uniform population distribution over specified states.
+
+    Creates a density matrix with equal population in each of the specified states,
+    normalized so the trace equals 1.
 
     Args:
-        states (list, np.ndarray): indices to put population into
-        levels (int): total number of levels
+        states (Union[List[int], npt.NDArray[np.int_]]): Indices of states to populate
+        levels (int): Total number of levels in the system
 
     Returns:
-        np.ndarray: density matrix
+        npt.NDArray[np.complex128]: Density matrix with uniform population in specified
+            states, trace normalized to 1
+
+    Raises:
+        ValueError: If any state index is out of bounds
     """
-    density = np.zeros([levels, levels], dtype=complex)
-    for state in states:
+    states_array = np.asarray(states)
+    if np.any(states_array < 0) or np.any(states_array >= levels):
+        raise ValueError(
+            f"State indices must be in range [0, {levels}), got indices: {states_array}"
+        )
+
+    density = np.zeros([levels, levels], dtype=np.complex128)
+    for state in states_array:
         density[state, state] = 1
     return density / np.trace(density)

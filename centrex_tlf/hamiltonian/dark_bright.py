@@ -17,6 +17,34 @@ class DarkBrightTransformation:
 def generate_transform_matrix_symbolic(
     n_levels: int = 4, ind_T_zero: Sequence[int] = [0, 2]
 ) -> DarkBrightTransformation:
+    """Generate symbolic transformation to dark/bright state basis.
+    
+    Constructs a symbolic unitary transformation matrix T that transforms a system
+    of n_levels states (n_levels-1 ground states coupled to 1 excited state) into
+    a dark/bright basis. In this basis:
+    - 1 bright state couples to the excited state
+    - n_levels-2 dark states have no direct coupling to the excited state
+    
+    The transformation diagonalizes the coupling structure to identify dark states
+    that are decoupled from the optical field.
+    
+    Args:
+        n_levels (int): Total number of quantum levels (ground + excited). 
+            Defaults to 4.
+        ind_T_zero (Sequence[int]): Indices [i, j] to set T[i,j]=0, making state i 
+            the "darkest" with no direct coupling. Defaults to [0, 2].
+    
+    Returns:
+        DarkBrightTransformation: Dataclass containing:
+            - n_levels: Number of levels
+            - a_symbols: Symbolic coupling amplitudes [a₀, a₁, ...]
+            - Δ_symbols: Symbolic detunings [Δ₀, Δ₁, ...]
+            - T: Symbolic unitary transformation matrix
+    
+    Note:
+        The transformation satisfies T†T = I (unitarity) and creates a basis where
+        only one state (the bright state) couples to the excited level.
+    """
     δ = smp.symbols("δ", real=True)
     Ω = smp.Symbol("Ω", real=True)
 

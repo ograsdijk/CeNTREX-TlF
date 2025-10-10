@@ -14,6 +14,17 @@ __all__ = ["H_LD", "H_c1p", "H_mhf_Tl", "H_mhf_F", "HZx", "HZy", "HZz"]
 
 
 def H_LD(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
+    """Lambda-doubling Hamiltonian for B state in uncoupled basis.
+    
+    Mixes states with opposite Ω (Ω → -Ω). Same physics as coupled basis version.
+    
+    Args:
+        psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
+        coefficients (BConstants): B state molecular constants (q parameter)
+    
+    Returns:
+        UncoupledState: Lambda-doubling contribution in uncoupled basis
+    """
     J = psi.J
     mJ = psi.mJ
     I1 = psi.I1
@@ -46,6 +57,18 @@ def H_LD(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
 
 
 def H_c1p(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
+    """Nuclear spin-rotation interaction C'(Tl) for B state in uncoupled basis.
+    
+    Ref: Brown 1978 "A determination of fundamental Zeeman parameters for the OH
+    radical", equation A12.
+    
+    Args:
+        psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
+        coefficients (BConstants): B state molecular constants (cp1_Tl)
+    
+    Returns:
+        UncoupledState: Nuclear spin-rotation contribution for Tl in uncoupled basis
+    """
     # Find the quantum numbers of the input state
     J = psi.J
     mJ = psi.mJ
@@ -144,6 +167,15 @@ def H_c1p(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
 
 
 def H_mhf_Tl(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
+    """Magnetic hyperfine interaction for Tl nucleus in B state (uncoupled basis).
+    
+    Args:
+        psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
+        coefficients (BConstants): B state molecular constants (h1_Tl)
+    
+    Returns:
+        UncoupledState: Magnetic hyperfine contribution for Tl in uncoupled basis
+    """
     # Find the quantum numbers of the input state
     J = psi.J
     mJ = psi.mJ
@@ -202,6 +234,15 @@ def H_mhf_Tl(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledSta
 
 
 def H_mhf_F(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
+    """Magnetic hyperfine interaction for F nucleus in B state (uncoupled basis).
+    
+    Args:
+        psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
+        coefficients (BConstants): B state molecular constants (h1_F)
+    
+    Returns:
+        UncoupledState: Magnetic hyperfine contribution for F in uncoupled basis
+    """
     # Find the quantum numbers of the input state
     J = psi.J
     mJ = psi.mJ
@@ -265,16 +306,47 @@ def H_mhf_F(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledStat
 
 
 def HZx(psi: UncoupledBasisState) -> UncoupledState:
+    """Zeeman Hamiltonian for Bₓ field component in B state (uncoupled basis).
+    
+    Args:
+        psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
+    
+    Returns:
+        UncoupledState: Zeeman interaction for Bₓ (currently placeholder)
+    
+    Note:
+        TODO: Full implementation needed
+    """
     # TODO
     return UncoupledState([(1.0, psi)])
 
 
 def HZy(psi: UncoupledBasisState) -> UncoupledState:
+    """Zeeman Hamiltonian for Bᵧ field component in B state (uncoupled basis).
+    
+    Args:
+        psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
+    
+    Returns:
+        UncoupledState: Zeeman interaction for Bᵧ (currently placeholder)
+    
+    Note:
+        TODO: Full implementation needed
+    """
     # TODO
     return UncoupledState([(1.0, psi)])
 
 
 def HZz(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:
+    """Zeeman Hamiltonian for Bz field component in B state (uncoupled basis).
+    
+    Args:
+        psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
+        coefficients (BConstants): B state molecular constants (μ_B Bohr magneton)
+    
+    Returns:
+        UncoupledState: Zeeman interaction for Bz field component
+    """
     # Find the quantum numbers of the input state
     J = psi.J
     mJ = psi.mJ

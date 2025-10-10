@@ -1,3 +1,8 @@
+"""Polarization vector representations for optical transitions.
+
+This module defines polarization states for light fields and provides utilities for
+manipulating them. Common polarizations (X, Y, Z, σ⁺, σ⁻) are predefined.
+"""
 from dataclasses import dataclass
 from typing import Self
 
@@ -15,13 +20,22 @@ __all__ = [
 
 
 def format_value(val: complex) -> str:
-    """Format a complex number for display, showing only real part if imaginary is zero.
+    """Format a complex number for display.
+    
+    Shows only the real part if the imaginary part is zero, otherwise shows the full
+    complex representation.
 
     Args:
-        val: Complex number to format
+        val (complex): Complex number to format
 
     Returns:
-        String representation of the value
+        str: String representation of the value
+        
+    Example:
+        >>> format_value(1.0 + 0j)
+        '1.0'
+        >>> format_value(1.0 + 1j)
+        '(1+1j)'
     """
     if val.imag == 0:
         return f"{val.real}"

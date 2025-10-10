@@ -5,6 +5,7 @@ from . import (
     basis_transformations,
     constants,
     generate_hamiltonian,
+    matrix_elements,
     quantum_operators,
     reduced_hamiltonian,
     utils,
@@ -13,6 +14,7 @@ from . import (
 from .basis_transformations import *  # noqa
 from .constants import *  # noqa
 from .generate_hamiltonian import *  # noqa
+from .matrix_elements import *  # noqa
 from .quantum_operators import *  # noqa
 from .reduced_hamiltonian import *  # noqa
 from .utils import *  # noqa
@@ -26,3 +28,4 @@ __all__ += quantum_operators.__all__.copy()
 __all__ += utils.__all__.copy()
 __all__ += basis_transformations.__all__.copy()
 __all__ += reduced_hamiltonian.__all__.copy()
+__all__ += ["generate_ED_ME_mixed_state", "ED_ME_coupled", "angular_part"]
