@@ -28,6 +28,41 @@ __all__ = [
 ]
 
 
+def _sanitize_polarization_name(name: str) -> str:
+    """Sanitize polarization name for use as a symbolic variable.
+    
+    Only keeps letters (a-z, A-Z). If the result is empty or contains
+    mathematical symbols/numbers, returns None to trigger fallback naming.
+    
+    Args:
+        name: Polarization name (e.g., "X", "1/√2 X + 1/√2 Z")
+        
+    Returns:
+        Sanitized name containing only letters, or empty string if not simple
+        
+    Examples:
+        >>> _sanitize_polarization_name("X")
+        'X'
+        >>> _sanitize_polarization_name("σp")
+        'σp'
+        >>> _sanitize_polarization_name("1/√2 X + 1/√2 Z")
+        ''
+    """
+    # Check if name is simple (only letters and maybe σ, Ω, etc.)
+    # Allow Greek letters but not math operators or numbers
+    simple_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                      "αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ"
+                      "σΣ")
+    
+    # If name contains operators, spaces, numbers, or other complex chars, return empty
+    if any(c in name for c in "+-*/^√() 0123456789"):
+        return ""
+    
+    # Keep only allowed characters
+    sanitized = "".join(c for c in name if c in simple_chars)
+    return sanitized
+
+
 @dataclass
 class TransitionSelector:
     """Describes a laser-driven transition with associated parameters.
@@ -150,14 +185,25 @@ def generate_transition_selectors(
                 ground_states_approx, excited_states_approx, polarization[0].vector
             )
 
+        # Create polarization symbols with sanitized names
+        pol_symbols = []
+        for idx, p in enumerate(polarization):
+            sanitized = _sanitize_polarization_name(p.name)
+            if sanitized:
+                # Use sanitized name if it's simple (e.g., "X", "Y", "σp")
+                pol_symbols.append(smp.Symbol(f"P{sanitized}{idt}"))
+            else:
+                # Use generic naming for complex expressions (e.g., "PA0", "PB0")
+                # A for first polarization, B for second, etc.
+                pol_label = chr(ord('A') + idx)
+                pol_symbols.append(smp.Symbol(f"P{pol_label}{idt}"))
+
         transition_selectors.append(
             TransitionSelector(
                 ground=ground_states_approx,
                 excited=excited_states_approx,
                 polarizations=[p.vector for p in polarization],
-                polarization_symbols=[
-                    smp.Symbol(f"P{p.name}{idt}") for p in polarization
-                ],
+                polarization_symbols=pol_symbols,
                 Ω=smp.Symbol(f"Ω{idt}", complex=True),
                 δ=smp.Symbol(f"δ{idt}"),
                 description=transition.name,

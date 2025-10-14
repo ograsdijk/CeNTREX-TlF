@@ -6,9 +6,8 @@ import numpy as np
 import numpy.typing as npt
 import sympy as smp
 
-from centrex_tlf import constants
+from centrex_tlf import constants, hamiltonian, states
 from centrex_tlf import couplings as couplings_tlf
-from centrex_tlf import hamiltonian, states
 from centrex_tlf.couplings.utils_compact import (
     compact_coupling_field,
     insert_levels_coupling_field,
@@ -37,12 +36,12 @@ class OBESystem:
     H_int: npt.NDArray[np.complex128]
     V_ref_int: npt.NDArray[np.complex128]
     couplings: List[Any]
-    H_symbolic: smp.matrices.dense.MutableDenseMatrix
+    H_symbolic: smp.MutableDenseMatrix
     C_array: npt.NDArray[np.floating]
-    system: smp.matrices.dense.MutableDenseMatrix
+    system: smp.MutableDenseMatrix
     coupling_symbols: Sequence[smp.Symbol]
     polarization_symbols: Sequence[Sequence[smp.Symbol]]
-    dissipator: Optional[smp.matrices.dense.MutableDenseMatrix] = None
+    dissipator: Optional[smp.MutableDenseMatrix] = None
     QN_original: Optional[Sequence[states.CoupledState]] = None
     decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None
     couplings_original: Optional[List[couplings_tlf.CouplingFields]] = None
@@ -99,8 +98,6 @@ def check_transitions_allowed(
                 ΔmF_allowed = couplings_tlf.utils.ΔmF_allowed(
                     transition_selector.polarizations[0]
                 )
-                if not isinstance(ΔmF_allowed, (int, np.int_)):
-                    ΔmF_allowed = int(ΔmF_allowed[0])
                 couplings_tlf.utils.assert_transition_coupled_allowed(
                     cast(
                         states.CoupledBasisState,
