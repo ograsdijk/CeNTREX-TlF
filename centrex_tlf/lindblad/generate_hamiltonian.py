@@ -21,8 +21,8 @@ __all__ = [
 
 
 def generate_unitary_transformation_matrix(
-    hamiltonian: smp.matrices.dense.MutableDenseMatrix,
-) -> smp.matrices.dense.MutableDenseMatrix:
+    hamiltonian: smp.MutableDenseMatrix,
+) -> smp.MutableDenseMatrix:
     """
     Generate the unitary transformation matrix to move to the rotating frame.
     This function computes a unitary transformation matrix based on the couplings
@@ -30,11 +30,11 @@ def generate_unitary_transformation_matrix(
     to determine the frequency differences between states, and constructs the
     transformation matrix to transition to the rotating frame.
     Args:
-        hamiltonian (smp.matrices.dense.MutableDenseMatrix): The Hamiltonian matrix
+        hamiltonian (smp.MutableDenseMatrix): The Hamiltonian matrix
             representing the system, where off-diagonal elements correspond to
             couplings between states.
     Returns:
-        smp.matrices.dense.MutableDenseMatrix: The unitary transformation matrix
+        smp.MutableDenseMatrix: The unitary transformation matrix
             for transitioning to the rotating frame.
     """
     n_states = np.shape(hamiltonian)[0]
@@ -73,12 +73,12 @@ def generate_unitary_transformation_matrix(
 
 
 def symbolic_hamiltonian_to_rotating_frame(
-    hamiltonian: smp.matrices.dense.MutableDenseMatrix,
+    hamiltonian: smp.MutableDenseMatrix,
     QN: List[states.CoupledState],
     H_int: npt.NDArray[np.complex128],
     couplings: Sequence[couplings_tlf.CouplingFields],
     δs: Sequence[smp.Symbol],
-) -> smp.matrices.dense.MutableDenseMatrix:
+) -> smp.MutableDenseMatrix:
     """Transform a symbolic hamiltonian to the rotating frame. Exponential terms
     with the transition frequencies are required to be present in the
     hamiltonian matrix, as well as symbolic energies on the diagonal.
@@ -145,7 +145,7 @@ def generate_symbolic_hamiltonian(
     couplings: Sequence[couplings_tlf.CouplingFields],
     Ωs: Sequence[smp.Symbol],
     pols: List[Optional[Sequence[smp.Symbol]]],
-) -> smp.matrices.dense.MutableDenseMatrix:
+) -> smp.MutableDenseMatrix:
     """Generate a symbolic hamiltonian without transforming to the rotating frame.
     This function generates a symbolic Hamiltonian matrix based on the provided
     quantum numbers, internal Hamiltonian, couplings, and transition frequencies.
@@ -161,7 +161,7 @@ def generate_symbolic_hamiltonian(
         pols (List[Optional[Sequence[smp.Symbol]]]): Polarization symbols for each coupling.
 
     Returns:
-        smp.matrices.dense.MutableDenseMatrix: Symbolic Hamiltonian matrix.
+        smp.MutableDenseMatrix: Symbolic Hamiltonian matrix.
     """
     assert not has_off_diagonal_elements(H_int), (
         "Hamiltonian should not have off-diagonal elements"
@@ -229,7 +229,7 @@ def generate_rwa_symbolic_hamiltonian(
     Ωs: Sequence[smp.Symbol],
     δs: Sequence[smp.Symbol],
     pols: List[Optional[Sequence[smp.Symbol]]],
-) -> smp.matrices.dense.MutableDenseMatrix:
+) -> smp.MutableDenseMatrix:
     n_states = H_int.shape[0]
     hamiltonian = generate_symbolic_hamiltonian(H_int, couplings, Ωs, pols)
     transformed = symbolic_hamiltonian_to_rotating_frame(
@@ -254,7 +254,7 @@ def generate_total_symbolic_hamiltonian(
     couplings: List[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
     qn_compact: Literal[None],
-) -> smp.matrices.dense.MutableDenseMatrix: ...
+) -> smp.MutableDenseMatrix: ...
 
 
 @overload
@@ -263,7 +263,7 @@ def generate_total_symbolic_hamiltonian(
     H_int: npt.NDArray[np.complex128],
     couplings: List[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
-) -> smp.matrices.dense.MutableDenseMatrix: ...
+) -> smp.MutableDenseMatrix: ...
 
 
 @overload
@@ -273,7 +273,7 @@ def generate_total_symbolic_hamiltonian(
     couplings: Sequence[couplings_tlf.CouplingFields],
     transitions: Sequence[Any],
     qn_compact: Union[Sequence[states.QuantumSelector], states.QuantumSelector],
-) -> Tuple[smp.matrices.dense.MutableDenseMatrix, List[states.CoupledState]]: ...
+) -> Tuple[smp.MutableDenseMatrix, List[states.CoupledState]]: ...
 
 
 def generate_total_symbolic_hamiltonian(
@@ -285,8 +285,8 @@ def generate_total_symbolic_hamiltonian(
         Union[Sequence[states.QuantumSelector], states.QuantumSelector]
     ] = None,
 ) -> Union[
-    Tuple[smp.matrices.dense.MutableDenseMatrix, List[states.CoupledState]],
-    smp.matrices.dense.MutableDenseMatrix,
+    Tuple[smp.MutableDenseMatrix, List[states.CoupledState]],
+    smp.MutableDenseMatrix,
 ]:
     """Generate the total symbolic hamiltonian for the given system
 
