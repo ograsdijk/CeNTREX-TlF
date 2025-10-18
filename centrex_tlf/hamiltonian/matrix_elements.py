@@ -4,6 +4,7 @@ This module provides functions for computing electric dipole matrix elements bet
 quantum states, including both reduced matrix elements and full matrix elements with
 polarization-dependent angular factors.
 """
+
 import math
 from functools import lru_cache
 from typing import Dict, Tuple
@@ -26,11 +27,11 @@ def generate_ED_ME_mixed_state(
     normalize_pol: bool = True,
 ) -> complex:
     """Calculate electric dipole matrix element between mixed (superposition) states.
-    
+
     Computes ⟨bra|D̂·ε|ket⟩ where bra and ket are mixed states (superpositions of basis
     states) and ε is the polarization vector. Automatically transforms states to Omega
     basis when needed (parity basis states are converted).
-    
+
     Args:
         bra (CoupledState): Bra state (superposition of coupled basis states)
         ket (CoupledState): Ket state (superposition of coupled basis states)
@@ -40,22 +41,29 @@ def generate_ED_ME_mixed_state(
             Defaults to False.
         normalize_pol (bool): If True, normalize the polarization vector. Defaults to
             True.
-    
+
     Returns:
         complex: Electric dipole matrix element
-    
+
     Note:
         For X state (Ω=0), the coupled basis already represents the Omega basis,
         so no transformation is needed.
-        
+
     Example:
         >>> ME = generate_ED_ME_mixed_state(ground_state, excited_state)
         >>> coupling_strength = np.abs(ME)
     """
     # Initialize default polarization vector if not provided
     if pol_vec is None:
-        pol_vec = np.array([1.0, 1.0, 1.0], dtype=np.complex128)
-        
+        pol_vec = np.array(
+            (
+                (1.0 + 0j) / math.sqrt(2),
+                0j,
+                (1.0 + 0j) / math.sqrt(2),
+            ),
+            dtype=np.complex128,
+        )
+
     ME = 0j
 
     # Transform to Omega basis if required. For the X state the basis is Coupled and
@@ -85,29 +93,33 @@ def generate_ED_ME_mixed_state(
 def ED_ME_coupled(
     bra: states.CoupledBasisState,
     ket: states.CoupledBasisState,
-    pol_vec: Tuple[complex, complex, complex] = (1.0 + 0j, 1.0 + 0j, 1.0 + 0j),
+    pol_vec: Tuple[complex, complex, complex] = (
+        (1.0 + 0j) / math.sqrt(2),
+        0j,
+        (1.0 + 0j) / math.sqrt(2),
+    ),
     rme_only: bool = False,
 ) -> complex:
     """Calculate electric dipole matrix element between coupled basis states.
-    
+
     Computes the electric dipole matrix element ⟨bra|D̂·ε|ket⟩ for transitions between
     molecular eigenstates. The calculation follows the formula in Oskari Timgren's
     thesis (page 131), using Wigner 3-j and 6-j symbols.
-    
+
     Args:
         bra (CoupledBasisState): Coupled basis state object (typically ground state)
         ket (CoupledBasisState): Coupled basis state object (typically excited state)
         pol_vec (Tuple[complex, complex, complex]): Polarization vector in Cartesian
-            basis [Ex, Ey, Ez]. Defaults to (1+0j, 1+0j, 1+0j).
+            basis [Ex, Ey, Ez]. Defaults to ((1+0j)/√2, 0j, (1+0j)/√2).
         rme_only (bool): If True, return only reduced matrix element without angular/
             polarization dependence. Defaults to False.
 
     Returns:
         complex: Electric dipole matrix element ⟨bra|D̂·ε|ket⟩
-        
+
     Note:
         Cached for performance. Selection rules: |ΔΩ| < 2, |Δm_F| ≤ 1
-        
+
     Example:
         >>> ME = ED_ME_coupled(ground_basis_state, excited_basis_state)
         >>> rme = ED_ME_coupled(ground_basis_state, excited_basis_state, rme_only=True)
@@ -165,26 +177,26 @@ def angular_part(
     mFp: int,
 ) -> complex:
     """Calculate polarization-dependent angular factor for electric dipole transitions.
-    
+
     Computes the angular part of the matrix element including polarization dependence:
         (-1)^(F-m_F) * ⟨F, 1, F'; -m_F, q, m_F'⟩ * ε_q
     where q = m_F - m_F' and ε_q are spherical components of the polarization.
-    
+
     Args:
         pol_vec (Tuple[complex, complex, complex]): Polarization vector in Cartesian
             basis [Ex, Ey, Ez]
         F (int): Total angular momentum quantum number of initial state
         mF (int): Projection of total angular momentum of initial state
-        Fp (int): Total angular momentum quantum number of final state  
+        Fp (int): Total angular momentum quantum number of final state
         mFp (int): Projection of total angular momentum of final state
 
     Returns:
         complex: Angular factor with polarization. Returns 0 if |q| > 1 (selection rule)
-        
+
     Note:
         Cached for performance. Spherical polarization components:
         - q=+1 (σ⁺): -(E_x + iE_y)/√2
-        - q=0 (π): E_z  
+        - q=0 (π): E_z
         - q=-1 (σ⁻): (E_x - iE_y)/√2
     """
     # Cartesian → spherical-basis components
