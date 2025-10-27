@@ -6,6 +6,8 @@ import pandas as pd
 
 from centrex_tlf import hamiltonian, states
 
+from .polarization import polarization_unpolarized
+
 __all__ = ["calculate_br", "generate_br_dataframe"]
 
 
@@ -15,21 +17,21 @@ def calculate_br(
     tol: float = 1e-3,
 ) -> npt.NDArray[np.floating]:
     """Calculate branching ratios for spontaneous emission from an excited state.
-    
+
     Computes the relative probability for an excited state to decay to each of the
     ground states via electric dipole transitions. Branching ratio BR[i] = |ME[i]|² /  Σ|ME|²,
     where ME[i] is the electric dipole matrix element to ground state i.
-    
+
     Args:
         excited_state (CoupledState): Excited state that can decay
         ground_states (Sequence[CoupledState]): Possible ground states for decay
         tol (float): Remove state components with amplitude < tol before calculating
             matrix elements. Defaults to 1e-3.
-    
+
     Returns:
         npt.NDArray[np.floating]: Array of branching ratios, length len(ground_states),
             normalized so that Σ BR[i] = 1
-    
+
     Example:
         >>> BRs = calculate_br(excited_state, ground_states)
         >>> print(f"Decay to state 0: {BRs[0]*100:.1f}%")
@@ -41,6 +43,7 @@ def calculate_br(
         MEs[idg] = hamiltonian.generate_ED_ME_mixed_state(
             ground_state.remove_small_components(tol=tol),
             excited_state.remove_small_components(tol=tol),
+            pol_vec=polarization_unpolarized.vector,
         )
 
     # Calculate branching ratios
@@ -57,12 +60,12 @@ def generate_br_dataframe(
     tolerance: float = 1e-3,
 ) -> pd.DataFrame:
     """Generate pandas DataFrame of branching ratios for optical transitions.
-    
+
     Creates a table showing the branching ratios for spontaneous emission from excited
     states to ground states. Rows represent ground states (or groups thereof) and columns
     represent excited states (or groups thereof). Values are normalized branching ratios
     summing to 1 for each excited state column.
-    
+
     Args:
         ground_states (Sequence[CoupledState]): Ground states (superpositions of
             CoupledBasisStates) that can be populated by decay
@@ -79,14 +82,14 @@ def generate_br_dataframe(
             ratio. Defaults to True.
         tolerance (float): Remove state components with amplitude < tolerance before
             calculating matrix elements. Defaults to 1e-3.
-    
+
     Returns:
         pd.DataFrame: DataFrame with ground states as rows (indexed by state labels) and
             excited states as columns, containing normalized branching ratios
-    
+
     Raises:
         AssertionError: If group_ground is not None, "J", or "mF"
-    
+
     Example:
         >>> df = generate_br_dataframe(ground_states, excited_states, group_ground="J")
         >>> print(df)  # Shows branching ratios grouped by ground state J

@@ -12,7 +12,7 @@ from typing import Dict, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from centrex_tlf import states
+from centrex_tlf import couplings, states
 
 from .wigner import sixj_f, threej_f
 
@@ -36,7 +36,8 @@ def generate_ED_ME_mixed_state(
         bra (CoupledState): Bra state (superposition of coupled basis states)
         ket (CoupledState): Ket state (superposition of coupled basis states)
         pol_vec (npt.NDArray[np.complex128] | None): Polarization vector [Ex, Ey, Ez]
-            in Cartesian basis. Defaults to None, which uses [1.0, 1.0, 1.0].
+            in Cartesian basis. Defaults to None, which uses [√(2/3), 0, √(1/3)], e.g.
+            averaging over all q=-1,0,+1 polarizations.
         reduced (bool): If True, return only reduced matrix element (no angular part).
             Defaults to False.
         normalize_pol (bool): If True, normalize the polarization vector. Defaults to
@@ -55,14 +56,7 @@ def generate_ED_ME_mixed_state(
     """
     # Initialize default polarization vector if not provided
     if pol_vec is None:
-        pol_vec = np.array(
-            (
-                (1.0 + 0j) / math.sqrt(2),
-                0j,
-                (1.0 + 0j) / math.sqrt(2),
-            ),
-            dtype=np.complex128,
-        )
+        pol_vec = couplings.polarization_unpolarized.vector
 
     ME = 0j
 

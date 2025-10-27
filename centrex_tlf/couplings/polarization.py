@@ -31,6 +31,7 @@ __all__ = [
     "polarization_Z",
     "polarization_σp",
     "polarization_σm",
+    "polarization_unpolarized",
 ]
 
 
@@ -408,7 +409,10 @@ polarization_Z = Polarization(np.array([0, 0, 1], dtype=np.complex128), "Z")
 polarization_σp = Polarization(
     np.array([-1 / np.sqrt(2), 1j / np.sqrt(2), 0], dtype=np.complex128), "σp"
 )
-
 polarization_σm = Polarization(
     np.array([1 / np.sqrt(2), 1j / np.sqrt(2), 0], dtype=np.complex128), "σm"
+)
+# used in branching ratio calculations, averaging over q=-1,0,+1 polarizations
+polarization_unpolarized = (
+    np.sqrt(2 / 3) * polarization_X + np.sqrt(1 / 3) * polarization_Z
 )
