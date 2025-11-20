@@ -33,7 +33,7 @@ from .generate_hamiltonian import (
     generate_uncoupled_hamiltonian_X,
     generate_uncoupled_hamiltonian_X_function,
 )
-from .matrix_elements import generate_ED_ME_mixed_state
+from .matrix_elements_electric_dipole import generate_ED_ME_mixed_state
 from .utils import matrix_to_states, reduced_basis_hamiltonian, reorder_evecs
 
 __all__ = [

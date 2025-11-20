@@ -201,9 +201,9 @@ def angular_part(
     }
 
     # q that connects the two Zeeman sub-levels
-    p = mF - mFp
-    if abs(p) > 1:
+    q = mF - mFp
+    if abs(q) > 1:
         return 0.0
 
-    angular = (-1) ** (F - mF) * threej_f(F, 1, Fp, -mF, p, mFp) * p_vec[p]
+    angular = (-1) ** (F - mF) * threej_f(F, 1, Fp, -mF, q, mFp) * p_vec[q]
     return angular

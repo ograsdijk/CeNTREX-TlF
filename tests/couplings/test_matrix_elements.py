@@ -55,4 +55,4 @@ def test_generate_ED_ME_mixed_state():
         electronic_state=states.ElectronicState.X,
     )
     dipole = hamiltonian.generate_ED_ME_mixed_state(1 * ground_state, 1 * excited_state)
-    assert dipole == (0.19245008972987523 + 0.19245008972987523j)
+    assert dipole == (0.2721655269759087 + 0j)

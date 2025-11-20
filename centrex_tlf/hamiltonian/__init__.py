@@ -5,7 +5,7 @@ from . import (
     basis_transformations,
     constants,
     generate_hamiltonian,
-    matrix_elements,
+    matrix_elements_electric_dipole,
     quantum_operators,
     reduced_hamiltonian,
     utils,
@@ -14,7 +14,7 @@ from . import (
 from .basis_transformations import *  # noqa
 from .constants import *  # noqa
 from .generate_hamiltonian import *  # noqa
-from .matrix_elements import *  # noqa
+from .matrix_elements_electric_dipole import *  # noqa
 from .quantum_operators import *  # noqa
 from .reduced_hamiltonian import *  # noqa
 from .utils import *  # noqa
