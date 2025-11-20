@@ -345,7 +345,7 @@ class CoupledBasisState(BasisState):
         Omega = self.Omega
 
         mF1s = np.arange(-F1, F1 + 1, 1)
-        mJs = range(-round(J, 0), round(J, 0) + 1, 1)
+        mJs = range(-J, J + 1, 1)
         m1s = np.arange(-I1, I1 + 1, 1)
         m2s = np.arange(-I2, I2 + 1, 1)
 
@@ -371,7 +371,11 @@ class CoupledBasisState(BasisState):
                             [(amp, basis_state)]
                         )
 
-        return uncoupled_state.normalize()
+        try:
+            uncoupled_state = uncoupled_state.normalize()
+        except ValueError:
+            pass
+        return uncoupled_state
 
     def transform_to_omega_basis(self) -> CoupledState:
         """Transform parity eigenstate to Omega eigenstate basis.
@@ -756,8 +760,10 @@ class UncoupledBasisState(BasisState):
         data: list[tuple[complex, CoupledBasisState]] = []
 
         # Loop over possible values of F1, F and m_F
-        for F1 in np.arange(J - I1, J + I1 + 1):
-            for F in range(int(round(F1 - I2, 0)), int(round(F1 + I2, 0)) + 1):
+        for F1 in np.arange(abs(J - I1), J + I1 + 1):
+            F_min = int(abs(F1 - I2))
+            F_max = int(F1 + I2)
+            for F in range(F_min, F_max + 1):
                 if np.abs(mF) <= F:
                     coupled_state = CoupledBasisState(
                         F,
