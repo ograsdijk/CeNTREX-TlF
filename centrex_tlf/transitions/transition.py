@@ -36,7 +36,7 @@ class OpticalTransitionType(IntEnum):
     S = +2
 
 
-@dataclass
+@dataclass(frozen=True)
 class MicrowaveTransition:
     """
     Pure‐rotational (microwave) J→J′ transition within the same electronic manifold.
@@ -135,7 +135,7 @@ class MicrowaveTransition:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class OpticalTransition:
     """Electronic (optical) X→B transition with fine/hyperfine structure.
     
