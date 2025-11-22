@@ -12,6 +12,14 @@ from .wigner import sixj_f, threej_f
 # You already have threej_f, sixj_f somewhere
 # from your.wigner.module import threej_f, sixj_f
 
+__all__ = [
+    "cartesian_to_spherical_rank1",
+    "couple_two_rank1_to_rank2",
+    "angular_part_rank2",
+    "EQ_ME_coupled",
+    "generate_EQ_ME_mixed_state",
+]
+
 
 def cartesian_to_spherical_rank1(
     vec: Tuple[complex, complex, complex],
@@ -107,25 +115,48 @@ def EQ_ME_coupled(
 ) -> complex:
     """Electric quadrupole (rank-2) matrix element between coupled basis states.
 
-    This mirrors ED_ME_coupled but with tensor rank k=2. It includes
-    Ω-coupling via a J,Ω three-j symbol, so ΔJ can be 0, ±1, ±2 and
-    ΔΩ is limited by |Ω - Ω'| ≤ 2.
+    This mirrors ED_ME_coupled but with tensor rank k=2. It includes Ω-coupling
+    via a J,Ω three-j symbol, so ΔJ can be 0, ±1, ±2 and |ΔΩ| ≤ 2.
+
+    IMPORTANT:
+        • This function expects *basis states in the Ω basis* (Basis.Coupled),
+          NOT in the parity basis (Basis.CoupledP).
+        • If your states are in the parity basis, first transform them to the
+          Ω basis (or use generate_EQ_ME_mixed_state, which does that for you).
 
     Args:
-        bra: Initial coupled basis state (e.g. X or B state)
-        ket: Final coupled basis state
-        pol_vec: Cartesian polarization vector (E_x, E_y, E_z). Required if
-            rme_only is False.
-        k_vec: Cartesian propagation (or geometry) vector (k_x, k_y, k_z).
-            Required if rme_only is False.
-        rme_only: If True, return only reduced matrix element (no m_F or
-            field geometry).
+        bra: Initial coupled basis state (e.g. X or B state) in Ω basis.
+        ket: Final coupled basis state in Ω basis.
+        pol_vec: Ignored if rme_only=True. If rme_only=False, Cartesian
+            polarization vector (E_x, E_y, E_z).
+        k_vec: Ignored if rme_only=True. If rme_only=False, Cartesian
+            propagation/geometry vector (k_x, k_y, k_z).
+        rme_only: If True, return only the reduced matrix element (no m_F or
+            field-geometry dependence).
 
     Returns:
-        complex: Quadrupole matrix element ⟨bra|Q̂^{(2)}·T^{(2)}|ket⟩.
-    """
+        complex: Quadrupole matrix element ⟨bra|Q̂^{(2)}·T^{(2)}|ket⟩, or the
+        reduced matrix element if rme_only=True.
 
-    # initial-state quantum numbers
+    Raises:
+        ValueError:
+            • If bra or ket are in the parity basis (Basis.CoupledP).
+            • If required quantum numbers (J, F, Ω) are not set.
+            • If pol_vec / k_vec are missing when rme_only=False.
+    """
+    # 0. Safety: require Ω-basis, not parity basis
+    if (
+        getattr(bra, "basis", None) is states.Basis.CoupledP
+        or getattr(ket, "basis", None) is states.Basis.CoupledP
+    ):
+        raise ValueError(
+            "EQ_ME_coupled expects CoupledBasisState in the Ω basis "
+            "(Basis.Coupled), not in the parity basis (Basis.CoupledP). "
+            "Use generate_EQ_ME_mixed_state on CoupledState objects, or "
+            "transform basis states to the Ω basis before calling."
+        )
+
+    # 1. Extract quantum numbers and check they exist
     F = bra.F
     mF = bra.mF
     J = bra.J
@@ -134,22 +165,27 @@ def EQ_ME_coupled(
     I2 = bra.I2
     Omega = bra.Omega
 
-    # final-state quantum numbers
     Fp = ket.F
     mFp = ket.mF
     Jp = ket.J
     F1p = ket.F1
     Omegap = ket.Omega
 
-    k_rank = 2  # tensor rank
+    if J is None or Jp is None:
+        raise ValueError("Both states must have total J set for EQ_ME_coupled")
+    if F is None or Fp is None:
+        raise ValueError("Both states must have total F set for EQ_ME_coupled")
+    if Omega is None or Omegap is None:
+        raise ValueError("Both states must have Ω set for EQ_ME_coupled")
 
-    # Ω-coupling part, exactly analogous to ED_ME_coupled but with rank 2
+    k_rank = 2  # tensor rank for E2
+
+    # 2. Ω-coupling selection rule: |ΔΩ| ≤ 2
     q_Omega = Omega - Omegap
     if abs(q_Omega) > k_rank:
-        # selection rule |ΔΩ| ≤ 2
         return 0.0
 
-    # reduced matrix element in hyperfine + rotational angular momentum
+    # 3. Reduced matrix element in hyperfine + rotational angular momentum
     ME: complex = (
         (-1) ** (F1p + F1 + Fp + I1 + I2 - Omega)
         * math.sqrt(
@@ -168,12 +204,11 @@ def EQ_ME_coupled(
     if rme_only:
         return ME
 
+    # 4. Full matrix element: need polarization / geometry
     if pol_vec is None or k_vec is None:
         raise ValueError("pol_vec and k_vec are required unless rme_only=True")
 
-    # build rank-2 spherical tensor from polarization and propagation
     field_tensor = couple_two_rank1_to_rank2(pol_vec, k_vec)
-
     ME *= angular_part_rank2(field_tensor, F, mF, Fp, mFp)
     return ME
 

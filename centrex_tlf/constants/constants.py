@@ -18,9 +18,11 @@ __all__ = [
     "XConstants",
     "BConstants",
     "Γ",
-    "D_XtB",
+    "ED_XtB",
     "TlFNuclearSpins",
 ]
+
+a0 = 0.529177210903e-10  # m
 
 # Unit conversion constants
 Debye = 3.333333333333333e-30  # Coulomb meter (C·m)
@@ -111,7 +113,9 @@ class BConstants(HamiltonianConstants):
 
 
 # Transition dipole moment from X to B state
-D_XtB = 0.80026518 * Debye  # C·m
+ED_XtB = 0.80026518 * Debye  # C·m
+EQ_XtB = ED_XtB * a0  # C·m^2
+
 
 # Natural linewidth of B state (convenience constant)
 Γ = 2 * np.pi * 1.56e6  # rad/s (same as BConstants.Γ)

@@ -4,13 +4,14 @@ This module provides utilities for converting between laser power, intensity,
 electric field, and Rabi frequencies for both optical and microwave transitions.
 Includes Gaussian and rectangular beam profiles, and beam width conversions.
 """
+
 from typing import TypeVar
 
 import numpy as np
 import numpy.typing as npt
 import scipy.constants as cst
 
-from centrex_tlf.constants import D_XtB, XConstants
+from centrex_tlf.constants import ED_XtB, XConstants
 
 __all__ = [
     "fwhm_to_sigma",
@@ -128,7 +129,7 @@ def intensity_to_electric_field(intensity: T) -> T:
     Example:
         >>> intensity_to_electric_field(1000.0)  # 1 kW/m² intensity
         868.3641436915924
-        
+
     Note:
         For focused Gaussian beams, intensity is the peak on-axis value.
     """
@@ -155,7 +156,7 @@ def electric_field_to_rabi(electric_field: T, coupling: float, D: float) -> T:
         >>> E = 1000.0  # V/m
         >>> electric_field_to_rabi(E, 1.0, 2.67e-30)  # TlF typical values
         2.532...e+05
-        
+
     Note:
         For two-level systems, population oscillates at frequency Ω/2.
     """
@@ -179,7 +180,7 @@ def intensity_to_rabi(intensity: T, coupling: float, D: float) -> T:
     Example:
         >>> intensity_to_rabi(1000.0, 1.0, 2.67e-30)  # 1 kW/m²
         2.199...e+05
-        
+
     Note:
         This is the most commonly used conversion for optical transitions.
     """
@@ -233,7 +234,7 @@ def power_to_rabi_rectangular_beam(
     coupling: float,
     wx: float,
     wy: float,
-    D: float = D_XtB,
+    D: float = ED_XtB,
 ) -> T:
     """Calculate Rabi frequency from power for rectangular beam profile.
 
@@ -277,7 +278,7 @@ def power_to_intensity_gaussian_beam(power: T, sigma_x: float, sigma_y: float) -
     Example:
         >>> power_to_intensity_gaussian_beam(0.001, 0.5e-3, 0.5e-3)  # 1 mW, 0.5 mm sigma
         636.6197723675814
-        
+
     Note:
         For circular beam with waist w₀, use sigma = w₀/2.
     """
@@ -309,7 +310,7 @@ def power_to_rabi_gaussian_beam(
     coupling: float,
     sigma_x: float,
     sigma_y: float,
-    D: float = D_XtB,
+    D: float = ED_XtB,
 ) -> T:
     """Calculate peak Rabi frequency from power for Gaussian beam profile.
 
@@ -330,7 +331,7 @@ def power_to_rabi_gaussian_beam(
     Example:
         >>> power_to_rabi_gaussian_beam(0.001, 1.0, 0.5e-3, 0.5e-3)  # 1 mW, TEM₀₀
         1.396...e+05
-        
+
     Note:
         For circular beam with waist w₀, use sigma = w₀/2.
     """
@@ -365,7 +366,7 @@ def power_to_rabi_gaussian_beam_microwave(
     Example:
         >>> power_to_rabi_gaussian_beam_microwave(0.1, 1.0, 5e-3, 5e-3)  # 100 mW
         7.377...e+05
-        
+
     Note:
         Microwave dipole moment is ~5x larger than optical transition dipole.
     """
@@ -417,7 +418,7 @@ def rabi_to_power_gaussian_beam(
     coupling: float,
     sigma_x: float,
     sigma_y: float,
-    D: float = D_XtB,
+    D: float = ED_XtB,
 ) -> T:
     """Calculate required laser power from desired Rabi frequency for Gaussian beam.
 

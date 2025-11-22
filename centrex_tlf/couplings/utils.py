@@ -58,6 +58,72 @@ def check_transition_coupled_allowed(
     return True
 
 
+def check_transition_coupled_allowed_E2(
+    ground: states.CoupledBasisState,
+    excited: states.CoupledBasisState,
+) -> bool:
+    """
+    Check if an electric-quadrupole (E2) transition between two coupled-basis
+    states is allowed at the level of basic selection rules.
+
+    Applies the following selection rules for a rank-2 tensor (E2):
+        • Parity must be conserved: P_ground * P_excited == +1
+        • Rotational: |ΔJ| ≤ 2 AND J_ground + J_excited ≥ 2
+          (triangle condition for (J, 2, J'); forbids J=0->0 and J=0->1)
+        • Hyperfine: |ΔF| ≤ 2 AND F_ground + F_excited ≥ 2
+          (triangle condition for (F, 2, F'); forbids F=0->0 and F=0->1)
+        • (Optional) Ω selection rule: |ΔΩ| ≤ 2, if Ω is defined for both.
+
+    Args:
+        ground (CoupledBasisState): Initial (usually lower-energy) state.
+        excited (CoupledBasisState): Final (usually higher-energy) state.
+
+    Returns:
+        bool: True if the transition is allowed by these E2 selection rules,
+              False otherwise.
+
+    Raises:
+        ValueError: If required quantum numbers (P, J, F) are not set.
+    """
+    # Ensure required quantum numbers are present
+    if ground.P is None or excited.P is None:
+        raise ValueError("Both states must have parity P set")
+    if ground.J is None or excited.J is None:
+        raise ValueError("Both states must have total J set")
+    if ground.F is None or excited.F is None:
+        raise ValueError("Both states must have total F set")
+
+    # 1. Parity: E2 has even parity, so parity must be conserved
+    if ground.P * excited.P != +1:
+        return False
+
+    # 2. Rotational selection rule (rank-2):
+    #    |ΔJ| ≤ 2 and J + J' ≥ 2 (triangle condition for (J, 2, J'))
+    dJ = abs(excited.J - ground.J)
+    if dJ > 2:
+        return False
+    if ground.J + excited.J < 2:
+        # forbids J=0->0 and J=0->1 (and symmetric cases)
+        return False
+
+    # 3. Hyperfine selection rule (rank-2):
+    #    |ΔF| ≤ 2 and F + F' ≥ 2 (triangle condition for (F, 2, F'))
+    dF = abs(excited.F - ground.F)
+    if dF > 2:
+        return False
+    if ground.F + excited.F < 2:
+        # forbids F=0->0 and F=0->1 (and symmetric cases)
+        return False
+
+    # 4. Optional Ω selection rule: |ΔΩ| ≤ 2, if both are defined
+    if ground.Omega is not None and excited.Omega is not None:
+        dOmega = abs(excited.Omega - ground.Omega)
+        if dOmega > 2:
+            return False
+
+    return True
+
+
 @overload
 def check_transition_coupled_allowed_polarization(
     ground_state: states.CoupledBasisState,
