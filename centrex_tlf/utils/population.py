@@ -4,6 +4,7 @@ This module provides functions for generating thermal and uniform population
 distributions across molecular quantum states, useful for initializing density
 matrices in optical Bloch equation simulations.
 """
+
 from typing import Literal, Optional, Sequence, TypeVar, Union, overload
 
 import numpy as np
@@ -91,7 +92,7 @@ def thermal_population(
         0.0971...
         >>> thermal_population(np.array([0, 1, 2]), 4.0)
         array([0.8945..., 0.0971..., 0.0082...])
-        
+
     Note:
         Population ∝ (2J+1)·exp(-E_J/k_BT) where E_J = h·B·J(J+1).
     """
@@ -236,7 +237,7 @@ def generate_thermal_population_states(
         >>> ρ_thermal = generate_thermal_population_states(4.0, QN)
         >>> np.trace(ρ_thermal)  # Normalized
         (1+0j)
-        
+
     Note:
         Population within each J is uniform across mF sublevels. Excited electronic
         states (B, etc.) are left unpopulated.
@@ -314,7 +315,7 @@ def get_diagonal_indices_flattened(
         [0, 12, 24]
         >>> get_diagonal_indices_flattened(3, mode="julia")  # 1-indexed
         [1, 5, 9]
-        
+
     Note:
         For matrix M flattened row-wise, diagonal element M[i, i] is at index i + size*i.
     """

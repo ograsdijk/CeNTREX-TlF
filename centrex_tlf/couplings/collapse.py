@@ -1,4 +1,5 @@
 import copy
+import warnings
 from typing import List, Optional, Sequence, Union
 
 import numpy as np
@@ -23,13 +24,13 @@ def collapse_matrices(
     ] = None,
 ) -> npt.NDArray[np.floating]:
     """Generate collapse (jump) matrices for spontaneous emission from excited states.
-    
+
     Creates Lindblad collapse operators C that describe spontaneous decay from excited
     states to ground states via electric dipole transitions. Each operator has the form:
         C[i,j] = √(BR * γ)
     where BR is the branching ratio and γ is the decay rate. Couplings smaller than
     tol are set to zero for computational efficiency.
-    
+
     Args:
         QN (Sequence[CoupledState]): Complete basis of states for the calculation
         ground_states (Sequence[CoupledState]): Ground states coupled to excited states
@@ -40,14 +41,14 @@ def collapse_matrices(
         qn_compact (QuantumSelector | Sequence[QuantumSelector] | None): Quantum number
             selectors for compacting multiple states into single manifolds. Defaults to
             None.
-    
+
     Returns:
         npt.NDArray[np.floating]: Array of collapse matrices, shape (n_ops, n_states,
             n_states), where n_ops is the number of non-zero transitions
-    
+
     Warns:
         UserWarning: If branching ratios sum to more than 1 (numerical error)
-    
+
     Example:
         >>> # Create collapse operators for X→B transitions
         >>> C_array = collapse_matrices(QN, ground_states, excited_states, gamma=2π*36e6)
@@ -60,7 +61,9 @@ def collapse_matrices(
         j = QN.index(excited_state)
         BRs = calculate_br(excited_state, ground_states)
         if np.sum(BRs) > 1:
-            print(f"Warning: Branching ratio sum > 1, difference = {np.sum(BRs)-1:.2e}")
+            warnings.warn(
+                f"Branching ratio sum > 1, difference = {np.sum(BRs) - 1:.2e}"
+            )
         for ground_state, BR in zip(ground_states, BRs):
             i = QN.index(ground_state)
 
