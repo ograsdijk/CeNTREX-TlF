@@ -132,7 +132,8 @@ def generate_system_of_equations_symbolic(
     n_states: int = hamiltonian.shape[0]
 
     # Generate symbolic density matrix with elements ρᵢⱼ as sympy symbols
-    density_matrix: smp.Matrix = generate_density_matrix_symbolic(n_states)
+    rho = smp.IndexedBase("\u03c1")  # Unicode ρ for density matrix
+    density_matrix = smp.Matrix(n_states, n_states, lambda i, j: rho[i, j])
 
     # Ensure collapse operators are complex-valued for proper conjugation
     if not np.iscomplexobj(C_array):
