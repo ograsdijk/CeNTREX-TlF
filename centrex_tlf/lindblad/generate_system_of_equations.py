@@ -19,8 +19,6 @@ import numpy as np
 import numpy.typing as npt
 import sympy as smp
 
-from .utils import generate_density_matrix_symbolic
-
 __all__ = ["generate_system_of_equations_symbolic"]
 
 
@@ -133,7 +131,9 @@ def generate_system_of_equations_symbolic(
 
     # Generate symbolic density matrix with elements ρᵢⱼ as sympy symbols
     rho = smp.IndexedBase("\u03c1")  # Unicode ρ for density matrix
-    density_matrix = smp.Matrix(n_states, n_states, lambda i, j: rho[i, j])
+    density_matrix = smp.Matrix(
+        n_states, n_states, lambda i, j: rho[i, j] if i <= j else rho[j, i].conjugate()
+    )
 
     # Ensure collapse operators are complex-valued for proper conjugation
     if not np.iscomplexobj(C_array):
