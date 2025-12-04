@@ -15,6 +15,20 @@ from centrex_tlf.states import (
 
 from . import B_coupled_Omega, X_uncoupled
 
+try:
+    from ..centrex_tlf_rust import (
+        generate_coupled_hamiltonian_B_py as _generate_coupled_hamiltonian_B_rust,
+    )
+    from ..centrex_tlf_rust import (
+        generate_uncoupled_hamiltonian_X_py as _generate_uncoupled_hamiltonian_X_rust,
+    )
+
+    HAS_RUST = True
+except ImportError:
+    _generate_coupled_hamiltonian_B_rust = None  # type: ignore[assignment]
+    _generate_uncoupled_hamiltonian_X_rust = None  # type: ignore[assignment]
+    HAS_RUST = False
+
 __all__ = [
     "Hamiltonian",
     "HamiltonianUncoupledX",
@@ -48,10 +62,13 @@ def HMatElems(
         npt.NDArray[np.complex128]: Hamiltonian matrix with elements ⟨i|H|j⟩
     """
     result = np.zeros((len(QN), len(QN)), dtype=complex)
+
+    # Pre-compute the Hamiltonian acting on each basis state
+    H_QN = [H(qn, constants) for qn in QN]
+
     for i, a in enumerate(QN):
         for j in range(i, len(QN)):
-            b = QN[j]
-            val = (1 * a) @ H(b, constants)
+            val = (1 * a) @ H_QN[j]
             result[i, j] = val
             if i != j:
                 result[j, i] = np.conjugate(val)
@@ -77,13 +94,18 @@ def HMatElemsBCoupledP(
         npt.NDArray[np.complex128]: Hamiltonian matrix with elements ⟨ψᵢ|H|ψⱼ⟩
     """
     result = np.zeros((len(QN), len(QN)), dtype=complex)
+
+    # Pre-compute the Hamiltonian acting on each superposition state
+    H_QN = []
+    for state in QN:
+        h_state = CoupledState()
+        for amp, basis_state in state:
+            h_state += amp * H(basis_state, constants)
+        H_QN.append(h_state)
+
     for i, a in enumerate(QN):
         for j in range(i, len(QN)):
-            val = 0j
-            b = QN[j]
-            for ampa, ai in a:
-                for ampb, bi in b:
-                    val += ampa * ampb * (1 * ai) @ H(bi, constants)
+            val = a @ H_QN[j]
             result[i, j] = val
             if i != j:
                 result[j, i] = np.conjugate(val)
@@ -139,9 +161,7 @@ class HamiltonianCoupledBOmega(Hamiltonian):
 
 
 def generate_uncoupled_hamiltonian_X(
-    QN: Union[
-        Sequence[UncoupledBasisState], Sequence[CoupledBasisState], npt.NDArray[Any]
-    ],
+    QN: Sequence[UncoupledBasisState],
     constants: XConstants = XConstants(),
 ) -> HamiltonianUncoupledX:
     """Generate the uncoupled X state Hamiltonian for the supplied basis states.
@@ -157,19 +177,25 @@ def generate_uncoupled_hamiltonian_X(
     Returns:
         HamiltonianUncoupledX: Dataclass containing all X state Hamiltonian
             matrix terms (Hff, HSx, HSy, HSz, HZx, HZy, HZz)
+
+    Note:
+        This function uses a Rust implementation if available for better performance.
     """
     for qn in QN:
         assert qn.isUncoupled, "supply list with UncoupledBasisStates"
 
-    return HamiltonianUncoupledX(
-        HMatElems(X_uncoupled.Hff_alt, QN, constants),
-        HMatElems(X_uncoupled.HSx, QN, constants),
-        HMatElems(X_uncoupled.HSy, QN, constants),
-        HMatElems(X_uncoupled.HSz, QN, constants),
-        HMatElems(X_uncoupled.HZx, QN, constants),
-        HMatElems(X_uncoupled.HZy, QN, constants),
-        HMatElems(X_uncoupled.HZz, QN, constants),
-    )
+    if HAS_RUST and _generate_uncoupled_hamiltonian_X_rust is not None:
+        return _generate_uncoupled_hamiltonian_X_rust(QN, constants)
+    else:
+        return HamiltonianUncoupledX(
+            HMatElems(X_uncoupled.Hff_alt, QN, constants),
+            HMatElems(X_uncoupled.HSx, QN, constants),
+            HMatElems(X_uncoupled.HSy, QN, constants),
+            HMatElems(X_uncoupled.HSz, QN, constants),
+            HMatElems(X_uncoupled.HZx, QN, constants),
+            HMatElems(X_uncoupled.HZy, QN, constants),
+            HMatElems(X_uncoupled.HZz, QN, constants),
+        )
 
 
 def generate_coupled_hamiltonian_B(
@@ -192,6 +218,10 @@ def generate_coupled_hamiltonian_B(
         HamiltonianCoupledBP | HamiltonianCoupledBOmega: Dataclass containing all
             B state Hamiltonian matrix terms. Returns HamiltonianCoupledBP for
             parity basis or HamiltonianCoupledBOmega for Omega basis.
+
+    Note:
+        This function uses a Rust implementation if available for better performance
+        when using the Omega basis.
     """
     for qn in QN:
         assert qn.isCoupled, "supply list withCoupledBasisStates"
@@ -216,20 +246,23 @@ def generate_coupled_hamiltonian_B(
             HMatElemsBCoupledP(B_coupled_Omega.zeeman.HZz, QN_omega, constants),
         )
     elif all([qn.basis == Basis.CoupledΩ for qn in QN]):
-        return HamiltonianCoupledBOmega(
-            HMatElems(B_coupled_Omega.rotational.Hrot, QN, constants),
-            HMatElems(B_coupled_Omega.mhf.H_mhf_Tl, QN, constants),
-            HMatElems(B_coupled_Omega.mhf.H_mhf_F, QN, constants),
-            HMatElems(B_coupled_Omega.ld.H_LD, QN, constants),
-            HMatElems(B_coupled_Omega.ld.H_cp1_Tl, QN, constants),
-            HMatElems(B_coupled_Omega.nsr.H_c_Tl, QN, constants),
-            HMatElems(B_coupled_Omega.stark.HSx, QN, constants),
-            HMatElems(B_coupled_Omega.stark.HSy, QN, constants),
-            HMatElems(B_coupled_Omega.stark.HSz, QN, constants),
-            HMatElems(B_coupled_Omega.zeeman.HZx, QN, constants),
-            HMatElems(B_coupled_Omega.zeeman.HZy, QN, constants),
-            HMatElems(B_coupled_Omega.zeeman.HZz, QN, constants),
-        )
+        if HAS_RUST and _generate_coupled_hamiltonian_B_rust is not None:
+            return _generate_coupled_hamiltonian_B_rust(QN, constants)
+        else:
+            return HamiltonianCoupledBOmega(
+                HMatElems(B_coupled_Omega.rotational.Hrot, QN, constants),
+                HMatElems(B_coupled_Omega.mhf.H_mhf_Tl, QN, constants),
+                HMatElems(B_coupled_Omega.mhf.H_mhf_F, QN, constants),
+                HMatElems(B_coupled_Omega.ld.H_LD, QN, constants),
+                HMatElems(B_coupled_Omega.ld.H_cp1_Tl, QN, constants),
+                HMatElems(B_coupled_Omega.nsr.H_c_Tl, QN, constants),
+                HMatElems(B_coupled_Omega.stark.HSx, QN, constants),
+                HMatElems(B_coupled_Omega.stark.HSy, QN, constants),
+                HMatElems(B_coupled_Omega.stark.HSz, QN, constants),
+                HMatElems(B_coupled_Omega.zeeman.HZx, QN, constants),
+                HMatElems(B_coupled_Omega.zeeman.HZy, QN, constants),
+                HMatElems(B_coupled_Omega.zeeman.HZz, QN, constants),
+            )
     else:
         raise AssertionError("QN basis not supported")
 
@@ -238,7 +271,7 @@ def _uncoupled_ham_func_X(
     E: Union[List[float], npt.NDArray[np.float64]],
     B: Union[List[float], npt.NDArray[np.float64]],
     H: HamiltonianUncoupledX,
-):
+) -> npt.NDArray[np.complex128]:
     return (
         2
         * np.pi
@@ -254,7 +287,11 @@ def _uncoupled_ham_func_X(
     )
 
 
-def generate_uncoupled_hamiltonian_X_function(H: HamiltonianUncoupledX) -> Callable:
+def generate_uncoupled_hamiltonian_X_function(
+    H: HamiltonianUncoupledX,
+) -> Callable[
+    [npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray[np.complex128]
+]:
     """Create function for X state Hamiltonian that depends on E and B fields.
 
     Returns a function H(E, B) that computes the total X state Hamiltonian for
@@ -273,7 +310,7 @@ def _coupled_ham_func_B(
     E: Union[List[float], npt.NDArray[np.float64]],
     B: Union[List[float], npt.NDArray[np.float64]],
     H: Union[HamiltonianCoupledBP, HamiltonianCoupledBOmega],
-):
+) -> npt.NDArray[np.complex128]:
     return (
         2
         * np.pi
@@ -296,7 +333,9 @@ def _coupled_ham_func_B(
 
 def generate_coupled_hamiltonian_B_function(
     H: Union[HamiltonianCoupledBP, HamiltonianCoupledBOmega],
-) -> Callable:
+) -> Callable[
+    [npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray[np.complex128]
+]:
     """Create function for B state Hamiltonian that depends on E and B fields.
 
     Returns a function H(E, B) that computes the total B state Hamiltonian for

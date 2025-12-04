@@ -65,6 +65,6 @@ def Hrot(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """
     return (
         constants.B_rot * J2(psi)
-        + constants.D_rot * J4(psi)
+        - constants.D_rot * J4(psi)
         + constants.H_const * J6(psi)
     )

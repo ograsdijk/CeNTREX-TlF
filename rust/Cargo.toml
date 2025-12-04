@@ -1,0 +1,16 @@
+[package]
+name = "centrex_tlf_rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "centrex_tlf_rust"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20.0", features = ["extension-module"] }
+numpy = "0.20.0"
+num-complex = "0.4"
+rayon = "1.8"
+wigner-3nj-symbols = "0.2.0"
+libm = "0.2"
