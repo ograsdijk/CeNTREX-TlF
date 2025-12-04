@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use numpy::{PyArray1, PyArray2};
+use numpy::{PyArray1, PyArray2, PyArrayMethods};
 use num_complex::Complex64;
 
 mod states;
@@ -61,9 +61,9 @@ fn wigner_6j_py(j1: f64, j2: f64, j3: f64, j4: f64, j5: f64, j6: f64) -> f64 {
 ///     HamiltonianUncoupledX: Dataclass containing all X state Hamiltonian matrix terms.
 fn generate_uncoupled_hamiltonian_X_py<'py>(
     py: Python<'py>,
-    states: Vec<&PyAny>,
-    constants: &PyAny
-) -> PyResult<&'py PyAny> {
+    states: Vec<Bound<'py, PyAny>>,
+    constants: &Bound<'py, PyAny>
+) -> PyResult<Bound<'py, PyAny>> {
     // Convert Python states to Rust UncoupledBasisState
     let rust_states: Vec<UncoupledBasisState> = states.iter().map(|s| {
         let J: i32 = s.getattr("J")?.extract()?;
@@ -104,7 +104,7 @@ fn generate_uncoupled_hamiltonian_X_py<'py>(
     let result = generate_uncoupled_hamiltonian_X(&rust_states, &rust_constants);
     let n = rust_states.len();
 
-    let to_numpy = |vec: Vec<Complex64>| -> PyResult<&PyArray2<Complex64>> {
+    let to_numpy = |vec: Vec<Complex64>| -> PyResult<Bound<'py, PyArray2<Complex64>>> {
         let array = PyArray1::from_vec(py, vec);
         array.reshape((n, n))
     };
@@ -135,9 +135,9 @@ fn generate_uncoupled_hamiltonian_X_py<'py>(
 ///     HamiltonianCoupledBOmega: Dataclass containing all B state Hamiltonian matrix terms.
 fn generate_coupled_hamiltonian_B_py<'py>(
     py: Python<'py>,
-    states: Vec<&PyAny>,
-    constants: &PyAny
-) -> PyResult<&'py PyAny> {
+    states: Vec<Bound<'py, PyAny>>,
+    constants: &Bound<'py, PyAny>
+) -> PyResult<Bound<'py, PyAny>> {
     let qn: Vec<CoupledBasisState> = states.iter().map(|s| {
         let J: i32 = s.getattr("J")?.extract()?;
         let F: i32 = s.getattr("F")?.extract()?;
@@ -185,7 +185,7 @@ fn generate_coupled_hamiltonian_B_py<'py>(
     let n = qn.len();
     let shape = (n, n);
 
-    let to_pyarray = |vec: Vec<Complex64>| -> PyResult<&PyArray2<Complex64>> {
+    let to_pyarray = |vec: Vec<Complex64>| -> PyResult<Bound<'py, PyArray2<Complex64>>> {
         let array = PyArray1::from_vec(py, vec);
         array.reshape(shape)
     };
@@ -221,10 +221,10 @@ fn generate_coupled_hamiltonian_B_py<'py>(
 ///     npt.NDArray[np.complex128]: Transformation matrix S.
 fn generate_transform_matrix_py<'py>(
     py: Python<'py>,
-    basis1: Vec<&PyAny>,
-    basis2: Vec<&PyAny>
-) -> PyResult<&'py PyArray2<Complex64>> {
-    let parse_state = |s: &PyAny| -> PyResult<states::BasisStateEnum> {
+    basis1: Vec<Bound<'py, PyAny>>,
+    basis2: Vec<Bound<'py, PyAny>>
+) -> PyResult<Bound<'py, PyArray2<Complex64>>> {
+    let parse_state = |s: &Bound<'py, PyAny>| -> PyResult<states::BasisStateEnum> {
         let is_coupled: bool = s.getattr("isCoupled")?.extract()?;
         if is_coupled {
             let J: i32 = s.getattr("J")?.extract()?;
@@ -283,7 +283,7 @@ fn generate_transform_matrix_py<'py>(
 }
 
 #[pymodule]
-fn centrex_tlf_rust(_py: Python, m: &PyModule) -> PyResult<()> {
+fn centrex_tlf_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_uncoupled_hamiltonian_X_py, m)?)?;
     m.add_function(wrap_pyfunction!(generate_coupled_hamiltonian_B_py, m)?)?;
     m.add_function(wrap_pyfunction!(wigner_3j_py, m)?)?;
