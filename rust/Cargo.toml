@@ -8,7 +8,7 @@ name = "centrex_tlf_rust"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3   = { version = "0.27", features = ["extension-module"] }
+pyo3   = { version = "0.27", features = ["extension-module", "num-complex"] }
 numpy  = "0.27"
 num-complex = "0.4"
 rayon = "1.8"

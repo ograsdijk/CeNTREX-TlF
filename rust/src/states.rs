@@ -197,7 +197,7 @@ pub struct CoupledBasisState {
 
 pub type CoupledTerm = (Amp, CoupledBasisState);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// Superposition of coupled basis states.
 pub struct CoupledState {
     pub terms: Vec<CoupledTerm>,
@@ -227,6 +227,11 @@ impl CoupledState {
     /// Create a state from a vector of terms.
     pub fn from_vec(terms: Vec<CoupledTerm>) -> Self {
         Self::new(terms)
+    }
+
+    /// Returns an iterator over the terms.
+    pub fn iter(&self) -> std::slice::Iter<CoupledTerm> {
+        self.terms.iter()
     }
 }
 
