@@ -23,25 +23,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # This action:
+      # - Sets up the right Python
+      # - Uses a manylinux container on Linux
+      # - Runs maturin with your pyproject.toml / Cargo.toml
+      - name: Build wheels with maturin
+        uses: PyO3/maturin-action@v1
         with:
+          # For Linux: build manylinux_2_28 wheels inside the container
+          manylinux: "2_28"
           python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      # Use maturin directly so we can control compatibility tags
-      - name: Build wheel with maturin via uvx
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            echo "Building manylinux wheel for Linux..."
-            uvx maturin build --release --out dist -i python --compatibility manylinux_2_28
-          else
-            echo "Building wheel for ${{ runner.os }}..."
-            uvx maturin build --release --out dist -i python
-          fi
+          args: --release --out dist
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
@@ -70,5 +62,5 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
-          # use kebab-case per the warning
+          # new kebab-case name (fixes the warning)
           packages-dir: upload
