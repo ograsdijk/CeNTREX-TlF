@@ -236,7 +236,7 @@ fn generate_transform_matrix_py<'py>(
             let Omega: i32 = s.getattr("Omega")?.extract()?;
             let P_obj = s.getattr("P")?;
             let P: Option<i8> = if P_obj.is_none() { None } else { Some(P_obj.extract::<i8>()?) };
-            
+
             let es_obj = s.getattr("electronic_state")?;
             let es_name: String = es_obj.getattr("name")?.extract()?;
             let electronic_state = match es_name.as_str() {

@@ -31,9 +31,17 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Build wheel with uv (maturin backend)
+      # Use maturin directly so we can control compatibility tags
+      - name: Build wheel with maturin via uvx
+        shell: bash
         run: |
-          uv build --wheel
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            echo "Building manylinux wheel for Linux..."
+            uvx maturin build --release --out dist -i python --compatibility manylinux_2_28
+          else
+            echo "Building wheel for ${{ runner.os }}..."
+            uvx maturin build --release --out dist -i python
+          fi
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
@@ -62,4 +70,5 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
-          packages_dir: upload
+          # use kebab-case per the warning
+          packages-dir: upload
