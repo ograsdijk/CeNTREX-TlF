@@ -72,6 +72,8 @@ def generate_ED_ME_mixed_state(
 
     for amp_bra, basis_bra in bra.data:
         for amp_ket, basis_ket in ket.data:
+            if abs(basis_bra.J - basis_ket.J) > 1:
+                continue
             ME += (
                 amp_bra.conjugate()
                 * amp_ket
@@ -118,6 +120,16 @@ def ED_ME_coupled(
         >>> ME = ED_ME_coupled(ground_basis_state, excited_basis_state)
         >>> rme = ED_ME_coupled(ground_basis_state, excited_basis_state, rme_only=True)
     """
+    # Safe early exits (apply to both full and reduced MEs)
+    if abs(bra.Omega - ket.Omega) > 1:
+        return 0j
+    if abs(bra.J - ket.J) > 1:
+        return 0j
+    if abs(bra.F - ket.F) > 1:
+        return 0j
+    # ΔmF only matters for the full (non-reduced) ME
+    if not rme_only and abs(bra.mF - ket.mF) > 1:
+        return 0j
 
     # find quantum numbers for ground state
     F = bra.F
@@ -135,30 +147,37 @@ def ED_ME_coupled(
     F1p = ket.F1
     Omegap = ket.Omega
 
+    q = Omega - Omegap
+    if abs(q) > 1:
+        return 0.0j
+
     # calculate the reduced matrix element
     # see Oskari Timgren's Thesis, page 131
-    q = Omega - Omegap
+    phase = (-1) ** (F1p + F1 + Fp + I1 + I2 - Omega)
+    prefactor = math.sqrt(
+        (2 * J + 1)
+        * (2 * Jp + 1)
+        * (2 * F1 + 1)
+        * (2 * F1p + 1)
+        * (2 * F + 1)
+        * (2 * Fp + 1)
+    )
+
     ME: complex = (
-        (-1) ** (F1p + F1 + Fp + I1 + I2 - Omega)
-        * math.sqrt(
-            (2 * J + 1)
-            * (2 * Jp + 1)
-            * (2 * F1 + 1)
-            * (2 * F1p + 1)
-            * (2 * F + 1)
-            * (2 * Fp + 1)
-        )
+        phase
+        * prefactor
         * sixj_f(F1p, Fp, I2, F, F1, 1)
         * sixj_f(Jp, F1p, I1, F1, J, 1)
         * threej_f(J, 1, Jp, -Omega, q, Omegap)
-        * float(np.abs(q) < 2)
+        * (1.0 if abs(q) < 2 else 0.0)
     )
 
-    # if we want the complete matrix element, calculate angular part
+    if ME == 0.0:
+        return 0.0
+
     if not rme_only:
         ME *= angular_part(pol_vec, F, mF, Fp, mFp)
 
-    # return the matrix element
     return ME
 
 
@@ -193,17 +212,20 @@ def angular_part(
         - q=0 (π): E_z
         - q=-1 (σ⁻): (E_x - iE_y)/√2
     """
-    # Cartesian → spherical-basis components
-    p_vec: Dict[int, complex] = {
-        +1: -1 / math.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1]),  # σ⁺
-        0: pol_vec[2],  # π
-        -1: 1 / math.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1]),  # σ⁻
-    }
-
     # q that connects the two Zeeman sub-levels
     q = mF - mFp
     if abs(q) > 1:
         return 0.0
 
-    angular = (-1) ** (F - mF) * threej_f(F, 1, Fp, -mF, q, mFp) * p_vec[q]
+    # Cartesian → spherical-basis components
+    if q == 1:
+        p_q = -1 / math.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1])  # σ+
+    elif q == -1:
+        p_q = 1 / math.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1])  # σ-
+    elif q == 0:
+        p_q = pol_vec[2]
+    else:
+        raise ValueError(f"Invalid q value: {q}")
+
+    angular = (-1) ** (F - mF) * threej_f(F, 1, Fp, -mF, q, mFp) * p_q
     return angular

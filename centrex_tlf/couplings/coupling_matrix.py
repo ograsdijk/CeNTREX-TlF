@@ -5,6 +5,7 @@ fields couple quantum states. It handles multiple polarizations, automatic state
 selection based on coupling strength, and generation of coupling field objects for
 use in optical Bloch equations.
 """
+
 from dataclasses import dataclass
 from typing import Sequence, Union, cast
 
@@ -36,11 +37,11 @@ def generate_coupling_matrix(
     normalize_pol: bool = True,
 ) -> npt.NDArray[np.complex128]:
     """Generate optical coupling matrix for transitions between quantum states.
-    
+
     Constructs a Hermitian coupling matrix H where H[i,j] represents the electric dipole
     coupling strength between states i and j. Only non-zero between ground and excited
     state pairs.
-    
+
     Args:
         QN (Sequence[CoupledState]): Complete list of basis states defining the Hilbert
             space
@@ -58,27 +59,37 @@ def generate_coupling_matrix(
     Returns:
         npt.NDArray[np.complex128]: Hermitian coupling matrix of shape (n, n) where
             n = len(QN)
-            
+
     Raises:
         AssertionError: If QN is not a list
-        
+
     Example:
         >>> H_coupling = generate_coupling_matrix(QN, ground_states, excited_states)
         >>> coupling_strength = np.abs(H_coupling[ground_idx, excited_idx])
     """
     assert isinstance(QN, list), "QN required to be of type list"
-    
+
     # Initialize default polarization vector if not provided
     if pol_vec is None:
         pol_vec = np.array([0.0, 0.0, 1.0], dtype=np.complex128)
 
+    if normalize_pol:
+        pol_vec = pol_vec / np.linalg.norm(pol_vec)
+
     H = np.zeros((len(QN), len(QN)), dtype=complex)
 
+    idx_mapping_ground = dict(
+        [(idg, QN.index(gs)) for idg, gs in enumerate(ground_states)]
+    )
+    idx_mapping_excited = dict(
+        [(ide, QN.index(es)) for ide, es in enumerate(excited_states)]
+    )
+
     # start looping over ground and excited states
-    for ground_state in ground_states:
-        i = QN.index(ground_state)
-        for excited_state in excited_states:
-            j = QN.index(excited_state)
+    for idg, ground_state in enumerate(ground_states):
+        i = idx_mapping_ground[idg]
+        for ide, excited_state in enumerate(excited_states):
+            j = idx_mapping_excited[ide]
 
             # calculate matrix element and add it to the Hamiltonian
             H[i, j] = hamiltonian.generate_ED_ME_mixed_state(
@@ -86,11 +97,11 @@ def generate_coupling_matrix(
                 ground_state,
                 pol_vec=pol_vec,
                 reduced=reduced,
-                normalize_pol=normalize_pol,
+                normalize_pol=False,
             )
-
-            # make H hermitian
-    H = H + H.conj().T
+            # # make H hermitian
+            if H[i, j] != 0:
+                H[j, i] = np.conj(H[i, j])
 
     return H
 
@@ -98,11 +109,12 @@ def generate_coupling_matrix(
 @dataclass
 class CouplingField:
     """Represents an optical coupling field for a specific polarization.
-    
+
     Attributes:
         polarization (npt.NDArray[np.complex128]): Polarization vector [Ex, Ey, Ez]
         field (npt.NDArray[np.complex128]): Coupling matrix for this polarization
     """
+
     polarization: npt.NDArray[np.complex128]
     field: npt.NDArray[np.complex128]
 
@@ -110,10 +122,10 @@ class CouplingField:
 @dataclass
 class CouplingFields:
     """Collection of coupling fields for a transition with multiple polarizations.
-    
+
     Attributes:
         ground_main (CoupledState): Main ground state for the transition
-        excited_main (CoupledState): Main excited state for the transition  
+        excited_main (CoupledState): Main excited state for the transition
         main_coupling (complex): Coupling strength of the main transition
         ground_states (Sequence[CoupledState]): All ground states with significant
             coupling
@@ -121,6 +133,7 @@ class CouplingFields:
             coupling
         fields (Sequence[CouplingField]): Coupling matrices for each polarization
     """
+
     ground_main: states.CoupledState
     excited_main: states.CoupledState
     main_coupling: complex
@@ -203,11 +216,11 @@ def generate_coupling_field(
     normalize_pol: bool = True,
 ) -> CouplingFields:
     """Generate coupling fields for optical transitions with multiple polarizations.
-    
+
     Creates CouplingField objects for each polarization that describe the coupling
     between ground and excited states. Automatically determines which states are
     significantly coupled based on relative and absolute thresholds.
-    
+
     Args:
         ground_main_approx (CoupledState): Main ground state for the transition
         excited_main_approx (CoupledState): Main excited state for the transition
@@ -230,11 +243,11 @@ def generate_coupling_field(
         absolute_coupling (float): Absolute threshold for coupling strength. States
             with |coupling| < absolute_coupling are excluded. Defaults to 1e-6.
         normalize_pol (bool): If True, normalize polarization vectors. Defaults to True.
-    
+
     Returns:
         CouplingFields: Dataclass containing ground/excited states, couplings for each
             polarization, and the main coupling strength
-            
+
     Raises:
         AssertionError: If pol_main or pol_vecs are not numpy arrays with correct dtype
     """
@@ -243,7 +256,7 @@ def generate_coupling_field(
         pol_main = np.array([0, 0, 1], dtype=np.complex128)
     if pol_vecs is None:
         pol_vecs = []
-        
+
     assert isinstance(pol_main, np.ndarray), (
         "supply a numpy ndarray with dtype np.complex128 for pol_main"
     )
