@@ -238,11 +238,15 @@ def generate_rwa_symbolic_hamiltonian(
     transformed = smp.Matrix(transformed)
 
     # Ωsᶜ = [smp.Symbol(str(Ω) + "ᶜ", complex=True) for Ω in Ωs]
+    pols_flat = [p for pset in pols for p in pset]  # type: ignore
+    pols_flat_conj = [smp.conjugate(p) for p in pols_flat]
     Ωsᶜ = [smp.conjugate(Ω) for Ω in Ωs]
     for idx in range(n_states):
         for idy in range(0, idx):
             for Ω, Ωᶜ in zip(Ωs, Ωsᶜ):
                 transformed[idx, idy] = transformed[idx, idy].subs(Ω, Ωᶜ)
+            for P, Pᶜ in zip(pols_flat, pols_flat_conj):
+                transformed[idx, idy] = transformed[idx, idy].subs(P, Pᶜ)
 
     return transformed
 

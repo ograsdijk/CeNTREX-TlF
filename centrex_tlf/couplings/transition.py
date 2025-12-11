@@ -4,6 +4,7 @@ This module provides tools for defining and organizing optical and microwave tra
 including their polarizations, symbolically-defined Rabi frequencies and detunings,
 and the quantum states involved.
 """
+
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Union
 
@@ -30,16 +31,16 @@ __all__ = [
 
 def _sanitize_polarization_name(name: str) -> str:
     """Sanitize polarization name for use as a symbolic variable.
-    
+
     Only keeps letters (a-z, A-Z). If the result is empty or contains
     mathematical symbols/numbers, returns None to trigger fallback naming.
-    
+
     Args:
         name: Polarization name (e.g., "X", "1/√2 X + 1/√2 Z")
-        
+
     Returns:
         Sanitized name containing only letters, or empty string if not simple
-        
+
     Examples:
         >>> _sanitize_polarization_name("X")
         'X'
@@ -50,14 +51,16 @@ def _sanitize_polarization_name(name: str) -> str:
     """
     # Check if name is simple (only letters and maybe σ, Ω, etc.)
     # Allow Greek letters but not math operators or numbers
-    simple_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                      "αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ"
-                      "σΣ")
-    
+    simple_chars = set(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ"
+        "σΣ"
+    )
+
     # If name contains operators, spaces, numbers, or other complex chars, return empty
     if any(c in name for c in "+-*/^√() 0123456789"):
         return ""
-    
+
     # Keep only allowed characters
     sanitized = "".join(c for c in name if c in simple_chars)
     return sanitized
@@ -66,7 +69,7 @@ def _sanitize_polarization_name(name: str) -> str:
 @dataclass
 class TransitionSelector:
     """Describes a laser-driven transition with associated parameters.
-    
+
     Attributes:
         ground (Sequence[CoupledState]): Ground states involved in the transition
         excited (Sequence[CoupledState]): Excited states involved in the transition
@@ -82,6 +85,7 @@ class TransitionSelector:
         excited_main (CoupledState | None): Main excited state for the transition
         phase_modulation (bool): Whether phase modulation is applied. Defaults to False.
     """
+
     ground: Sequence[states.CoupledState]
     excited: Sequence[states.CoupledState]
     polarizations: Sequence[npt.NDArray[np.complex128]]
@@ -111,7 +115,7 @@ def generate_transition_selectors(
     phase_modulations: Optional[Sequence[bool]] = None,
 ) -> List[TransitionSelector]:
     """Generate TransitionSelector objects from transition and polarization specs.
-    
+
     Creates a list of TransitionSelector objects that describe the laser-driven
     transitions in an optical Bloch equation system. Each selector includes the
     ground and excited states, polarization vectors, and symbolic parameters (Rabi
@@ -132,7 +136,7 @@ def generate_transition_selectors(
 
     Returns:
         List[TransitionSelector]: List of TransitionSelector objects, one per transition
-        
+
     Example:
         >>> transitions = [OpticalTransition(J_ground=0, J_excited=1)]
         >>> pols = [[polarization_X, polarization_Y]]
@@ -191,12 +195,12 @@ def generate_transition_selectors(
             sanitized = _sanitize_polarization_name(p.name)
             if sanitized:
                 # Use sanitized name if it's simple (e.g., "X", "Y", "σp")
-                pol_symbols.append(smp.Symbol(f"P{sanitized}{idt}"))
+                pol_symbols.append(smp.Symbol(f"P{sanitized}{idt}", complex=True))
             else:
                 # Use generic naming for complex expressions (e.g., "PA0", "PB0")
                 # A for first polarization, B for second, etc.
-                pol_label = chr(ord('A') + idx)
-                pol_symbols.append(smp.Symbol(f"P{pol_label}{idt}"))
+                pol_label = chr(ord("A") + idx)
+                pol_symbols.append(smp.Symbol(f"P{pol_label}{idt}", complex=True))
 
         transition_selectors.append(
             TransitionSelector(
