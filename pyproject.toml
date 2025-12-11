@@ -1,6 +1,6 @@
 [project]
 name = "centrex-tlf"
-version = "0.1.7"
+version = "0.1.7.1"
 description = ""
 authors = [
     {name = "ograsdijk", email = "o.grasdijk@gmail.com"}
