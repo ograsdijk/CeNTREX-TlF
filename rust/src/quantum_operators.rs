@@ -192,13 +192,6 @@ pub fn I2y<T>(psi: UncoupledBasisState, constants: &T) -> UncoupledState {
     (0.0 - imag_unit) * 0.5 * (I2p(psi, constants) - I2m(psi, constants))
 }
 
-/// Commutator helper: [A, B] applied to psi.
-/// Actually computes A(B(psi)) which is just composition, not commutator?
-/// Wait, the implementation is `result = result + A(basis, constants) * amp`.
-/// This is applying A after B. So it's A * B.
-/// The name `com` suggests commutator or composition.
-/// Looking at usage in `X_uncoupled.rs`: `com(I1z, Jz, psi, constants)`
-/// This is used for terms like `I1z * Jz`. So it is composition.
 pub fn com<T>(
     A: fn(UncoupledBasisState, &T) -> UncoupledState,
     B: fn(UncoupledBasisState, &T) -> UncoupledState,
