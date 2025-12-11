@@ -18,6 +18,16 @@ from centrex_tlf.states.states import CoupledBasisState
 
 from .utils import ΔmF_allowed, assert_transition_coupled_allowed, select_main_states
 
+try:
+    from ..centrex_tlf_rust import (
+        generate_coupling_matrix_py as _generate_coupling_matrix_rust,
+    )
+
+    HAS_RUST = True
+except ImportError:
+    _generate_coupling_matrix_rust = None  # type: ignore[assignment]
+    HAS_RUST = False
+
 __all__ = [
     "generate_coupling_matrix",
     "generate_coupling_field",
@@ -28,7 +38,7 @@ __all__ = [
 ]
 
 
-def generate_coupling_matrix(
+def generate_coupling_matrix_python(
     QN: Sequence[states.CoupledState],
     ground_states: Sequence[states.CoupledState],
     excited_states: Sequence[states.CoupledState],
@@ -104,6 +114,71 @@ def generate_coupling_matrix(
                 H[j, i] = np.conj(H[i, j])
 
     return H
+
+
+def generate_coupling_matrix(
+    QN: Sequence[states.CoupledState],
+    ground_states: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
+    pol_vec: npt.NDArray[np.complex128] | None = None,
+    reduced: bool = False,
+    normalize_pol: bool = True,
+) -> npt.NDArray[np.complex128]:
+    """Generate optical coupling matrix for transitions between quantum states.
+
+    Constructs a Hermitian coupling matrix H where H[i,j] represents the electric dipole
+    coupling strength between states i and j. Only non-zero between ground and excited
+    state pairs.
+
+    Args:
+        QN (Sequence[CoupledState]): Complete list of basis states defining the Hilbert
+            space
+        ground_states (Sequence[CoupledState]): Ground states that couple to excited
+            states
+        excited_states (Sequence[CoupledState]): Excited states that couple to ground
+            states
+        pol_vec (npt.NDArray[np.complex128] | None): Polarization vector [Ex, Ey, Ez]
+            in Cartesian basis. Defaults to None, which uses [0, 0, 1] (σ polarization).
+        reduced (bool): If True, return only reduced matrix elements (no angular part).
+            Defaults to False.
+        normalize_pol (bool): If True, normalize the polarization vector. Defaults to
+            True.
+
+    Returns:
+        npt.NDArray[np.complex128]: Hermitian coupling matrix of shape (n, n) where
+            n = len(QN)
+
+    Raises:
+        AssertionError: If QN is not a list
+
+    Example:
+        >>> H_coupling = generate_coupling_matrix(QN, ground_states, excited_states)
+        >>> coupling_strength = np.abs(H_coupling[ground_idx, excited_idx])
+    """
+    # Initialize default polarization vector if not provided
+    if pol_vec is None:
+        pol_vec = np.array([0.0, 0.0, 1.0], dtype=np.complex128)
+
+    if normalize_pol:
+        pol_vec = pol_vec / np.linalg.norm(pol_vec)
+
+    if HAS_RUST and _generate_coupling_matrix_rust is not None:
+        return _generate_coupling_matrix_rust(
+            QN,
+            ground_states,
+            excited_states,
+            pol_vec,
+            reduced,
+        )
+    else:
+        return generate_coupling_matrix_python(
+            QN,
+            ground_states,
+            excited_states,
+            pol_vec,
+            reduced,
+            normalize_pol=False,
+        )
 
 
 @dataclass

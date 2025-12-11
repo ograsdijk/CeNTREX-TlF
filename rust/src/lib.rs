@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods,PyList, PyTuple};
+use pyo3::Py;
 use pyo3::PyResult;
 use numpy::{PyArray1, PyArray2, PyArrayMethods};
 use num_complex::Complex64;
@@ -17,6 +18,8 @@ use states::{UncoupledBasisState, CoupledBasisState, CoupledState};
 use constants::{XConstants, BConstants};
 use generate_hamiltonian::{generate_uncoupled_hamiltonian_X, generate_coupled_hamiltonian_B};
 use coupling::generate_coupling_matrix;
+use std::collections::HashMap;
+
 
 use wigner::{wigner_3j_f, wigner_6j_f};
 
@@ -286,60 +289,61 @@ fn generate_transform_matrix_py<'py>(
     array.reshape((n1, n2))
 }
 
-#[pyfunction(signature = (qn, ground_states, excited_states, pol_vec, reduced))]
-/// Generate the optical coupling matrix for transitions between quantum states.
+#[pyfunction(signature = (QN, ground_states, excited_states, pol_vec, reduced=false))]
+/// Generate optical coupling matrix for transitions between quantum states.
 ///
-/// Args:
-///     qn (Sequence[CoupledState]): The basis states for the matrix.
-///     ground_states (Sequence[CoupledState]): The ground states involved in transitions.
-///     excited_states (Sequence[CoupledState]): The excited states involved in transitions.
-///     pol_vec (Sequence[complex]): Polarization vector (Cartesian).
-///     reduced_dipole (float): Reduced dipole matrix element.
-///
-/// Returns:
-///     npt.NDArray[np.complex128]: The coupling matrix.
-
+/// Python wrapper around Rust `generate_coupling_matrix`.
 fn generate_coupling_matrix_py<'py>(
     py: Python<'py>,
-    qn: Vec<Bound<'py, PyAny>>,
+    QN: Vec<Bound<'py, PyAny>>,
     ground_states: Vec<Bound<'py, PyAny>>,
     excited_states: Vec<Bound<'py, PyAny>>,
-    pol_vec: Vec<Bound<'py, PyAny>>,
-    reduced: bool,  // Include the reduced flag
+    pol_vec: &Bound<'py, PyAny>,  // accept ndarray or list
+    reduced: bool,
 ) -> PyResult<Bound<'py, PyArray2<Complex64>>> {
-    // Helper to parse a Python CoupledState into Rust CoupledState
+    // --- pol_vec: Python sequence -> [Complex64; 3] (no normalization) ---
+    let pol_list: Vec<Complex64> = pol_vec.extract()?;
+    if pol_list.len() != 3 {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "pol_vec must have length 3",
+        ));
+    }
+    let pol = [pol_list[0], pol_list[1], pol_list[2]];
+
+    // --- helper: Python CoupledState -> Rust CoupledState ---
     let parse_coupled_state = |s: &Bound<'py, PyAny>| -> PyResult<CoupledState> {
-        let mut terms = Vec::new();
+        // Python side: CoupledState.data is iterable of (amp, basis) pairs
+        let terms_obj = s.getattr("data")?;
+        let terms_list = terms_obj.downcast::<PyList>()?;
 
-        // CoupledState.data is the list of (amp, basis_state) tuples
-        let data_obj = s.getattr("data")?;                 // bra.data / ket.data
-        let data_list = data_obj.downcast::<PyList>()?;    // type: list
+        let mut terms = Vec::with_capacity(terms_list.len());
 
-        for item in data_list.iter() {
-            let tuple = item.downcast::<PyTuple>()?;       // (amp, basis_state)
+        for term in terms_list.iter() {
+            // each term is (amp, basis_state)
+            let tup = term.downcast::<PyTuple>()?;
+            let amp: Complex64 = tup.get_item(0)?.extract()?;
+            let basis_py = tup.get_item(1)?;
 
-            let amp: Complex64 = tuple.get_item(0)?.extract()?;
-            let basis_state_obj = tuple.get_item(1)?;
+            // CoupledBasisState fields
+            let J: i32 = basis_py.getattr("J")?.extract()?;
+            let F: i32 = basis_py.getattr("F")?.extract()?;
+            let mF: i32 = basis_py.getattr("mF")?.extract()?;
 
-            // Extract attributes from the CoupledBasisState
-            let J: i32 = basis_state_obj.getattr("J")?.extract()?;
-            let F: i32 = basis_state_obj.getattr("F")?.extract()?;
-            let mF: i32 = basis_state_obj.getattr("mF")?.extract()?;
+            // I1, I2, F1 stored as 2×physical in Rust
+            let I1: i32 = (basis_py.getattr("I1")?.extract::<f64>()? * 2.0).round() as i32;
+            let I2: i32 = (basis_py.getattr("I2")?.extract::<f64>()? * 2.0).round() as i32;
+            let F1: i32 = (basis_py.getattr("F1")?.extract::<f64>()? * 2.0).round() as i32;
 
-            let I1: i32 = (basis_state_obj.getattr("I1")?
-                .extract::<f64>()? * 2.0).round() as i32;
-            let I2: i32 = (basis_state_obj.getattr("I2")?
-                .extract::<f64>()? * 2.0).round() as i32;
-            let F1: i32 = (basis_state_obj.getattr("F1")?
-                .extract::<f64>()? * 2.0).round() as i32;
+            let Omega: i32 = basis_py.getattr("Omega")?.extract()?;
 
-            let Omega: i32 = basis_state_obj.getattr("Omega")?.extract()?;
+            let P_obj = basis_py.getattr("P")?;
+            let P: Option<i8> = if P_obj.is_none() {
+                None
+            } else {
+                Some(P_obj.extract::<i8>()?)
+            };
 
-            let P_obj = basis_state_obj.getattr("P")?;
-            let P: Option<i8> =
-                if P_obj.is_none() { None } else { Some(P_obj.extract::<i8>()?) };
-
-            let es_obj = basis_state_obj.getattr("electronic_state")?;
+            let es_obj = basis_py.getattr("electronic_state")?;
             let es_name: String = es_obj.getattr("name")?.extract()?;
             let electronic_state = match es_name.as_str() {
                 "X" => states::ElectronicState::X,
@@ -351,7 +355,7 @@ fn generate_coupling_matrix_py<'py>(
                 }
             };
 
-            let basis_state = CoupledBasisState {
+            let basis = CoupledBasisState {
                 J,
                 F,
                 mF,
@@ -363,41 +367,62 @@ fn generate_coupling_matrix_py<'py>(
                 electronic_state,
             };
 
-            terms.push((amp, basis_state));
+            terms.push((amp, basis));
         }
 
-        Ok(CoupledState::from_vec(terms))
+        Ok(CoupledState::new(terms))
     };
 
-    // Convert Python states to Rust structures
-    let rust_qn = qn.iter().map(|s| parse_coupled_state(s)).collect::<PyResult<Vec<_>>>()?;
-    let rust_ground = ground_states.iter().map(|s| parse_coupled_state(s)).collect::<PyResult<Vec<_>>>()?;
-    let rust_excited = excited_states.iter().map(|s| parse_coupled_state(s)).collect::<PyResult<Vec<_>>>()?;
+    // --- convert QN (Python) -> rust_qn (Rust) ---
+    let rust_qn: Vec<CoupledState> = QN
+        .iter()
+        .map(|s| parse_coupled_state(s))
+        .collect::<PyResult<_>>()?;
 
-    let pol_array: [Complex64; 3] = [
-        pol_vec[0].extract()?,
-        pol_vec[1].extract()?,
-        pol_vec[2].extract()?,
-    ];
-
-    // Generate coupling matrix (flattened)
-    let flattened_matrix: Vec<Complex64> = generate_coupling_matrix(&rust_qn, &rust_ground, &rust_excited, &pol_array, reduced);
-
-    // Now reshape the flattened matrix into n x n (Vec<Vec<Complex64>>)
-    let n = rust_qn.len();
-    let mut matrix: Vec<Vec<Complex64>> = Vec::with_capacity(n);
-
-    for i in 0..n {
-        let start = i * n;
-        let end = start + n;
-        let row = flattened_matrix[start..end].to_vec();  // Create a row from the flattened matrix
-        matrix.push(row);
+    // --- build identity-based mapping: Python object -> index in QN ---
+    let mut ptr_to_idx: HashMap<usize, usize> = HashMap::with_capacity(QN.len());
+    for (i, obj) in QN.iter().enumerate() {
+        let ptr = obj.as_ptr() as usize;
+        ptr_to_idx.insert(ptr, i);
     }
 
-    // Return as a reshaped PyArray2
-    let array = PyArray2::from_vec2(py, &matrix)?;  // Pass the reference to the 2D matrix
-    Ok(array.reshape((n, n))?)  // Reshape the array into n x n and return
+    // --- compute ground_indices and excited_indices using Python identity ---
+    let mut ground_indices = Vec::with_capacity(ground_states.len());
+    for gs in ground_states.iter() {
+        let ptr = gs.as_ptr() as usize;
+        let idx = ptr_to_idx.get(&ptr).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "ground_state not found in QN",
+            )
+        })?;
+        ground_indices.push(*idx);
+    }
+
+    let mut excited_indices = Vec::with_capacity(excited_states.len());
+    for es in excited_states.iter() {
+        let ptr = es.as_ptr() as usize;
+        let idx = ptr_to_idx.get(&ptr).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "excited_state not found in QN",
+            )
+        })?;
+        excited_indices.push(*idx);
+    }
+
+    // --- call core Rust function (no pol normalization) ---
+    let H = generate_coupling_matrix(
+        &rust_qn,
+        &ground_indices,
+        &excited_indices,
+        pol,
+        reduced,
+    );
+
+    // --- convert Vec<Vec<Complex64>> -> numpy.ndarray (n×n) ---
+    let array = PyArray2::from_vec2(py, &H)?;
+    Ok(array)
 }
+
 
 #[pymodule]
 fn centrex_tlf_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
