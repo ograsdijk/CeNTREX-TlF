@@ -169,7 +169,6 @@ def ED_ME_coupled(
         * sixj_f(F1p, Fp, I2, F, F1, 1)
         * sixj_f(Jp, F1p, I1, F1, J, 1)
         * threej_f(J, 1, Jp, -Omega, q, Omegap)
-        * (1.0 if abs(q) < 2 else 0.0)
     )
 
     if ME == 0.0:
