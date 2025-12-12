@@ -8,7 +8,7 @@ pub const ALPHA: f64 = 45.0843e6; // Hz
 /// Constants for the X state Hamiltonian.
 pub struct XConstants {
     /// Rotational constant (Hz)
-    pub B_rot: f64,
+    pub b_rot: f64,
     /// Hyperfine constant c1 (Hz)
     pub c1: f64,
     /// Hyperfine constant c2 (Hz)
@@ -18,30 +18,30 @@ pub struct XConstants {
     /// Hyperfine constant c4 (Hz)
     pub c4: f64,
     /// Rotational g-factor
-    pub mu_J: f64,
+    pub mu_j: f64,
     /// Thallium nuclear magnetic moment (Hz/G)
-    pub mu_Tl: f64,
+    pub mu_tl: f64,
     /// Fluorine nuclear magnetic moment (Hz/G)
-    pub mu_F: f64,
+    pub mu_f: f64,
     /// Electric dipole moment (Hz/(V/cm))
-    pub D_TlF: f64,
+    pub d_tlf: f64,
     /// Electric dipole moment (C·m)
-    pub D: f64,
+    pub d: f64,
 }
 
 impl Default for XConstants {
     fn default() -> Self {
         XConstants {
-            B_rot: B_EPSILON - ALPHA / 2.0,
+            b_rot: B_EPSILON - ALPHA / 2.0,
             c1: 126030.0,
             c2: 17890.0,
             c3: 700.0,
             c4: -13300.0,
-            mu_J: 35.0,
-            mu_Tl: 1240.5,
-            mu_F: 2003.63,
-            D_TlF: 4.2282 * DEBYE_HZ_V_CM,
-            D: 4.2282 * DEBYE,
+            mu_j: 35.0,
+            mu_tl: 1240.5,
+            mu_f: 2003.63,
+            d_tlf: 4.2282 * DEBYE_HZ_V_CM,
+            d: 4.2282 * DEBYE,
         }
     }
 }
@@ -50,29 +50,29 @@ impl Default for XConstants {
 /// Constants for the B state Hamiltonian.
 pub struct BConstants {
     /// Rotational constant (Hz)
-    pub B_rot: f64,
+    pub b_rot: f64,
     /// Centrifugal distortion constant (Hz)
-    pub D_rot: f64,
+    pub d_rot: f64,
     /// Higher order centrifugal distortion constant (Hz)
-    pub H_const: f64,
+    pub h_const: f64,
     /// Tl hyperfine constant (Hz)
-    pub h1_Tl: f64,
+    pub h1_tl: f64,
     /// F hyperfine constant (Hz)
-    pub h1_F: f64,
+    pub h1_f: f64,
     /// Lambda doubling constant (Hz)
     pub q: f64,
     /// Tl spin-rotation constant (Hz)
-    pub c_Tl: f64,
+    pub c_tl: f64,
     /// Tl spin-rotation constant (Hz)
-    pub c1p_Tl: f64,
+    pub c1p_tl: f64,
     /// Bohr magneton (Hz/G)
-    pub mu_B: f64,
+    pub mu_b: f64,
     /// Electron orbital g-factor
-    pub gL: f64,
+    pub gl: f64,
     /// Electron spin g-factor
-    pub gS: f64,
+    pub gs: f64,
     /// Electric dipole moment (Hz/(V/cm))
-    pub mu_E: f64,
+    pub mu_e: f64,
     /// Decay rate (Hz)
-    pub Gamma: f64,
+    pub gamma: f64,
 }

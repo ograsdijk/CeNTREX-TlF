@@ -64,34 +64,34 @@ pub fn ed_me_coupled(
     rme_only: bool,
 ) -> Complex64 {
     // ---------- selection-rule early exits ----------
-    if (bra.Omega - ket.Omega).abs() > 1 {
+    if (bra.omega - ket.omega).abs() > 1 {
         return Complex64::new(0.0, 0.0);
     }
-    if (bra.J - ket.J).abs() > 1 {
+    if (bra.j - ket.j).abs() > 1 {
         return Complex64::new(0.0, 0.0);
     }
-    if (bra.F - ket.F).abs() > 1 {
+    if (bra.f - ket.f).abs() > 1 {
         return Complex64::new(0.0, 0.0);
     }
-    if !rme_only && (bra.mF - ket.mF).abs() > 1 {
+    if !rme_only && (bra.mf - ket.mf).abs() > 1 {
         return Complex64::new(0.0, 0.0);
     }
 
     // ---------- bra quantum numbers ----------
-    let f = bra.F;
-    let mf = bra.mF;
-    let j = bra.J;
-    let f1_twice = bra.F1; // 2*F1 (physical)
-    let i1_twice = bra.I1; // 2*I1
-    let i2_twice = bra.I2; // 2*I2
-    let omega = bra.Omega;
+    let f = bra.f;
+    let mf = bra.mf;
+    let j = bra.j;
+    let f1_twice = bra.f1; // 2*F1 (physical)
+    let i1_twice = bra.i1; // 2*I1
+    let i2_twice = bra.i2; // 2*I2
+    let omega = bra.omega;
 
     // ---------- ket quantum numbers ----------
-    let fp = ket.F;
-    let mfp = ket.mF;
-    let jp = ket.J;
-    let f1p_twice = ket.F1; // 2*F1'
-    let omegap = ket.Omega;
+    let fp = ket.f;
+    let mfp = ket.mf;
+    let jp = ket.j;
+    let f1p_twice = ket.f1; // 2*F1'
+    let omegap = ket.omega;
 
     // q = Ω − Ω'
     let q = omega - omegap;
@@ -207,7 +207,7 @@ pub fn generate_ed_me_mixed_state(
         let amp_bra_conj = amp_bra.conj();
 
         for (amp_ket, basis_ket) in ket.terms.iter() {
-            if (basis_bra.J - basis_ket.J).abs() > 1 {
+            if (basis_bra.j - basis_ket.j).abs() > 1 {
                 continue;
             }
 

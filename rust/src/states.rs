@@ -10,19 +10,19 @@ use crate::wigner::clebsch_gordan;
 /// Uncoupled basis state for X state.
 pub struct UncoupledBasisState{
     /// Rotational quantum number J
-    pub J: i32,
+    pub j: i32,
     /// Projection of J on z-axis
-    pub mJ: i32,
+    pub mj: i32,
     /// Nuclear spin I1 (Tl) * 2
-    pub I1: i32, // 2 * I1
+    pub i1: i32, // 2 * I1
     /// Projection of I1 on z-axis * 2
     pub m1: i32, // 2 * m1
     /// Nuclear spin I2 (F) * 2
-    pub I2: i32, // 2 * I2
+    pub i2: i32, // 2 * I2
     /// Projection of I2 on z-axis * 2
     pub m2: i32, // 2 * m2
     /// Omega quantum number
-    pub Omega: i32,
+    pub omega: i32,
     /// Parity
     pub parity: i8
 }
@@ -176,21 +176,21 @@ pub enum ElectronicState {
 /// Coupled basis state for B state.
 pub struct CoupledBasisState {
     /// Rotational quantum number J
-    pub J: i32,
+    pub j: i32,
     /// Total angular momentum F
-    pub F: i32,
+    pub f: i32,
     /// Projection of F on z-axis
-    pub mF: i32,
+    pub mf: i32,
     /// Nuclear spin I1 (Tl) * 2
-    pub I1: i32, // 2*I1
+    pub i1: i32, // 2*I1
     /// Nuclear spin I2 (F) * 2
-    pub I2: i32, // 2*I2
+    pub i2: i32, // 2*I2
     /// Intermediate angular momentum F1 * 2
-    pub F1: i32, // 2*F1
+    pub f1: i32, // 2*F1
     /// Omega quantum number
-    pub Omega: i32,
+    pub omega: i32,
     /// Parity
-    pub P: Option<i8>,
+    pub p: Option<i8>,
     /// Electronic state
     pub electronic_state: ElectronicState,
 }
@@ -315,41 +315,41 @@ impl Div<f64> for CoupledState {
 impl CoupledBasisState {
     /// Transform coupled basis state to uncoupled basis.
     pub fn transform_to_uncoupled(&self) -> UncoupledState {
-        let J = self.J;
-        let F = self.F;
-        let mF = self.mF;
-        let I1 = self.I1;
-        let I2 = self.I2;
-        let F1 = self.F1;
+        let j = self.j;
+        let f = self.f;
+        let mf = self.mf;
+        let i1 = self.i1;
+        let i2 = self.i2;
+        let f1 = self.f1;
 
         let mut terms = Vec::new();
 
         // mF1 ranges from -F1 to F1 in steps of 2
-        for mF1 in (-F1..=F1).step_by(2) {
+        for mf1 in (-f1..=f1).step_by(2) {
             // mJ ranges from -J to J in steps of 1 (since J is integer)
-            for mJ in -J..=J {
+            for mj in -j..=j {
                 // m1 ranges from -I1 to I1 in steps of 2
-                for m1 in (-I1..=I1).step_by(2) {
+                for m1 in (-i1..=i1).step_by(2) {
                     // m2 ranges from -I2 to I2 in steps of 2
-                    for m2 in (-I2..=I2).step_by(2) {
+                    for m2 in (-i2..=i2).step_by(2) {
                         // Check angular momentum conservation
                         // mJ is single, m1, mF1 are doubled
-                        if 2 * mJ + m1 != mF1 { continue; }
+                        if 2 * mj + m1 != mf1 { continue; }
                         // mF1, m2 are doubled, mF is single
-                        if mF1 + m2 != 2 * mF { continue; }
+                        if mf1 + m2 != 2 * mf { continue; }
 
                         // Convert single integer quantum numbers to doubled for CG calculation
-                        let cg1 = clebsch_gordan(2 * J, 2 * mJ, I1, m1, F1, mF1);
+                        let cg1 = clebsch_gordan(2 * j, 2 * mj, i1, m1, f1, mf1);
                         if cg1 == 0.0 { continue; }
 
-                        let cg2 = clebsch_gordan(F1, mF1, I2, m2, 2 * F, 2 * mF);
+                        let cg2 = clebsch_gordan(f1, mf1, i2, m2, 2 * f, 2 * mf);
                         if cg2 == 0.0 { continue; }
 
                         let amp = Complex64::new(cg1 * cg2, 0.0);
                         let state = UncoupledBasisState {
-                            J, mJ, I1, m1, I2, m2,
-                            Omega: self.Omega,
-                            parity: self.P.unwrap_or(0)
+                            j, mj, i1, m1, i2, m2,
+                            omega: self.omega,
+                            parity: self.p.unwrap_or(0)
                         };
                         terms.push((amp, state));
                     }
