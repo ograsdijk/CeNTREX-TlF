@@ -413,7 +413,6 @@ def find_exact_states_indices(
         )
 
     # Calculate overlap probabilities: |<approx|exact>|²
-    # Fix: Use np.abs before squaring to get proper probabilities
     overlaps = np.abs(np.dot(np.conj(state_vecs), _V)) ** 2
 
     n_approx = len(states_approx)
