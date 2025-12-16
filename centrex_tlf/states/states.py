@@ -95,6 +95,25 @@ class BasisState(abc.ABC):
 
 
 class CoupledBasisState(BasisState):
+    __slots__ = (
+        "F",
+        "mF",
+        "F1",
+        "J",
+        "I1",
+        "I2",
+        "Omega",
+        "Ω",
+        "P",
+        "electronic_state",
+        "isCoupled",
+        "isUncoupled",
+        "basis",
+        "v",
+        "_hash",
+        "_frozen",
+    )
+
     # constructor
     def __init__(
         self,
@@ -112,7 +131,10 @@ class CoupledBasisState(BasisState):
         v: Optional[int] = None,
         basis: Optional[Basis] = None,
     ):
-        self.F, self.mF = F, mF
+        object.__setattr__(self, "_frozen", False)
+
+        self.F = F
+        self.mF = mF
         self.F1 = F1
         self.J = J
         self.I1 = I1
@@ -154,10 +176,37 @@ class CoupledBasisState(BasisState):
             self.basis = None
         self.v = v
 
+        object.__setattr__(
+            self,
+            "_hash",
+            hash(
+                (
+                    self.F,
+                    self.mF,
+                    self.I1,
+                    self.I2,
+                    self.F1,
+                    self.J,
+                    self.Omega,
+                    self.P,
+                    self.electronic_state,
+                    self.v,
+                    self.basis,
+                )
+            ),
+        )
+        object.__setattr__(self, "_frozen", True)
+
+    def __setattr__(self, name: str, value) -> None:
+        if getattr(self, "_frozen", False):
+            raise AttributeError(
+                f"{type(self).__name__} is immutable; cannot set {name}"
+            )
+        object.__setattr__(self, name, value)
+
     # equality testing
     def __eq__(self, other: object) -> bool:
-        # return self.__hash__() == other.__hash__()
-        if not isinstance(other, CoupledBasisState):
+        if type(other) is not CoupledBasisState:
             return False
         else:
             return (
@@ -182,7 +231,9 @@ class CoupledBasisState(BasisState):
 
     # inner product
     def __matmul__(self, other):
-        if not isinstance(other, BasisState):
+        if (type(other) is not CoupledBasisState) and (
+            type(other) is not UncoupledBasisState
+        ):
             raise TypeError(
                 "can only matmul CoupledBasisState with CoupledBasisState or "
                 f"UncoupledBasisState (not {type(other)})"
@@ -203,7 +254,7 @@ class CoupledBasisState(BasisState):
     def __add__(self, other: Self) -> CoupledState:
         if self == other:
             return CoupledState([(2, self)])
-        elif isinstance(other, CoupledBasisState):
+        elif type(other) is CoupledBasisState:
             if self.basis == other.basis:
                 return CoupledState([(1, self), (1, other)])
             else:
@@ -218,7 +269,7 @@ class CoupledBasisState(BasisState):
     def __sub__(self, other: Self) -> CoupledState | Literal[0]:
         if self == other:
             return 0
-        elif isinstance(other, CoupledBasisState):
+        elif type(other) is CoupledBasisState:
             if self.basis == other.basis:
                 return CoupledState([(1, self), (-1, other)])
             else:
@@ -238,14 +289,15 @@ class CoupledBasisState(BasisState):
         return self * a
 
     def __hash__(self) -> int:
-        P = self.P if self.P is not None else 2
-        ev = self.electronic_state.value if self.electronic_state is not None else 0
-        v = self.v if self.v is not None else -1
-        basis_val = self.basis.value if self.basis is not None else 0
-        # Use string representation to avoid tuple hash collisions
-        # Format ensures each value is clearly separated and distinguishable
-        hash_string = f"{self.J}|{self.F1}|{self.F}|{self.mF}|{self.I1}|{self.I2}|{P}|{self.Omega}|{ev}|{v}|{basis_val}"
-        return hash(hash_string)
+        # P = self.P if self.P is not None else 2
+        # ev = self.electronic_state.value if self.electronic_state is not None else 0
+        # v = self.v if self.v is not None else -1
+        # basis_val = self.basis.value if self.basis is not None else 0
+        # # Use string representation to avoid tuple hash collisions
+        # # Format ensures each value is clearly separated and distinguishable
+        # hash_string = f"{self.J}|{self.F1}|{self.F}|{self.mF}|{self.I1}|{self.I2}|{P}|{self.Omega}|{ev}|{v}|{basis_val}"
+        # return hash(hash_string)
+        return self._hash
 
     def __repr__(self) -> str:
         return self.state_string()
@@ -546,6 +598,24 @@ class CoupledBasisState(BasisState):
 
 # Class for uncoupled basis states
 class UncoupledBasisState(BasisState):
+    __slots__ = (
+        "J",
+        "mJ",
+        "I1",
+        "m1",
+        "I2",
+        "m2",
+        "Omega",
+        "P",
+        "electronic_state",
+        "isCoupled",
+        "isUncoupled",
+        "basis",
+        "v",
+        "_hash",
+        "_frozen",
+    )
+
     # constructor
     def __init__(
         self,
@@ -562,6 +632,7 @@ class UncoupledBasisState(BasisState):
         basis: Optional[Basis] = None,
         v: Optional[int] = None,
     ):
+        object.__setattr__(self, "_frozen", False)
         self.J, self.mJ = J, mJ
         self.I1, self.m1 = I1, m1
         self.I2, self.m2 = I2, m2
@@ -589,9 +660,31 @@ class UncoupledBasisState(BasisState):
 
         self.v = v
 
+        # cached hash computed once, must match __eq__ fields
+        object.__setattr__(
+            self,
+            "_hash",
+            hash(
+                (
+                    self.J,
+                    self.mJ,
+                    self.I1,
+                    self.I2,
+                    self.m1,
+                    self.m2,
+                    self.Omega,
+                    self.P,
+                    self.electronic_state,
+                    self.basis,
+                    self.v,
+                )
+            ),
+        )
+        object.__setattr__(self, "_frozen", True)
+
     # equality testing
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, UncoupledBasisState):
+        if type(other) is not UncoupledBasisState:
             return False
         else:
             return (
@@ -621,7 +714,7 @@ class UncoupledBasisState(BasisState):
                 return 1
             else:
                 return 0
-        elif isinstance(other, CoupledBasisState):
+        elif type(other) is CoupledBasisState:
             return UncoupledState([(1, self)]) @ other.transform_to_uncoupled()
         else:
             raise TypeError(
@@ -633,7 +726,7 @@ class UncoupledBasisState(BasisState):
     def __add__(self, other: UncoupledBasisState) -> UncoupledState:
         if self == other:
             return UncoupledState([(2, self)])
-        elif isinstance(other, UncoupledBasisState):
+        elif type(other) is UncoupledBasisState:
             return UncoupledState([(1, self), (1, other)])
         else:
             raise TypeError(
@@ -645,7 +738,7 @@ class UncoupledBasisState(BasisState):
     def __sub__(self, other: UncoupledBasisState) -> Union[int, UncoupledState]:
         if self == other:
             return 0
-        elif isinstance(other, UncoupledBasisState):
+        elif type(other) is UncoupledBasisState:
             return UncoupledState([(1, self), (-1, other)])
         else:
             raise TypeError(
@@ -662,13 +755,14 @@ class UncoupledBasisState(BasisState):
         return self * a
 
     def __hash__(self) -> int:
-        ev = self.electronic_state.value if self.electronic_state is not None else 0
-        v = self.v if self.v is not None else -1
-        basis_val = self.basis.value if self.basis is not None else 0
-        # Use string representation to avoid tuple hash collisions
-        # Format ensures each value is clearly separated and distinguishable
-        hash_string = f"{self.J}|{self.mJ}|{self.I1}|{self.m1}|{self.I2}|{self.m2}|{self.P}|{self.Omega}|{ev}|{v}|{basis_val}"
-        return hash(hash_string)
+        # ev = self.electronic_state.value if self.electronic_state is not None else 0
+        # v = self.v if self.v is not None else -1
+        # basis_val = self.basis.value if self.basis is not None else 0
+        # # Use string representation to avoid tuple hash collisions
+        # # Format ensures each value is clearly separated and distinguishable
+        # hash_string = f"{self.J}|{self.mJ}|{self.I1}|{self.m1}|{self.I2}|{self.m2}|{self.P}|{self.Omega}|{ev}|{v}|{basis_val}"
+        # return hash(hash_string)
+        return self._hash
 
     def __repr__(self) -> str:
         return self.state_string()
@@ -929,10 +1023,31 @@ class State(Generic[S]):
 
     # inner product
     def __matmul__(self, other: Self) -> Union[int, float, complex]:
-        result = 0
-        for amp1, psi1 in self:
-            for amp2, psi2 in other:
-                result += amp1.conjugate() * amp2 * (psi1 @ psi2)  # type: ignore[operator]
+        # result = 0
+        # for amp1, psi1 in self:
+        #     for amp2, psi2 in other:
+        #         result += amp1.conjugate() * amp2 * (psi1 @ psi2)  # type: ignore[operator]
+        # return result
+        a: dict[object, complex] = {}
+        b: dict[object, complex] = {}
+
+        for amp, psi in self:
+            a[psi] = a.get(psi, 0j) + amp
+        for amp, psi in other:
+            b[psi] = b.get(psi, 0j) + amp
+
+        result: complex = 0j
+        if len(a) <= len(b):
+            for psi, amp in a.items():
+                amp2 = b.get(psi)
+                if amp2 is not None:
+                    result += amp.conjugate() * amp2
+        else:
+            for psi, amp2 in b.items():
+                amp1 = a.get(psi)
+                if amp1 is not None:
+                    result += amp1.conjugate() * amp2
+
         return result
 
     # iterator methods
