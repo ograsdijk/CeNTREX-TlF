@@ -4,13 +4,14 @@ This module provides dataclasses for representing molecular transitions includin
 optical (X→B electronic) and microwave (rotational) transitions with proper quantum
 number labeling and state selectors.
 """
+
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Sequence
 
-import sympy
+import sympy as smp
 
-import centrex_tlf.states as states
+from .. import states
 
 __all__: list[str] = [
     "OpticalTransitionType",
@@ -21,7 +22,7 @@ __all__: list[str] = [
 
 class OpticalTransitionType(IntEnum):
     """Optical transition branch types following spectroscopic notation.
-    
+
     Attributes:
         O (int): O-branch (ΔJ = -2)
         P (int): P-branch (ΔJ = -1)
@@ -29,6 +30,7 @@ class OpticalTransitionType(IntEnum):
         R (int): R-branch (ΔJ = +1)
         S (int): S-branch (ΔJ = +2)
     """
+
     O = -2  # noqa: E741
     P = -1
     Q = 0
@@ -64,7 +66,7 @@ class MicrowaveTransition:
     @property
     def name(self) -> str:
         """Human-readable transition name.
-        
+
         Returns:
             str: Formatted string like "J=1→J=2"
         """
@@ -73,7 +75,7 @@ class MicrowaveTransition:
     @property
     def Ω_ground(self) -> int:
         """Projection of electronic angular momentum for ground state (Ω=0 for X).
-        
+
         Returns:
             int: Always 0 for X state
         """
@@ -82,7 +84,7 @@ class MicrowaveTransition:
     @property
     def Ω_excited(self) -> int:
         """Projection of electronic angular momentum for excited state (Ω=0 for X).
-        
+
         Returns:
             int: Always 0 for X state
         """
@@ -91,7 +93,7 @@ class MicrowaveTransition:
     @property
     def P_ground(self) -> int:
         """Parity of ground state, P = (-1)^J.
-        
+
         Returns:
             int: +1 for even J, -1 for odd J
         """
@@ -100,7 +102,7 @@ class MicrowaveTransition:
     @property
     def P_excited(self) -> int:
         """Parity of excited state, P = (-1)^J.
-        
+
         Returns:
             int: +1 for even J, -1 for odd J
         """
@@ -109,7 +111,7 @@ class MicrowaveTransition:
     @property
     def qn_select_ground(self) -> states.QuantumSelector:
         """Quantum number selector for ground state manifold.
-        
+
         Returns:
             states.QuantumSelector: Selector with J, electronic, Ω, P specified
         """
@@ -123,7 +125,7 @@ class MicrowaveTransition:
     @property
     def qn_select_excited(self) -> states.QuantumSelector:
         """Quantum number selector for excited state manifold.
-        
+
         Returns:
             states.QuantumSelector: Selector with J, electronic, Ω, P specified
         """
@@ -138,7 +140,7 @@ class MicrowaveTransition:
 @dataclass(frozen=True)
 class OpticalTransition:
     """Electronic (optical) X→B transition with fine/hyperfine structure.
-    
+
     Represents optical transitions between X (Ω=0) and B (Ω=1) electronic states,
     including hyperfine structure labels. The excited state J is determined by the
     ground state J and the branch type: J_excited = J_ground + t.value.
@@ -158,11 +160,11 @@ class OpticalTransition:
     Raises:
         ValueError: If J_ground, F1_excited, or F_excited is negative.
         ValueError: If computed J_excited = J_ground + t.value is negative.
-        
+
     Note:
         F1_excited accepts floats for half-integer values. Use 1.5 or 3/2 for F1=3/2.
         Parity changes sign for optical transitions: P_excited = -P_ground.
-        
+
     Example:
         >>> transition = OpticalTransition(
         ...     t=OpticalTransitionType.R,
@@ -189,7 +191,8 @@ class OpticalTransition:
 
         # Ensure computed J_excited is non-negative
         J_exc = self.J_ground + int(self.t.value)
-        if J_exc < 0:
+        # Excited state B has Ω = 1, so J_excited must be >= 1
+        if J_exc < 1:
             raise ValueError(
                 f"J_excited (J_ground + {self.t.value}) = {J_exc} must be non-negative"
             )
@@ -200,9 +203,9 @@ class OpticalTransition:
     @property
     def J_excited(self) -> int:
         """Excited state rotational quantum number.
-        
+
         Computed from ground state and branch type: J_excited = J_ground + ΔJ.
-        
+
         Returns:
             int: Rotational quantum number of excited state
         """
@@ -211,21 +214,21 @@ class OpticalTransition:
     @property
     def name(self) -> str:
         """Human-readable transition name with spectroscopic notation.
-        
+
         Format: "Branch(J_ground) F1'=F1_excited F'=F_excited"
         F1 values are displayed as fractions (e.g., 1/2 instead of 0.5).
-        
+
         Returns:
             str: Formatted transition name like "R(0) F1'=1/2 F'=1"
         """
         # Convert float to Rational for exact representation (e.g., 1.5 → 3/2)
-        F1rat = sympy.Rational(self.F1_excited).limit_denominator()
+        F1rat = smp.Rational(self.F1_excited).limit_denominator()
         return f"{self.t.name}({self.J_ground}) F1'={F1rat} F'={self.F_excited}"
 
     @property
     def Ω_ground(self) -> int:
         """Projection of electronic angular momentum for ground state (Ω=0 for X).
-        
+
         Returns:
             int: Always 0 for X state
         """
@@ -234,7 +237,7 @@ class OpticalTransition:
     @property
     def Ω_excited(self) -> int:
         """Projection of electronic angular momentum for excited state (Ω=1 for B).
-        
+
         Returns:
             int: Always 1 for B state
         """
@@ -243,7 +246,7 @@ class OpticalTransition:
     @property
     def P_ground(self) -> int:
         """Parity of ground state, P = (-1)^J.
-        
+
         Returns:
             int: +1 for even J, -1 for odd J
         """
@@ -252,9 +255,9 @@ class OpticalTransition:
     @property
     def P_excited(self) -> int:
         """Parity of excited state for optical transition.
-        
+
         Optical transitions flip parity: P_excited = -P_ground.
-        
+
         Returns:
             int: Opposite sign to P_ground
         """
@@ -263,9 +266,9 @@ class OpticalTransition:
     @property
     def qn_select_ground(self) -> states.QuantumSelector:
         """Quantum number selector for ground state manifold.
-        
+
         Ground state selector excludes F1 and F (no hyperfine structure in X state).
-        
+
         Returns:
             states.QuantumSelector: Selector with J, electronic, Ω, P specified
         """
@@ -281,9 +284,9 @@ class OpticalTransition:
     @property
     def qn_select_excited(self) -> states.QuantumSelector:
         """Quantum number selector for excited state manifold.
-        
+
         Excited state selector includes F1 and F for hyperfine structure in B state.
-        
+
         Returns:
             states.QuantumSelector: Selector with J, F1, F, electronic, Ω, P specified
         """
@@ -299,7 +302,7 @@ class OpticalTransition:
     @property
     def ground_states(self) -> Sequence[states.CoupledBasisState]:
         """Generate all ground state basis states matching the quantum selector.
-        
+
         Returns:
             Sequence[states.CoupledBasisState]: List of ground X state basis states
         """
@@ -308,7 +311,7 @@ class OpticalTransition:
     @property
     def excited_states(self) -> Sequence[states.CoupledBasisState]:
         """Generate all excited state basis states matching the quantum selector.
-        
+
         Returns:
             Sequence[states.CoupledBasisState]: List of excited B state basis states
         """
