@@ -38,7 +38,7 @@ __all__ = [
 ]
 
 
-def generate_coupling_matrix_python(
+def _generate_coupling_matrix_python(
     QN: Sequence[states.CoupledState],
     ground_states: Sequence[states.CoupledState],
     excited_states: Sequence[states.CoupledState],
@@ -180,7 +180,7 @@ def generate_coupling_matrix(
             reduced,
         )
     else:
-        return generate_coupling_matrix_python(
+        return _generate_coupling_matrix_python(
             QN,
             ground_states,
             excited_states,

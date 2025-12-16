@@ -92,3 +92,26 @@ def generate_transform_matrix_py(
         npt.NDArray[np.complex128]: Transformation matrix S.
     """
     ...
+
+def generate_coupling_matrix_py(
+    QN: Sequence[CoupledBasisState],
+    ground_states: Sequence[CoupledBasisState],
+    excited_states: Sequence[CoupledBasisState],
+    pol_vec: Union[npt.NDArray[np.complex128], Sequence[complex]],
+    reduced: bool = False,
+) -> npt.NDArray[np.complex128]:
+    """
+    Generate optical coupling matrix for transitions between quantum states (Rust binding).
+
+    Args:
+        QN (Sequence[CoupledBasisState]): Complete list of basis states defining the Hilbert space.
+        ground_states (Sequence[CoupledBasisState]): Ground states that couple to excited states.
+        excited_states (Sequence[CoupledBasisState]): Excited states that couple to ground states.
+        pol_vec (np.ndarray | Sequence[complex]): Polarization vector [Ex, Ey, Ez] (complex).
+        reduced (bool): If True, return only reduced matrix elements (no angular part).
+
+    Returns:
+        npt.NDArray[np.complex128]: Hermitian coupling matrix of shape (n, n) where n = len(QN).
+    """
+    ...
+
