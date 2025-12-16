@@ -209,7 +209,7 @@ def generate_transition_selectors(
                 polarizations=[p.vector for p in polarization],
                 polarization_symbols=pol_symbols,
                 Ω=smp.Symbol(f"Ω{idt}", complex=True),
-                δ=smp.Symbol(f"δ{idt}"),
+                δ=smp.Symbol(f"δ{idt}", real=True),
                 description=transition.name,
                 ground_main=ground_main if ground_mains is None else ground_mains[idt],
                 excited_main=excited_main
