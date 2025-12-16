@@ -8,7 +8,7 @@ import sympy as smp
 from centrex_tlf import couplings as couplings_tlf
 from centrex_tlf import states
 
-from .utils import has_off_diagonal_elements
+from .utils import has_off_diagonal_elements, strip_float_ones
 from .utils_compact import compact_symbolic_hamiltonian_indices
 
 __all__ = [
@@ -101,7 +101,13 @@ def symbolic_hamiltonian_to_rotating_frame(
 
     # use unitary matrix to transform to rotating frame
     transformed = T.adjoint() @ hamiltonian @ T - 1j * T.adjoint() @ smp.diff(T, t)
-    transformed = smp.simplify(transformed)
+    # expand to get rid of exponentials that cancel out
+    for i in range(transformed.shape[0]):
+        for j in range(i + 1, transformed.shape[0]):
+            if transformed[i, j] != 0:
+                transformed[i, j] = smp.expand(transformed[i, j])
+                transformed[j, i] = smp.conjugate(transformed[i, j])
+    # transformed = smp.expand(transformed)
 
     transformed = smp.Matrix(transformed)
 
@@ -130,7 +136,7 @@ def symbolic_hamiltonian_to_rotating_frame(
 
     # remove extraneous 1.0 from expressions like 1.0*δ
     for idx in range(transformed.shape[0]):
-        transformed[idx, idx] = smp.nfloat(smp.nsimplify(transformed[idx, idx]))
+        transformed[idx, idx] = strip_float_ones(transformed[idx, idx])
 
     # substitute level energies for symbolic values
     transformed = transformed.subs(
@@ -216,8 +222,6 @@ def generate_symbolic_hamiltonian(
                         hamiltonian[j, i] += (
                             val * field.field[j, i] * smp.exp(-1j * ω * t)
                         )
-
-    hamiltonian = smp.simplify(hamiltonian)
 
     return hamiltonian
 
