@@ -1,6 +1,6 @@
+use pyo3::basic::CompareOp;
 use pyo3::prelude::*;
-use pyo3::types::{PyAnyMethods,PyList, PyTuple};
-use pyo3::Py;
+use pyo3::types::{PyAnyMethods, PyList, PyTuple};
 use pyo3::PyResult;
 use numpy::{PyArray1, PyArray2, PyArrayMethods};
 use num_complex::Complex64;
@@ -18,7 +18,6 @@ use states::{UncoupledBasisState, CoupledBasisState, CoupledState};
 use constants::{XConstants, BConstants};
 use generate_hamiltonian::{generate_uncoupled_hamiltonian_x, generate_coupled_hamiltonian_b};
 use coupling::generate_coupling_matrix;
-use std::collections::HashMap;
 
 
 use wigner::{wigner_3j_f, wigner_6j_f};
@@ -314,13 +313,13 @@ fn generate_coupling_matrix_py<'py>(
     let parse_coupled_state = |s: &Bound<'py, PyAny>| -> PyResult<CoupledState> {
         // Python side: CoupledState.data is iterable of (amp, basis) pairs
         let terms_obj = s.getattr("data")?;
-        let terms_list = terms_obj.downcast::<PyList>()?;
+        let terms_list: &Bound<'py, PyList> = terms_obj.cast()?;
 
         let mut terms = Vec::with_capacity(terms_list.len());
 
         for term in terms_list.iter() {
             // each term is (amp, basis_state)
-            let tup = term.downcast::<PyTuple>()?;
+            let tup: &Bound<'py, PyTuple> = term.cast()?;
             let amp: Complex64 = tup.get_item(0)?.extract()?;
             let basis_py = tup.get_item(1)?;
 
@@ -379,34 +378,28 @@ fn generate_coupling_matrix_py<'py>(
         .map(|s| parse_coupled_state(s))
         .collect::<PyResult<_>>()?;
 
-    // --- build identity-based mapping: Python object -> index in QN ---
-    let mut ptr_to_idx: HashMap<usize, usize> = HashMap::with_capacity(qn.len());
-    for (i, obj) in qn.iter().enumerate() {
-        let ptr = obj.as_ptr() as usize;
-        ptr_to_idx.insert(ptr, i);
-    }
+    // --- helper: locate index in QN using Python __eq__ ---
+    let find_index = |item: &Bound<'py, PyAny>, label: &str| -> PyResult<usize> {
+        for (i, candidate) in qn.iter().enumerate() {
+            let eq = item.rich_compare(candidate, CompareOp::Eq)?.is_truthy()?;
+            if eq {
+                return Ok(i);
+            }
+        }
+        Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            format!("{label} not found in QN"),
+        ))
+    };
 
-    // --- compute ground_indices and excited_indices using Python identity ---
+    // --- compute ground_indices and excited_indices using equality ---
     let mut ground_indices = Vec::with_capacity(ground_states.len());
     for gs in ground_states.iter() {
-        let ptr = gs.as_ptr() as usize;
-        let idx = ptr_to_idx.get(&ptr).ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "ground_state not found in QN",
-            )
-        })?;
-        ground_indices.push(*idx);
+        ground_indices.push(find_index(gs, "ground_state")?);
     }
 
     let mut excited_indices = Vec::with_capacity(excited_states.len());
     for es in excited_states.iter() {
-        let ptr = es.as_ptr() as usize;
-        let idx = ptr_to_idx.get(&ptr).ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "excited_state not found in QN",
-            )
-        })?;
-        excited_indices.push(*idx);
+        excited_indices.push(find_index(es, "excited_state")?);
     }
 
     // --- call core Rust function (no pol normalization) ---

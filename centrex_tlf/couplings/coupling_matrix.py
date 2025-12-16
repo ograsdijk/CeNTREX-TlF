@@ -162,6 +162,15 @@ def generate_coupling_matrix(
     if normalize_pol:
         pol_vec = pol_vec / np.linalg.norm(pol_vec)
 
+    if excited_states[0].largest.basis is states.Basis.CoupledP:
+        QN = [
+            qn.transform_to_omega_basis()
+            if qn.largest.basis is states.Basis.CoupledP
+            else qn
+            for qn in QN
+        ]
+        excited_states = [qn.transform_to_omega_basis() for qn in excited_states]
+
     if HAS_RUST and _generate_coupling_matrix_rust is not None:
         return _generate_coupling_matrix_rust(
             QN,
