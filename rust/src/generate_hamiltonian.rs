@@ -1,7 +1,7 @@
 use crate::constants::{XConstants, BConstants};
 use crate::states::{UncoupledBasisState, UncoupledState, CoupledBasisState, CoupledState};
-use crate::x_uncoupled;
-use crate::b_coupled;
+use crate::X_uncoupled;
+use crate::B_coupled;
 use num_complex::Complex64;
 
 /// Container for X state Hamiltonian matrices.
