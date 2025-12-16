@@ -60,7 +60,7 @@ def collapse_matrices(
     for excited_state in excited_states:
         j = QN.index(excited_state)
         BRs = calculate_br(excited_state, ground_states)
-        if np.sum(BRs) > 1:
+        if not np.allclose(np.sum(BRs), 1.0):
             warnings.warn(
                 f"Branching ratio sum > 1, difference = {np.sum(BRs) - 1:.2e}"
             )
