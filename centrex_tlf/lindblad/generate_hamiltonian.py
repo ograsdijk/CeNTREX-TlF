@@ -200,7 +200,9 @@ def generate_symbolic_hamiltonian(
                                 val * field.field[i, j] * smp.exp(1j * ω * t)
                             )
                             hamiltonian[j, i] += (
-                                val * field.field[j, i] * smp.exp(-1j * ω * t)
+                                smp.conjugate(val)
+                                * field.field[j, i]
+                                * smp.exp(-1j * ω * t)
                             )
                 else:
                     val = (Ω / main_coupling) / 2
@@ -210,7 +212,9 @@ def generate_symbolic_hamiltonian(
                                 val * field.field[i, j] * smp.exp(1j * ω * t)
                             )
                             hamiltonian[j, i] += (
-                                val * field.field[j, i] * smp.exp(-1j * ω * t)
+                                smp.conjugate(val)
+                                * field.field[j, i]
+                                * smp.exp(-1j * ω * t)
                             )
             else:
                 val = (Ω / main_coupling) / 2
@@ -220,7 +224,9 @@ def generate_symbolic_hamiltonian(
                             val * field.field[i, j] * smp.exp(1j * ω * t)
                         )
                         hamiltonian[j, i] += (
-                            val * field.field[j, i] * smp.exp(-1j * ω * t)
+                            smp.conjugate(val)
+                            * field.field[j, i]
+                            * smp.exp(-1j * ω * t)
                         )
 
     return hamiltonian
@@ -234,24 +240,11 @@ def generate_rwa_symbolic_hamiltonian(
     δs: Sequence[smp.Symbol],
     pols: List[Optional[Sequence[smp.Symbol]]],
 ) -> smp.MutableDenseMatrix:
-    n_states = H_int.shape[0]
     hamiltonian = generate_symbolic_hamiltonian(H_int, couplings, Ωs, pols)
     transformed = symbolic_hamiltonian_to_rotating_frame(
         hamiltonian, QN, H_int, couplings, δs
     )
     transformed = smp.Matrix(transformed)
-
-    # Ωsᶜ = [smp.Symbol(str(Ω) + "ᶜ", complex=True) for Ω in Ωs]
-    pols_flat = [p for pset in pols for p in pset]  # type: ignore
-    pols_flat_conj = [smp.conjugate(p) for p in pols_flat]
-    Ωsᶜ = [smp.conjugate(Ω) for Ω in Ωs]
-    for idx in range(n_states):
-        for idy in range(0, idx):
-            for Ω, Ωᶜ in zip(Ωs, Ωsᶜ):
-                transformed[idx, idy] = transformed[idx, idy].subs(Ω, Ωᶜ)
-            for P, Pᶜ in zip(pols_flat, pols_flat_conj):
-                transformed[idx, idy] = transformed[idx, idy].subs(P, Pᶜ)
-
     return transformed
 
 
