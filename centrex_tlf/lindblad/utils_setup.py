@@ -38,7 +38,7 @@ class OBESystem:
     couplings: List[Any]
     H_symbolic: smp.MutableDenseMatrix
     C_array: npt.NDArray[np.floating]
-    system: smp.MutableDenseMatrix
+    system: smp.MutableDenseMatrix | None
     coupling_symbols: Sequence[smp.Symbol]
     polarization_symbols: Sequence[Sequence[smp.Symbol]]
     dissipator: Optional[smp.MutableDenseMatrix] = None
@@ -147,6 +147,7 @@ def generate_OBE_system(
     verbose: bool = False,
     normalize_pol: bool = False,
     Γ: float = hamiltonian.Γ,
+    method: str = "expanded",
 ) -> OBESystem:
     """Convenience function for generating the symbolic OBE system of equations.
 
@@ -167,6 +168,8 @@ def generate_OBE_system(
                     ground, exxcited, QN, H_int, V_ref_int, couplings, H_symbolic,
                     C_array, system
     """
+    if method not in ["expanded", "matrix"]:
+        raise ValueError(f"method {method} not recognised; use 'expanded' or 'matrix'")
     # check if transitions are allowed before generating the hamiltonian
     check_transitions_allowed(transition_selectors=transition_selectors)
 
@@ -312,7 +315,10 @@ def generate_OBE_system(
             "generate_OBE_system: 5/5 -> Transforming the Hamiltonian and collapse "
             "matrices into a symbolic system of equations"
         )
-    system = generate_system_of_equations_symbolic(H_symbolic, C_array, fast=True)
+    if method == "expanded":
+        system = generate_system_of_equations_symbolic(H_symbolic, C_array, fast=True)
+    else:
+        system = None
     obe_system = OBESystem(
         QN=QN_compact if qn_compact is not None else QN,
         ground=ground_states,
@@ -358,6 +364,7 @@ def generate_OBE_system_transitions(
     H_func_B: Optional[Callable] = None,
     verbose: bool = False,
     normalize_pol: bool = False,
+    method: str = "expanded",
 ) -> OBESystem:
     """Convenience function for generating the symbolic OBE system of equations.
 
@@ -581,6 +588,7 @@ def setup_OBE_system(
     H_func_B: Optional[Callable] = None,
     verbose: bool = False,
     normalize_pol: bool = False,
+    method: str = "expanded",
 ):
     """Convenience function for generating the OBE system
 
@@ -630,6 +638,7 @@ def setup_OBE_system(
         H_func_B=H_func_B,
         verbose=verbose,
         normalize_pol=normalize_pol,
+        method=method,
     )
     return obe_system
 
@@ -658,6 +667,7 @@ def setup_OBE_system_transitions(
     verbose: bool = False,
     normalize_pol: bool = False,
     Γ: float = hamiltonian.Γ,
+    method: str = "expanded",
 ) -> OBESystem:
     """Convenience function for generating the OBE system
 
@@ -705,6 +715,7 @@ def setup_OBE_system_transitions(
         H_func_B=H_func_B,
         verbose=verbose,
         normalize_pol=normalize_pol,
+        method=method,
     )
 
     return obe_system
