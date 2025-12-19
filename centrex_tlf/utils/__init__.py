@@ -6,9 +6,11 @@ This module provides utilities for:
 - Thermal and uniform population distributions
 - Rabi frequency and beam power calculations
 """
-from . import detuning, multipass, population, rabi
+
+from . import detuning, multipass, plotting, population, rabi
 
 __all__ = detuning.__all__
 __all__ += multipass.__all__
 __all__ += population.__all__
 __all__ += rabi.__all__
+__all__ += plotting.__all__
