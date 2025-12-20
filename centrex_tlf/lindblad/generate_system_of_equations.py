@@ -19,7 +19,115 @@ import numpy as np
 import numpy.typing as npt
 import sympy as smp
 
-__all__ = ["generate_system_of_equations_symbolic"]
+__all__ = [
+    "generate_system_of_equations_symbolic",
+    "generate_dissipator_term",
+    "generate_hamiltonian_term",
+    "generate_density_matrix",
+]
+
+
+def generate_density_matrix(nstates: int, symbol: str = "\u03c1") -> smp.Matrix:
+    """Generate symbolic density matrix for nstates-level system.
+
+    The density matrix ρ is Hermitian, so ρᵢⱼ = ρⱼᵢ* (complex conjugate).
+    This function creates a symbolic matrix with elements as sympy IndexedBase
+    symbols, ensuring Hermiticity by defining only upper triangle elements
+    independently.
+
+    Args:
+        nstates: Number of quantum states in the system.
+
+    Returns:
+        Symbolic density matrix (nstates x nstates) with Hermitian structure.
+    """
+    rho = smp.IndexedBase(symbol)  # Unicode ρ for density matrix
+    density_matrix = smp.Matrix(
+        nstates,
+        nstates,
+        lambda i, j: rho[i, j] if i <= j else rho[j, i].conjugate(),
+    )
+    return density_matrix
+
+
+def generate_dissipator_term(
+    C_array: npt.NDArray[np.floating | np.complexfloating],
+    density_matrix: smp.Matrix,
+    fast: bool = False,
+) -> smp.Matrix:
+    nstates = density_matrix.shape[0]
+
+    # Ensure collapse operators are complex-valued for proper conjugation
+    if not np.iscomplexobj(C_array):
+        C_array = C_array.astype(np.complex128)
+
+    # Ensure collapse operators are complex-valued for proper conjugation
+    if not np.iscomplexobj(C_array):
+        C_array = C_array.astype(np.complex128)
+
+    # Compute conjugate transpose of all collapse operators: Cᵢ†
+    # einsum("ijk->ikj") transposes the last two dimensions for each operator
+    C_conj_array: npt.NDArray[np.complexfloating] = np.einsum(
+        "ijk->ikj",
+        C_array.conj(),  # type: ignore[arg-type]
+    )
+
+    # Initialize accumulator for dissipation term: Σᵢ CᵢρCᵢ†
+    dissipation_sum: smp.Matrix = smp.zeros(nstates, nstates)
+
+    if fast:
+        # Sparse optimization: only compute non-zero contributions
+        # Significant speedup when collapse operators are sparse (typical for decay)
+        for C, C_conj in zip(C_array, C_conj_array):
+            # Get indices of non-zero elements: nonzero returns tuple of (row_indices, col_indices)
+            nonzero_C = np.nonzero(C)
+            nonzero_C_conj = np.nonzero(C_conj)
+
+            # Only process if both operators have non-zero elements
+            if len(nonzero_C[0]) > 0 and len(nonzero_C_conj[0]) > 0:
+                # For sparse operators (e.g., |g⟩⟨e|), typically only one non-zero element
+                # nonzero_C[0][0] is row index, nonzero_C[1][0] is column index
+                # density_matrix indexing returns a MatrixElement directly (no [0] needed)
+                value = (
+                    C[nonzero_C][0]  # Get first non-zero value from C
+                    * C_conj[nonzero_C_conj][0]  # Get first non-zero value from C†
+                    * density_matrix[int(nonzero_C[1][0]), int(nonzero_C_conj[0][0])]
+                )
+                dissipation_sum[int(nonzero_C[0][0]), int(nonzero_C_conj[1][0])] += (
+                    value
+                )
+    else:
+        # Standard computation: Σᵢ CᵢρCᵢ† for all operators
+        # Use full matrix multiplication (more general but slower)
+        for idx in range(C_array.shape[0]):
+            dissipation_sum += C_array[idx] @ density_matrix @ C_conj_array[idx]
+
+    # Precompute Σᵢ Cᵢ†Cᵢ for anticommutator term: -½{Cᵢ†Cᵢ, ρ}
+    # einsum("ijk,ikl") efficiently computes the sum of Cᵢ†Cᵢ for all i
+    C_dagger_C_sum: npt.NDArray[np.complexfloating] = np.einsum(
+        "ijk,ikl",
+        C_conj_array,  # type: ignore[arg-type]
+        C_array,  # type: ignore[arg-type]
+    )
+
+    # Anticommutator term: -½{Cᵢ†Cᵢ, ρ} = -½(Cᵢ†Cᵢ·ρ + ρ·Cᵢ†Cᵢ)
+    anticommutator_term: smp.Matrix = -0.5 * (
+        C_dagger_C_sum @ density_matrix + density_matrix @ C_dagger_C_sum
+    )
+
+    lindblad_dissipation = dissipation_sum + anticommutator_term
+    return lindblad_dissipation
+
+
+def generate_hamiltonian_term(
+    hamiltonian: smp.Matrix, density_matrix: smp.Matrix
+) -> smp.Matrix:
+    # Compute Hamiltonian contribution: -i[H, ρ] = -i(Hρ - ρH)
+    # This is the coherent (unitary) evolution part
+    hamiltonian_term: smp.Matrix = -1j * (
+        hamiltonian @ density_matrix - density_matrix @ hamiltonian
+    )
+    return hamiltonian_term
 
 
 @overload
@@ -130,77 +238,16 @@ def generate_system_of_equations_symbolic(
     n_states: int = hamiltonian.shape[0]
 
     # Generate symbolic density matrix with elements ρᵢⱼ as sympy symbols
-    rho = smp.IndexedBase("\u03c1")  # Unicode ρ for density matrix
-    density_matrix = smp.Matrix(
-        n_states, n_states, lambda i, j: rho[i, j] if i <= j else rho[j, i].conjugate()
-    )
+    density_matrix = generate_density_matrix(n_states)
 
-    # Ensure collapse operators are complex-valued for proper conjugation
-    if not np.iscomplexobj(C_array):
-        C_array = C_array.astype(np.complex128)
-
-    # Compute conjugate transpose of all collapse operators: Cᵢ†
-    # einsum("ijk->ikj") transposes the last two dimensions for each operator
-    C_conj_array: npt.NDArray[np.complexfloating] = np.einsum(
-        "ijk->ikj",
-        C_array.conj(),  # type: ignore[arg-type]
-    )
-
-    # Initialize accumulator for dissipation term: Σᵢ CᵢρCᵢ†
-    dissipation_sum: smp.Matrix = smp.zeros(n_states, n_states)
-
-    if fast:
-        # Sparse optimization: only compute non-zero contributions
-        # Significant speedup when collapse operators are sparse (typical for decay)
-        for C, C_conj in zip(C_array, C_conj_array):
-            # Get indices of non-zero elements: nonzero returns tuple of (row_indices, col_indices)
-            nonzero_C = np.nonzero(C)
-            nonzero_C_conj = np.nonzero(C_conj)
-
-            # Only process if both operators have non-zero elements
-            if len(nonzero_C[0]) > 0 and len(nonzero_C_conj[0]) > 0:
-                # For sparse operators (e.g., |g⟩⟨e|), typically only one non-zero element
-                # nonzero_C[0][0] is row index, nonzero_C[1][0] is column index
-                # density_matrix indexing returns a MatrixElement directly (no [0] needed)
-                value = (
-                    C[nonzero_C][0]  # Get first non-zero value from C
-                    * C_conj[nonzero_C_conj][0]  # Get first non-zero value from C†
-                    * density_matrix[int(nonzero_C[1][0]), int(nonzero_C_conj[0][0])]
-                )
-                dissipation_sum[int(nonzero_C[0][0]), int(nonzero_C_conj[1][0])] += (
-                    value
-                )
-    else:
-        # Standard computation: Σᵢ CᵢρCᵢ† for all operators
-        # Use full matrix multiplication (more general but slower)
-        for idx in range(C_array.shape[0]):
-            dissipation_sum += C_array[idx] @ density_matrix @ C_conj_array[idx]
-
-    # Precompute Σᵢ Cᵢ†Cᵢ for anticommutator term: -½{Cᵢ†Cᵢ, ρ}
-    # einsum("ijk,ikl") efficiently computes the sum of Cᵢ†Cᵢ for all i
-    C_dagger_C_sum: npt.NDArray[np.complexfloating] = np.einsum(
-        "ijk,ikl",
-        C_conj_array,  # type: ignore[arg-type]
-        C_array,  # type: ignore[arg-type]
-    )
-
-    # Anticommutator term: -½{Cᵢ†Cᵢ, ρ} = -½(Cᵢ†Cᵢ·ρ + ρ·Cᵢ†Cᵢ)
-    anticommutator_term: smp.Matrix = -0.5 * (
-        C_dagger_C_sum @ density_matrix + density_matrix @ C_dagger_C_sum
-    )
-
-    # Compute Hamiltonian contribution: -i[H, ρ] = -i(Hρ - ρH)
-    # This is the coherent (unitary) evolution part
-    hamiltonian_term: smp.Matrix = -1j * (
-        hamiltonian @ density_matrix - density_matrix @ hamiltonian
-    )
+    lindblad_dissipation = generate_dissipator_term(C_array, density_matrix)
+    hamiltonian_term = generate_hamiltonian_term(hamiltonian, density_matrix)
 
     if split_output:
         # Return coherent and dissipative parts separately
-        lindblad_dissipation = dissipation_sum + anticommutator_term
         return hamiltonian_term, lindblad_dissipation
     else:
         # Return complete Lindblad equation: dρ/dt = -i[H,ρ] + Σᵢ(CᵢρCᵢ† - ½{Cᵢ†Cᵢ,ρ})
         system: smp.Matrix = smp.zeros(n_states, n_states)
-        system += dissipation_sum + anticommutator_term + hamiltonian_term
+        system += lindblad_dissipation + hamiltonian_term
         return system

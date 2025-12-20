@@ -16,7 +16,11 @@ from centrex_tlf.transitions import MicrowaveTransition, OpticalTransition
 
 from . import utils_decay as utils_decay
 from .generate_hamiltonian import generate_total_symbolic_hamiltonian
-from .generate_system_of_equations import generate_system_of_equations_symbolic
+from .generate_system_of_equations import (
+    generate_density_matrix,
+    generate_dissipator_term,
+    generate_system_of_equations_symbolic,
+)
 from .utils_compact import generate_qn_compact
 
 __all__ = [
@@ -256,6 +260,8 @@ def generate_OBE_system(
         H_symbolic = generate_total_symbolic_hamiltonian(
             QN, H_int, couplings, transition_selectors
         )
+        QN_compact = None
+        couplings_compact = None
 
     if verbose:
         logger.info("generate_OBE_system: 4/5 -> Generating the collapse matrices")
@@ -289,7 +295,11 @@ def generate_OBE_system(
         ]
         QN = utils_decay.add_states_QN(_decay_channels, QN, indices)
 
-        if qn_compact is not None:
+        if (
+            (qn_compact is not None)
+            and (QN_compact is not None)
+            and (couplings_compact is not None)
+        ):
             indices, H_symbolic = utils_decay.add_levels_symbolic_hamiltonian(
                 H_symbolic, _decay_channels, QN_compact, excited_states
             )
@@ -309,6 +319,8 @@ def generate_OBE_system(
             C_array = utils_decay.add_decays_C_arrays(
                 _decay_channels, indices, QN, C_array, Γ
             )
+    else:
+        _decay_channels = None
 
     if verbose:
         logger.info(
@@ -316,19 +328,26 @@ def generate_OBE_system(
             "matrices into a symbolic system of equations"
         )
     if method == "expanded":
-        system = generate_system_of_equations_symbolic(H_symbolic, C_array, fast=True)
+        hamiltonian_term, dissipator = generate_system_of_equations_symbolic(
+            H_symbolic, C_array, fast=True, split_output=True
+        )
+        system = hamiltonian_term + dissipator
     else:
         system = None
+        density_matrix = generate_density_matrix(H_symbolic.shape[0])
+        dissipator = generate_dissipator_term(C_array, density_matrix, fast=True)
+
     obe_system = OBESystem(
-        QN=QN_compact if qn_compact is not None else QN,
+        QN=QN_compact if QN_compact is not None else QN,
         ground=ground_states,
         excited=excited_states,
-        couplings=couplings if qn_compact is None else couplings_compact,
+        couplings=couplings if couplings_compact is None else couplings_compact,
         H_symbolic=H_symbolic,
         H_int=H_int,
         V_ref_int=V_ref_int,
         C_array=C_array,
         system=system,
+        dissipator=dissipator,
         coupling_symbols=[trans.Ω for trans in transition_selectors],
         polarization_symbols=[
             trans.polarization_symbols for trans in transition_selectors
@@ -537,10 +556,17 @@ def generate_OBE_system_transitions(
             "matrices into a symbolic system of equations"
         )
         logging.basicConfig(level=logging.WARNING)
-    ham, dissipator = generate_system_of_equations_symbolic(
-        H_symbolic, C_array, fast=True, split_output=True
-    )
-    system = ham + dissipator
+    if method == "expanded":
+        ham, dissipator = generate_system_of_equations_symbolic(
+            H_symbolic, C_array, fast=True, split_output=True
+        )
+        system = ham + dissipator
+    elif method == "matrix":
+        system = None
+        density_matrix = generate_density_matrix(H_symbolic.shape[0])
+        dissipator = generate_dissipator_term(C_array, density_matrix, fast=True)
+    else:
+        raise ValueError(f"method {method} not recognised; use 'expanded' or 'matrix'")
 
     obe_system = OBESystem(
         QN=QN_compact if _qn_compact is not None else QN,

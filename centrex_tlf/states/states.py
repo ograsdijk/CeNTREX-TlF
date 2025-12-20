@@ -113,6 +113,7 @@ class CoupledBasisState(BasisState):
         "_hash",
         "_frozen",
     )
+    _hash: int
 
     # constructor
     def __init__(
@@ -615,6 +616,7 @@ class UncoupledBasisState(BasisState):
         "_hash",
         "_frozen",
     )
+    _hash: int
 
     # constructor
     def __init__(
