@@ -398,7 +398,7 @@ def generate_OBE_system_transitions(
 
     Returns:
         OBESystem: dataclass designed to hold the generated values
-                    ground, exxcited, QN, H_int, V_ref_int, couplings, H_symbolic,
+                    ground, excited, QN, H_int, V_ref_int, couplings, H_symbolic,
                     C_array, system
     """
     rtol = None
