@@ -29,6 +29,28 @@ import sympy as sp
 
 from .utils import CGc
 
+
+def _half_int_to_int2(x: float | int) -> int:
+    """Convert integer/half-integer quantum numbers to an exact int via 2*x.
+
+    This is used for deterministic hashing across processes.
+    """
+    return int(round(2 * float(x)))
+
+
+def _optional_int_hash_value(x: int | None) -> tuple[int, int]:
+    """Encode an optional integer quantum number for deterministic hashing."""
+    if x is None:
+        return (0, 0)
+    return (1, int(x))
+
+
+def _optional_half_int_hash_value(x: float | int | None) -> tuple[int, int]:
+    """Encode an optional half-integer quantum number for deterministic hashing."""
+    if x is None:
+        return (0, 0)
+    return (1, _half_int_to_int2(x))
+
 __all__ = [
     "ElectronicState",
     "BasisState",
@@ -118,10 +140,10 @@ class CoupledBasisState(BasisState):
     # constructor
     def __init__(
         self,
-        F: int,
-        mF: int,
-        F1: float,
-        J: int,
+        F: int | None,
+        mF: int | None,
+        F1: float | None,
+        J: int | None,
         I1: float,
         I2: float,
         Omega: int = 0,
@@ -182,17 +204,17 @@ class CoupledBasisState(BasisState):
             "_hash",
             hash(
                 (
-                    self.F,
-                    self.mF,
-                    self.I1,
-                    self.I2,
-                    self.F1,
-                    self.J,
+                    _optional_int_hash_value(self.F),
+                    _optional_int_hash_value(self.mF),
+                    _half_int_to_int2(self.I1),
+                    _half_int_to_int2(self.I2),
+                    _optional_half_int_hash_value(self.F1),
+                    _optional_int_hash_value(self.J),
                     self.Omega,
-                    self.P,
-                    self.electronic_state,
-                    self.v,
-                    self.basis,
+                    (self.P if self.P is not None else 0),
+                    (self.electronic_state.value if self.electronic_state else 0),
+                    (self.v if self.v is not None else -1),
+                    (self.basis.value if self.basis else 0),
                 )
             ),
         )
@@ -670,15 +692,15 @@ class UncoupledBasisState(BasisState):
                 (
                     self.J,
                     self.mJ,
-                    self.I1,
-                    self.I2,
-                    self.m1,
-                    self.m2,
+                    _half_int_to_int2(self.I1),
+                    _half_int_to_int2(self.m1),
+                    _half_int_to_int2(self.I2),
+                    _half_int_to_int2(self.m2),
                     self.Omega,
                     self.P,
-                    self.electronic_state,
-                    self.basis,
-                    self.v,
+                    self.electronic_state.value,
+                    self.basis.value,
+                    (self.v if self.v is not None else -1),
                 )
             ),
         )

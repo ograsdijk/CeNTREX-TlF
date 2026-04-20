@@ -12,6 +12,7 @@ mod x_uncoupled;
 mod b_coupled;
 mod generate_hamiltonian;
 mod coupling;
+mod lindblad;
 pub mod wigner;
 
 use states::{UncoupledBasisState, CoupledBasisState, CoupledState};
@@ -425,5 +426,6 @@ fn centrex_tlf_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(wigner_6j_py, m)?)?;
     m.add_function(wrap_pyfunction!(generate_transform_matrix_py, m)?)?;
     m.add_function(wrap_pyfunction!(generate_coupling_matrix_py, m)?)?;
+    lindblad::register_python_api(m)?;
     Ok(())
 }

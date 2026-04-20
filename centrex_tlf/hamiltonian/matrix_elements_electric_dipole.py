@@ -7,7 +7,7 @@ polarization-dependent angular factors.
 
 import math
 from functools import lru_cache
-from typing import Dict, Tuple
+from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -16,7 +16,13 @@ from centrex_tlf import couplings, states
 
 from .wigner import sixj_f, threej_f
 
-__all__ = ["generate_ED_ME_mixed_state", "ED_ME_coupled", "angular_part"]
+__all__ = [
+    "generate_ED_ME_mixed_state",
+    "generate_ED_ME_mixed_state_uncoupled",
+    "ED_ME_coupled",
+    "ED_ME_uncoupled",
+    "angular_part",
+]
 
 
 def generate_ED_ME_mixed_state(
@@ -58,6 +64,8 @@ def generate_ED_ME_mixed_state(
     if pol_vec is None:
         pol_vec = couplings.polarization_unpolarized.vector
 
+    pol_vec = np.asarray(pol_vec, dtype=np.complex128)
+
     ME = 0j
 
     # Transform to Omega basis if required. For the X state the basis is Coupled and
@@ -83,6 +91,199 @@ def generate_ED_ME_mixed_state(
             )
 
     return ME
+
+
+def generate_ED_ME_mixed_state_uncoupled(
+    bra: states.UncoupledState,
+    ket: states.UncoupledState,
+    pol_vec: npt.NDArray[np.complex128] | None = None,
+    reduced: bool = False,
+    normalize_pol: bool = True,
+) -> complex:
+    """Calculate electric dipole matrix element between uncoupled mixed states.
+
+    Mirrors `generate_ED_ME_mixed_state`, but for `UncoupledState`. This stays in the
+    uncoupled basis and evaluates the ME by summing `ED_ME_uncoupled` over uncoupled
+    basis-state components.
+    """
+    if pol_vec is None:
+        pol_vec = couplings.polarization_unpolarized.vector
+
+    pol_vec = np.asarray(pol_vec, dtype=np.complex128)
+
+    if normalize_pol:
+        pol_vec = pol_vec / np.linalg.norm(pol_vec)
+
+    ME = 0j
+    for amp_bra, basis_bra in bra.data:
+        for amp_ket, basis_ket in ket.data:
+            if abs(basis_bra.J - basis_ket.J) > 1:
+                continue
+            ME += (
+                amp_bra.conjugate()
+                * amp_ket
+                * ED_ME_uncoupled(
+                    basis_bra, basis_ket, pol_vec=tuple(pol_vec), rme_only=reduced
+                )
+            )
+
+    return ME
+
+
+@lru_cache(maxsize=int(1e6))
+def ED_ME_uncoupled(
+    bra: states.UncoupledBasisState,
+    ket: states.UncoupledBasisState,
+    pol_vec: Tuple[complex, complex, complex] = (
+        (1.0 + 0j) / math.sqrt(2),
+        0j,
+        (1.0 + 0j) / math.sqrt(2),
+    ),
+    rme_only: bool = False,
+) -> complex:
+    """Calculate electric dipole matrix element between uncoupled basis states.
+
+    Implements the standard uncoupled-basis (|J mJ I1 m1 I2 m2; Ω⟩) rank-1 spherical
+    tensor matrix element, closely following the structure of the user-provided
+    reference implementation.
+
+    Note:
+        This intentionally does not include any physical dipole moment scaling.
+    """
+    ME = 0j
+    for amp_bra, basis_bra in _expand_uncoupled_parity_to_omega_components(bra):
+        for amp_ket, basis_ket in _expand_uncoupled_parity_to_omega_components(ket):
+            ME += amp_bra.conjugate() * amp_ket * _ED_ME_uncoupled_omega(
+                basis_bra,
+                basis_ket,
+                pol_vec=pol_vec,
+                rme_only=rme_only,
+            )
+    return ME
+
+
+def _expand_uncoupled_parity_to_omega_components(
+    state: states.UncoupledBasisState,
+) -> list[tuple[complex, states.UncoupledBasisState]]:
+    """Expand a parity-basis B-state |J,|Ω|,P⟩ into signed-Ω components.
+
+    This mirrors `states.CoupledBasisState.transform_to_omega_basis`'s convention:
+        |J Ω P⟩ = (|J +Ω⟩ + P(-1)^J |J -Ω⟩)/√2
+
+    For X (Ω=0) and for Ω=0 states, returns the state itself.
+    """
+    if state.electronic_state == states.ElectronicState.B and state.P is not None and state.Omega != 0:
+        Omega_abs = abs(state.Omega)
+        amp_plus = 1 / math.sqrt(2)
+        amp_minus = state.P * ((-1) ** state.J) / math.sqrt(2)
+
+        state_plus = states.UncoupledBasisState(
+            J=state.J,
+            mJ=state.mJ,
+            I1=state.I1,
+            m1=state.m1,
+            I2=state.I2,
+            m2=state.m2,
+            Omega=Omega_abs,
+            P=state.P,
+            electronic_state=state.electronic_state,
+            basis=state.basis,
+            v=state.v,
+        )
+        state_minus = states.UncoupledBasisState(
+            J=state.J,
+            mJ=state.mJ,
+            I1=state.I1,
+            m1=state.m1,
+            I2=state.I2,
+            m2=state.m2,
+            Omega=-Omega_abs,
+            P=state.P,
+            electronic_state=state.electronic_state,
+            basis=state.basis,
+            v=state.v,
+        )
+
+        return [(complex(amp_plus), state_plus), (complex(amp_minus), state_minus)]
+
+    return [(1.0 + 0j, state)]
+
+
+@lru_cache(maxsize=int(1e6))
+def _ED_ME_uncoupled_omega(
+    bra: states.UncoupledBasisState,
+    ket: states.UncoupledBasisState,
+    pol_vec: Tuple[complex, complex, complex],
+    rme_only: bool,
+) -> complex:
+    """Uncoupled-basis ED ME assuming signed-Ω components (no parity mixing)."""
+    # Spectator nuclear spins
+    if bra.I1 != ket.I1 or bra.I2 != ket.I2:
+        return 0j
+    if bra.m1 != ket.m1 or bra.m2 != ket.m2:
+        return 0j
+
+    # Rotational selection rules
+    if abs(bra.J - ket.J) > 1:
+        return 0j
+    if not rme_only and abs(bra.mJ - ket.mJ) > 1:
+        return 0j
+
+    J = float(bra.J)
+    mJ = float(bra.mJ)
+    Omega = float(bra.Omega)
+
+    Jp = float(ket.J)
+    mJp = float(ket.mJ)
+    Omegap = float(ket.Omega)
+
+    q = Omega - Omegap
+    if abs(q) > 1:
+        return 0j
+
+    M_r = (
+        (-1) ** (J - Omega)
+        * math.sqrt((2 * J + 1) * (2 * Jp + 1))
+        * threej_f(J, 1, Jp, -Omega, q, Omegap)
+    )
+    if M_r == 0.0:
+        return 0j
+
+    if rme_only:
+        return complex(M_r)
+
+    angular = _angular_part_uncoupled(pol_vec, J, mJ, Jp, mJp)
+    if angular == 0.0:
+        return 0j
+
+    return complex(M_r) * angular
+
+
+@lru_cache(maxsize=int(1e6))
+def _angular_part_uncoupled(
+    pol_vec: Tuple[complex, complex, complex],
+    J: float,
+    mJ: float,
+    Jp: float,
+    mJp: float,
+) -> complex:
+    """Polarization-dependent angular factor for uncoupled |J mJ⟩ states."""
+    q_s = mJ - mJp
+    if abs(q_s) > 1:
+        return 0.0
+
+    # Cartesian → spherical-basis components
+    if q_s == 1:
+        eps_q = -1 / math.sqrt(2) * (pol_vec[0] + 1j * pol_vec[1])  # σ+
+    elif q_s == -1:
+        eps_q = 1 / math.sqrt(2) * (pol_vec[0] - 1j * pol_vec[1])  # σ-
+    elif q_s == 0:
+        eps_q = pol_vec[2]
+    else:
+        return 0.0
+
+    angular = (-1) ** (J - mJ) * threej_f(J, 1, Jp, -mJ, q_s, mJp) * eps_q
+    return angular
 
 
 @lru_cache(maxsize=int(1e6))
