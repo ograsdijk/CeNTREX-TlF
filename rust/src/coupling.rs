@@ -1,14 +1,8 @@
-use num_complex::Complex64;
-use crate::states::{CoupledState, CoupledBasisState};
+use crate::states::{CoupledBasisState, CoupledState};
 use crate::wigner::{wigner_3j_f, wigner_6j_f};
+use num_complex::Complex64;
 
-pub fn angular_part(
-    pol_vec: [Complex64; 3],
-    f: i32,
-    mf: i32,
-    fp: i32,
-    mfp: i32,
-) -> Complex64 {
+pub fn angular_part(pol_vec: [Complex64; 3], f: i32, mf: i32, fp: i32, mfp: i32) -> Complex64 {
     let q = mf - mfp;
     if q.abs() > 1 {
         return Complex64::new(0.0, 0.0);
@@ -19,23 +13,20 @@ pub fn angular_part(
 
     let p_q = match q {
         1 => -(pol_vec[0] + i * pol_vec[1]) / sqrt2,
-        -1 =>  (pol_vec[0] - i * pol_vec[1]) / sqrt2,
-        0 =>   pol_vec[2],
+        -1 => (pol_vec[0] - i * pol_vec[1]) / sqrt2,
+        0 => pol_vec[2],
         _ => unreachable!("q = {q}, but |q| ≤ 1 already checked"),
     };
 
     // (-1)^(F - mF)
     let exponent = f - mf;
-    let phase = if exponent.rem_euclid(2) == 0 { 1.0 } else { -1.0 };
+    let phase = if exponent.rem_euclid(2) == 0 {
+        1.0
+    } else {
+        -1.0
+    };
 
-    let three_j = wigner_3j_f(
-        f as f64,
-        1.0,
-        fp as f64,
-        -mf as f64,
-        q as f64,
-        mfp as f64,
-    );
+    let three_j = wigner_3j_f(f as f64, 1.0, fp as f64, -mf as f64, q as f64, mfp as f64);
 
     p_q * (phase * three_j)
 }
@@ -112,21 +103,18 @@ pub fn ed_me_coupled(
     //   2e = F1p_twice + F1_twice + 2*F' + I1_twice + I2_twice − 2*Ω
     //
     // We only care about e mod 2 for (-1)^e.
-    let two_e: i32 =
-        f1p_twice + f1_twice + 2 * fp + i1_twice + i2_twice - 2 * omega;
+    let two_e: i32 = f1p_twice + f1_twice + 2 * fp + i1_twice + i2_twice - 2 * omega;
     let e_parity = (two_e / 2).rem_euclid(2);
     let phase = if e_parity == 0 { 1.0 } else { -1.0 };
 
     // ---------- prefactor sqrt[(2J+1)(2J'+1)(2F1+1)(2F1'+1)(2F+1)(2F'+1)] ----------
     // F1,F1' stored as 2*F1_phys ⇒ (2F1_phys + 1) = F1_twice + 1, etc.
-    let prefactor = (
-        (2 * j + 1) as f64
+    let prefactor = ((2 * j + 1) as f64
         * (2 * jp + 1) as f64
         * (f1_twice + 1) as f64
         * (f1p_twice + 1) as f64
         * (2 * f + 1) as f64
-        * (2 * fp + 1) as f64
-    )
+        * (2 * fp + 1) as f64)
         .sqrt();
 
     // ---------- Wigner 6j symbols ----------
@@ -138,24 +126,10 @@ pub fn ed_me_coupled(
     let i1_phys = i1_twice as f64 / 2.0;
     let i2_phys = i2_twice as f64 / 2.0;
 
-    let sixj1 = wigner_6j_f(
-        f1p_phys,
-        fp as f64,
-        i2_phys,
-        f as f64,
-        f1_phys,
-        1.0,
-    );
+    let sixj1 = wigner_6j_f(f1p_phys, fp as f64, i2_phys, f as f64, f1_phys, 1.0);
 
     // Python: sixj_f(Jp, F1p, I1, F1, J, 1)
-    let sixj2 = wigner_6j_f(
-        jp as f64,
-        f1p_phys,
-        i1_phys,
-        f1_phys,
-        j as f64,
-        1.0,
-    );
+    let sixj2 = wigner_6j_f(jp as f64, f1p_phys, i1_phys, f1_phys, j as f64, 1.0);
 
     // ---------- Wigner 3j symbol ----------
     //
@@ -230,9 +204,9 @@ pub fn generate_coupling_matrix(
     excited_indices: &[usize],
     pol_vec: [Complex64; 3],
     reduced: bool,
-) -> Vec<Vec<Complex64>> {
+) -> Vec<Complex64> {
     let n = qn.len();
-    let mut h = vec![vec![Complex64::new(0.0, 0.0); n]; n];
+    let mut h = vec![Complex64::new(0.0, 0.0); n * n];
 
     for &i in ground_indices {
         let ground_state = &qn[i];
@@ -240,16 +214,11 @@ pub fn generate_coupling_matrix(
         for &j in excited_indices {
             let excited_state = &qn[j];
 
-            let me = generate_ed_me_mixed_state(
-                excited_state,
-                ground_state,
-                pol_vec,
-                reduced,
-            );
+            let me = generate_ed_me_mixed_state(excited_state, ground_state, pol_vec, reduced);
 
-            h[i][j] = me;
+            h[i * n + j] = me;
             if me != Complex64::new(0.0, 0.0) {
-                h[j][i] = me.conj();
+                h[j * n + i] = me.conj();
             }
         }
     }

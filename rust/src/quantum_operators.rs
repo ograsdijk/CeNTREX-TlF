@@ -63,7 +63,7 @@ pub fn jp<T>(psi: UncoupledBasisState, _: &T) -> UncoupledState {
     let mj = psi.mj;
 
     if (mj as f64) < (j as f64) {
-        let coeff = ((j as f64 * (j as f64 + 1.0) - mj as f64 * (mj as f64 + 1.0))).sqrt();
+        let coeff = (j as f64 * (j as f64 + 1.0) - mj as f64 * (mj as f64 + 1.0)).sqrt();
         let mut new_psi = psi;
         new_psi.mj += 1;
         UncoupledState {
@@ -203,22 +203,12 @@ pub fn com<T>(
     a: fn(UncoupledBasisState, &T) -> UncoupledState,
     b: fn(UncoupledBasisState, &T) -> UncoupledState,
     psi: UncoupledBasisState,
-    constants: &T
+    constants: &T,
 ) -> UncoupledState {
     let intermediate = b(psi, constants);
     let mut result = UncoupledState::empty();
     for (amp, basis) in intermediate.terms {
         result = result + a(basis, constants) * amp;
-    }
-    result
-}
-
-/// Apply an operator to a state (superposition).
-pub fn apply_op<T>(op: fn(UncoupledBasisState, &T) -> UncoupledState, state: UncoupledState, constants: &T) -> UncoupledState {
-    let mut result = UncoupledState::empty();
-    for (amp, basis) in state.terms {
-        let new_state = op(basis, constants);
-        result = result + new_state * amp;
     }
     result
 }

@@ -135,12 +135,7 @@ pub fn h_mhf_tl(psi: CoupledBasisState, constants: &BConstants) -> CoupledState 
             * phase1
             * wigner_6j_f(i1, jp, f1, j, i1, 1.0)
             * wigner_3j_f(j, 1.0, jp, -omega, 0.0, omegap)
-            * ((2.0 * j + 1.0)
-                * (2.0 * jp + 1.0)
-                * i1
-                * (i1 + 1.0)
-                * (2.0 * i1 + 1.0))
-                .sqrt();
+            * ((2.0 * j + 1.0) * (2.0 * jp + 1.0) * i1 * (i1 + 1.0) * (2.0 * i1 + 1.0)).sqrt();
 
         if amp != 0.0 {
             let ket = CoupledBasisState {
@@ -324,8 +319,7 @@ pub fn d_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledSta
             let f_max = f1 + i2;
             let mut f = f_min;
             while f <= f_max + 1e-9 {
-                let exp1 =
-                    (f + fp + f1 + f1p + i1 + i2 - omega - mf).round() as i32;
+                let exp1 = (f + fp + f1 + f1p + i1 + i2 - omega - mf).round() as i32;
                 let phase1 = if exp1 % 2 == 0 { 1.0 } else { -1.0 };
 
                 let amp = constants.mu_e
@@ -389,7 +383,7 @@ pub fn h_sz(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
 /// Magnetic dipole operator (p-th spherical tensor component) for B state.
 /// Rust translation of Python mu_p (with gL = 1.0 hard-coded).
 pub fn mu_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledState {
-    let g_l = 1.0;
+    let g_l = constants.gl;
 
     let jp = psi.j as f64;
     let i1p = psi.i1 as f64 / 2.0;
@@ -421,8 +415,7 @@ pub fn mu_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledSt
             let f_max = f1 + i2;
             let mut f = f_min;
             while f <= f_max + 1e-9 {
-                let exp1 =
-                    (f + fp + f1 + f1p + i1 + i2 - omega - mf).round() as i32;
+                let exp1 = (f + fp + f1 + f1p + i1 + i2 - omega - mf).round() as i32;
                 let phase1 = if exp1 % 2 == 0 { 1.0 } else { -1.0 };
 
                 let amp = g_l
@@ -483,4 +476,3 @@ pub fn h_zy(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
 pub fn h_zz(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
     mu_p(psi, 0, constants) * -1.0
 }
-

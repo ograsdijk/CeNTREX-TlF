@@ -172,10 +172,13 @@ def generate_coupling_matrix(
         excited_states = [qn.transform_to_omega_basis() for qn in excited_states]
 
     if HAS_RUST and _generate_coupling_matrix_rust is not None:
+        idx_map = {s.largest: i for i, s in enumerate(QN)}
+        ground_indices = [idx_map[gs.largest] for gs in ground_states]
+        excited_indices = [idx_map[es.largest] for es in excited_states]
         return _generate_coupling_matrix_rust(
             QN,
-            ground_states,
-            excited_states,
+            ground_indices,
+            excited_indices,
             pol_vec,
             reduced,
         )

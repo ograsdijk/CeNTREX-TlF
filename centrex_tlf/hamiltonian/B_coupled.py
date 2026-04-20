@@ -446,7 +446,7 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
     dipole operator.
     """
     # Some constants
-    gL = 1
+    gL = constants.gL
 
     # Find the quantum numbers of the input state
     Jp = psi.J

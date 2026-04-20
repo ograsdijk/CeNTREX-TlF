@@ -69,7 +69,7 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
         >>> result_sm = mu_p(state, -1, constants)     # σ⁻ component
     """
     # Electronic orbital g-factor (appropriate for ²Π₁/₂ state)
-    gL = 1.0
+    gL = constants.gL
 
     # Find the quantum numbers of the input state
     Jp = psi.J

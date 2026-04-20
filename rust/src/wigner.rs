@@ -99,17 +99,11 @@ pub fn wigner_3j(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32) -> 
         return 0.0;
     }
 
-    let pref_sqrt = delta
-        * (fact(a1)
-            * fact(a2)
-            * fact(a3)
-            * fact(a4)
-            * fact(a5)
-            * fact(a6))
-        .sqrt();
+    let pref_sqrt =
+        delta * (fact(a1) * fact(a2) * fact(a3) * fact(a4) * fact(a5) * fact(a6)).sqrt();
 
     // z-sum bounds in integer form (see standard 3j formula)
-    let z_a1 = (tj1 + tj2 - tj3) / 2;           // = a1' in some notations
+    let z_a1 = (tj1 + tj2 - tj3) / 2; // = a1' in some notations
     let z_a2 = (tj1 - tm1) / 2;
     let z_a3 = (tj2 + tm2) / 2;
     let z_a4 = (tj3 - tj2 + tm1) / 2;
@@ -219,14 +213,7 @@ fn to_two_j(x: f64) -> i32 {
 }
 
 /// Wigner 3j symbol for float inputs (wraps integer implementation).
-pub fn wigner_3j_f(
-    j1: f64,
-    j2: f64,
-    j3: f64,
-    m1: f64,
-    m2: f64,
-    m3: f64,
-) -> f64 {
+pub fn wigner_3j_f(j1: f64, j2: f64, j3: f64, m1: f64, m2: f64, m3: f64) -> f64 {
     let tj1 = to_two_j(j1);
     let tj2 = to_two_j(j2);
     let tj3 = to_two_j(j3);
@@ -238,14 +225,7 @@ pub fn wigner_3j_f(
 }
 
 /// Wigner 6j symbol for float inputs (wraps integer implementation).
-pub fn wigner_6j_f(
-    j1: f64,
-    j2: f64,
-    j3: f64,
-    j4: f64,
-    j5: f64,
-    j6: f64,
-) -> f64 {
+pub fn wigner_6j_f(j1: f64, j2: f64, j3: f64, j4: f64, j5: f64, j6: f64) -> f64 {
     let tj1 = to_two_j(j1);
     let tj2 = to_two_j(j2);
     let tj3 = to_two_j(j3);
@@ -253,7 +233,7 @@ pub fn wigner_6j_f(
     let tj5 = to_two_j(j5);
     let tj6 = to_two_j(j6);
 
-        wigner_6j(tj1, tj2, tj3, tj4, tj5, tj6)
+    wigner_6j(tj1, tj2, tj3, tj4, tj5, tj6)
 }
 
 /// Clebsch-Gordan coefficient <j1 m1 j2 m2 | j3 m3>

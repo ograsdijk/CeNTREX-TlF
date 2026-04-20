@@ -1,8 +1,9 @@
-use crate::constants::{XConstants, BConstants};
-use crate::states::{UncoupledBasisState, UncoupledState, CoupledBasisState, CoupledState};
-use crate::x_uncoupled;
 use crate::b_coupled;
+use crate::constants::{BConstants, XConstants};
+use crate::states::{CoupledBasisState, CoupledState, UncoupledBasisState, UncoupledState};
+use crate::x_uncoupled;
 use num_complex::Complex64;
+use rayon::prelude::*;
 
 /// Container for X state Hamiltonian matrices.
 pub struct HamiltonianUncoupledX {
@@ -44,9 +45,7 @@ pub fn h_mat_elems(
 
     // Optimization: Precompute H|b> for all basis states.
     // This reduces operator applications from O(N^2) to O(N).
-    let h_applied: Vec<UncoupledState> = qn.iter()
-        .map(|b| h(*b, constants))
-        .collect();
+    let h_applied: Vec<UncoupledState> = qn.iter().map(|b| h(*b, constants)).collect();
 
     for (i, a) in qn.iter().enumerate() {
         for j in i..n {
@@ -80,9 +79,7 @@ pub fn h_mat_elems_b(
     let n = qn.len();
     let mut result = vec![Complex64::new(0.0, 0.0); n * n];
 
-    let h_applied: Vec<CoupledState> = qn.iter()
-        .map(|b| h(*b, constants))
-        .collect();
+    let h_applied: Vec<CoupledState> = qn.iter().map(|b| h(*b, constants)).collect();
 
     for (i, a) in qn.iter().enumerate() {
         for j in i..n {
@@ -102,39 +99,74 @@ pub fn h_mat_elems_b(
     result
 }
 
-/// Generate all X state Hamiltonian matrices.
 pub fn generate_uncoupled_hamiltonian_x(
     qn: &[UncoupledBasisState],
     constants: &XConstants,
 ) -> HamiltonianUncoupledX {
+    let ops: Vec<fn(UncoupledBasisState, &XConstants) -> UncoupledState> = vec![
+        x_uncoupled::h_ff,
+        x_uncoupled::h_sx,
+        x_uncoupled::h_sy,
+        x_uncoupled::h_sz,
+        x_uncoupled::h_zx,
+        x_uncoupled::h_zy,
+        x_uncoupled::h_zz,
+    ];
+
+    let results: Vec<Vec<Complex64>> = ops
+        .into_par_iter()
+        .map(|op| h_mat_elems(op, qn, constants))
+        .collect();
+
+    let mut it = results.into_iter();
     HamiltonianUncoupledX {
-        h_ff: h_mat_elems(x_uncoupled::h_ff, qn, constants),
-        h_sx: h_mat_elems(x_uncoupled::h_sx, qn, constants),
-        h_sy: h_mat_elems(x_uncoupled::h_sy, qn, constants),
-        h_sz: h_mat_elems(x_uncoupled::h_sz, qn, constants),
-        h_zx: h_mat_elems(x_uncoupled::h_zx, qn, constants),
-        h_zy: h_mat_elems(x_uncoupled::h_zy, qn, constants),
-        h_zz: h_mat_elems(x_uncoupled::h_zz, qn, constants),
+        h_ff: it.next().unwrap(),
+        h_sx: it.next().unwrap(),
+        h_sy: it.next().unwrap(),
+        h_sz: it.next().unwrap(),
+        h_zx: it.next().unwrap(),
+        h_zy: it.next().unwrap(),
+        h_zz: it.next().unwrap(),
     }
 }
 
-/// Generate all B state Hamiltonian matrices.
 pub fn generate_coupled_hamiltonian_b(
     qn: &[CoupledBasisState],
     constants: &BConstants,
 ) -> HamiltonianCoupledB {
+    let ops: Vec<fn(CoupledBasisState, &BConstants) -> CoupledState> = vec![
+        b_coupled::h_rot,
+        b_coupled::h_mhf_tl,
+        b_coupled::h_mhf_f,
+        b_coupled::h_ld,
+        b_coupled::h_cp1_tl,
+        b_coupled::h_c_tl,
+        b_coupled::h_sx,
+        b_coupled::h_sy,
+        b_coupled::h_sz,
+        b_coupled::h_zx,
+        b_coupled::h_zy,
+        b_coupled::h_zz,
+    ];
+
+    let results: Vec<Vec<Complex64>> = ops
+        .into_par_iter()
+        .map(|op| h_mat_elems_b(op, qn, constants))
+        .collect();
+
+    let mut it = results.into_iter();
     HamiltonianCoupledB {
-        h_rot: h_mat_elems_b(b_coupled::h_rot, qn, constants),
-        h_mhf_tl: h_mat_elems_b(b_coupled::h_mhf_tl, qn, constants),
-        h_mhf_f: h_mat_elems_b(b_coupled::h_mhf_f, qn, constants),
-        h_ld: h_mat_elems_b(b_coupled::h_ld, qn, constants),
-        h_cp1_tl: h_mat_elems_b(b_coupled::h_cp1_tl, qn, constants),
-        h_c_tl: h_mat_elems_b(b_coupled::h_c_tl, qn, constants),
-        h_sx: h_mat_elems_b(b_coupled::h_sx, qn, constants),
-        h_sy: h_mat_elems_b(b_coupled::h_sy, qn, constants),
-        h_sz: h_mat_elems_b(b_coupled::h_sz, qn, constants),
-        h_zx: h_mat_elems_b(b_coupled::h_zx, qn, constants),
-        h_zy: h_mat_elems_b(b_coupled::h_zy, qn, constants),
-        h_zz: h_mat_elems_b(b_coupled::h_zz, qn, constants),
+        h_rot: it.next().unwrap(),
+        h_mhf_tl: it.next().unwrap(),
+        h_mhf_f: it.next().unwrap(),
+        h_ld: it.next().unwrap(),
+        h_cp1_tl: it.next().unwrap(),
+        h_c_tl: it.next().unwrap(),
+        h_sx: it.next().unwrap(),
+        h_sy: it.next().unwrap(),
+        h_sz: it.next().unwrap(),
+        h_zx: it.next().unwrap(),
+        h_zy: it.next().unwrap(),
+        h_zz: it.next().unwrap(),
     }
 }

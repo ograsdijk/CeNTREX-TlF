@@ -1,14 +1,14 @@
+use crate::wigner::clebsch_gordan;
 use num_complex::Complex64;
 use std::collections::HashMap;
 use std::ops::Add;
 use std::ops::Div;
 use std::ops::Mul;
 use std::ops::Sub;
-use crate::wigner::clebsch_gordan;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 /// Uncoupled basis state for X state.
-pub struct UncoupledBasisState{
+pub struct UncoupledBasisState {
     /// Rotational quantum number J
     pub j: i32,
     /// Projection of J on z-axis
@@ -24,7 +24,7 @@ pub struct UncoupledBasisState{
     /// Omega quantum number
     pub omega: i32,
     /// Parity
-    pub parity: i8
+    pub parity: i8,
 }
 
 pub type Amp = Complex64;
@@ -66,22 +66,18 @@ impl UncoupledState {
     }
 }
 
-
 impl Add for UncoupledState {
     type Output = UncoupledState;
 
     fn add(self, other: UncoupledState) -> UncoupledState {
-        let mut map: HashMap<UncoupledBasisState, Amp> = HashMap::new();
-
-        for (amp, ket) in self.terms.into_iter().chain(other.terms.into_iter()) {
-            *map.entry(ket).or_insert(Complex64::new(0.0, 0.0)) += amp;
+        let mut terms = self.terms;
+        for (amp, ket) in other.terms {
+            if let Some(existing) = terms.iter_mut().find(|(_, k)| *k == ket) {
+                existing.0 += amp;
+            } else {
+                terms.push((amp, ket));
+            }
         }
-
-        let terms = map.into_iter()
-            .filter(|(_, amp)| amp.re != 0.0 || amp.im != 0.0)
-            .map(|(ket, amp)| (amp, ket))
-            .collect();
-
         UncoupledState { terms }
     }
 }
@@ -98,7 +94,8 @@ impl Mul<f64> for UncoupledState {
     type Output = UncoupledState;
 
     fn mul(self, rhs: f64) -> UncoupledState {
-        let terms = self.terms
+        let terms = self
+            .terms
             .into_iter()
             .map(|(amp, ket)| (amp * rhs, ket))
             .filter(|(amp, _)| amp.re != 0.0 || amp.im != 0.0)
@@ -111,7 +108,8 @@ impl Mul<Complex64> for UncoupledState {
     type Output = UncoupledState;
 
     fn mul(self, rhs: Complex64) -> UncoupledState {
-        let terms = self.terms
+        let terms = self
+            .terms
             .into_iter()
             .map(|(amp, ket)| (amp * rhs, ket))
             .filter(|(amp, _)| amp.re != 0.0 || amp.im != 0.0)
@@ -147,21 +145,19 @@ impl Mul<UncoupledState> for UncoupledState {
     type Output = UncoupledState;
 
     fn mul(self, rhs: UncoupledState) -> UncoupledState {
-        let mut map: HashMap<UncoupledBasisState, Amp> = HashMap::new();
-
+        let mut terms: Vec<Term> = Vec::new();
         for (amp1, ket1) in self.terms {
             for (amp2, ket2) in &rhs.terms {
                 if ket1 == *ket2 {
-                    *map.entry(ket1).or_insert(Complex64::new(0.0, 0.0)) += amp1 * amp2;
+                    let product = amp1 * amp2;
+                    if let Some(existing) = terms.iter_mut().find(|(_, k)| *k == ket1) {
+                        existing.0 += product;
+                    } else {
+                        terms.push((product, ket1));
+                    }
                 }
             }
         }
-
-        let terms = map.into_iter()
-            .filter(|(_, amp)| amp.re != 0.0 || amp.im != 0.0)
-            .map(|(ket, amp)| (amp, ket))
-            .collect();
-
         UncoupledState { terms }
     }
 }
@@ -239,17 +235,14 @@ impl Add for CoupledState {
     type Output = CoupledState;
 
     fn add(self, other: CoupledState) -> CoupledState {
-        let mut map: HashMap<CoupledBasisState, Amp> = HashMap::new();
-
-        for (amp, ket) in self.terms.into_iter().chain(other.terms.into_iter()) {
-            *map.entry(ket).or_insert(Complex64::new(0.0, 0.0)) += amp;
+        let mut terms = self.terms;
+        for (amp, ket) in other.terms {
+            if let Some(existing) = terms.iter_mut().find(|(_, k)| *k == ket) {
+                existing.0 += amp;
+            } else {
+                terms.push((amp, ket));
+            }
         }
-
-        let terms = map.into_iter()
-            .filter(|(_, amp)| amp.re != 0.0 || amp.im != 0.0)
-            .map(|(ket, amp)| (amp, ket))
-            .collect();
-
         CoupledState { terms }
     }
 }
@@ -266,7 +259,8 @@ impl Mul<f64> for CoupledState {
     type Output = CoupledState;
 
     fn mul(self, rhs: f64) -> CoupledState {
-        let terms = self.terms
+        let terms = self
+            .terms
             .into_iter()
             .map(|(amp, ket)| (amp * rhs, ket))
             .filter(|(amp, _)| amp.re != 0.0 || amp.im != 0.0)
@@ -279,7 +273,8 @@ impl Mul<Complex64> for CoupledState {
     type Output = CoupledState;
 
     fn mul(self, rhs: Complex64) -> CoupledState {
-        let terms = self.terms
+        let terms = self
+            .terms
             .into_iter()
             .map(|(amp, ket)| (amp * rhs, ket))
             .filter(|(amp, _)| amp.re != 0.0 || amp.im != 0.0)
@@ -334,22 +329,35 @@ impl CoupledBasisState {
                     for m2 in (-i2..=i2).step_by(2) {
                         // Check angular momentum conservation
                         // mJ is single, m1, mF1 are doubled
-                        if 2 * mj + m1 != mf1 { continue; }
+                        if 2 * mj + m1 != mf1 {
+                            continue;
+                        }
                         // mF1, m2 are doubled, mF is single
-                        if mf1 + m2 != 2 * mf { continue; }
+                        if mf1 + m2 != 2 * mf {
+                            continue;
+                        }
 
                         // Convert single integer quantum numbers to doubled for CG calculation
                         let cg1 = clebsch_gordan(2 * j, 2 * mj, i1, m1, f1, mf1);
-                        if cg1 == 0.0 { continue; }
+                        if cg1 == 0.0 {
+                            continue;
+                        }
 
                         let cg2 = clebsch_gordan(f1, mf1, i2, m2, 2 * f, 2 * mf);
-                        if cg2 == 0.0 { continue; }
+                        if cg2 == 0.0 {
+                            continue;
+                        }
 
                         let amp = Complex64::new(cg1 * cg2, 0.0);
                         let state = UncoupledBasisState {
-                            j, mj, i1, m1, i2, m2,
+                            j,
+                            mj,
+                            i1,
+                            m1,
+                            i2,
+                            m2,
                             omega: self.omega,
-                            parity: self.p.unwrap_or(0)
+                            parity: self.p.unwrap_or(0),
                         };
                         terms.push((amp, state));
                     }
@@ -364,7 +372,7 @@ impl CoupledBasisState {
 /// Enum wrapper for both basis types.
 pub enum BasisStateEnum {
     Coupled(CoupledBasisState),
-    Uncoupled(UncoupledBasisState)
+    Uncoupled(UncoupledBasisState),
 }
 
 impl BasisStateEnum {
@@ -372,11 +380,19 @@ impl BasisStateEnum {
     pub fn inner_product(&self, other: &BasisStateEnum) -> Complex64 {
         match (self, other) {
             (BasisStateEnum::Coupled(a), BasisStateEnum::Coupled(b)) => {
-                if a == b { Complex64::new(1.0, 0.0) } else { Complex64::new(0.0, 0.0) }
-            },
+                if a == b {
+                    Complex64::new(1.0, 0.0)
+                } else {
+                    Complex64::new(0.0, 0.0)
+                }
+            }
             (BasisStateEnum::Uncoupled(a), BasisStateEnum::Uncoupled(b)) => {
-                if a == b { Complex64::new(1.0, 0.0) } else { Complex64::new(0.0, 0.0) }
-            },
+                if a == b {
+                    Complex64::new(1.0, 0.0)
+                } else {
+                    Complex64::new(0.0, 0.0)
+                }
+            }
             (BasisStateEnum::Uncoupled(a), BasisStateEnum::Coupled(b)) => {
                 let uncoupled_b = b.transform_to_uncoupled();
                 for (amp, state) in uncoupled_b.terms {
@@ -385,7 +401,7 @@ impl BasisStateEnum {
                     }
                 }
                 Complex64::new(0.0, 0.0)
-            },
+            }
             (BasisStateEnum::Coupled(a), BasisStateEnum::Uncoupled(b)) => {
                 let uncoupled_a = a.transform_to_uncoupled();
                 for (amp, state) in uncoupled_a.terms {
@@ -398,4 +414,3 @@ impl BasisStateEnum {
         }
     }
 }
-
