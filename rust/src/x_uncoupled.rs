@@ -134,23 +134,24 @@ pub fn r10(psi: UncoupledBasisState, _constants: &XConstants) -> UncoupledState 
     let j = psi.j as f64;
     let mj = psi.mj as f64;
 
-    let amp1 = 2.0f64.sqrt() * ((j - mj) * (j + mj) / (8.0 * j * j - 2.0)).sqrt();
-    let mut ket1 = psi;
-    ket1.j -= 1;
-    ket1.parity = parity_x(ket1.j);
+    let mut terms = Vec::with_capacity(2);
+
+    if psi.j >= 1 {
+        let amp1 = 2.0f64.sqrt() * ((j - mj) * (j + mj) / (8.0 * j * j - 2.0)).sqrt();
+        let mut ket1 = psi;
+        ket1.j -= 1;
+        ket1.parity = parity_x(ket1.j);
+        terms.push((Complex64::new(amp1, 0.0), ket1));
+    }
 
     let amp2 =
         2.0f64.sqrt() * ((j - mj + 1.0) * (j + mj + 1.0) / (8.0 * j * j + 16.0 * j + 6.0)).sqrt();
     let mut ket2 = psi;
     ket2.j += 1;
     ket2.parity = parity_x(ket2.j);
+    terms.push((Complex64::new(amp2, 0.0), ket2));
 
-    UncoupledState {
-        terms: vec![
-            (Complex64::new(amp1, 0.0), ket1),
-            (Complex64::new(amp2, 0.0), ket2),
-        ],
-    }
+    UncoupledState { terms }
 }
 
 /// Spherical tensor component R_1^-1.
@@ -158,11 +159,16 @@ pub fn r1m(psi: UncoupledBasisState, _constants: &XConstants) -> UncoupledState 
     let j = psi.j as f64;
     let mj = psi.mj as f64;
 
-    let amp1 = -0.5 * 2.0f64.sqrt() * ((j + mj) * (j + mj - 1.0) / (4.0 * j * j - 1.0)).sqrt();
-    let mut ket1 = psi;
-    ket1.j -= 1;
-    ket1.mj -= 1;
-    ket1.parity = parity_x(ket1.j);
+    let mut terms = Vec::with_capacity(2);
+
+    if psi.j >= 1 {
+        let amp1 = -0.5 * 2.0f64.sqrt() * ((j + mj) * (j + mj - 1.0) / (4.0 * j * j - 1.0)).sqrt();
+        let mut ket1 = psi;
+        ket1.j -= 1;
+        ket1.mj -= 1;
+        ket1.parity = parity_x(ket1.j);
+        terms.push((Complex64::new(amp1, 0.0), ket1));
+    }
 
     let amp2 = 0.5
         * 2.0f64.sqrt()
@@ -171,13 +177,9 @@ pub fn r1m(psi: UncoupledBasisState, _constants: &XConstants) -> UncoupledState 
     ket2.j += 1;
     ket2.mj -= 1;
     ket2.parity = parity_x(ket2.j);
+    terms.push((Complex64::new(amp2, 0.0), ket2));
 
-    UncoupledState {
-        terms: vec![
-            (Complex64::new(amp1, 0.0), ket1),
-            (Complex64::new(amp2, 0.0), ket2),
-        ],
-    }
+    UncoupledState { terms }
 }
 
 /// Spherical tensor component R_1^+1.
@@ -185,11 +187,16 @@ pub fn r1p(psi: UncoupledBasisState, _constants: &XConstants) -> UncoupledState 
     let j = psi.j as f64;
     let mj = psi.mj as f64;
 
-    let amp1 = -0.5 * 2.0f64.sqrt() * ((j - mj) * (j - mj - 1.0) / (4.0 * j * j - 1.0)).sqrt();
-    let mut ket1 = psi;
-    ket1.j -= 1;
-    ket1.mj += 1;
-    ket1.parity = parity_x(ket1.j);
+    let mut terms = Vec::with_capacity(2);
+
+    if psi.j >= 1 {
+        let amp1 = -0.5 * 2.0f64.sqrt() * ((j - mj) * (j - mj - 1.0) / (4.0 * j * j - 1.0)).sqrt();
+        let mut ket1 = psi;
+        ket1.j -= 1;
+        ket1.mj += 1;
+        ket1.parity = parity_x(ket1.j);
+        terms.push((Complex64::new(amp1, 0.0), ket1));
+    }
 
     let amp2 = 0.5
         * 2.0f64.sqrt()
@@ -198,13 +205,9 @@ pub fn r1p(psi: UncoupledBasisState, _constants: &XConstants) -> UncoupledState 
     ket2.j += 1;
     ket2.mj += 1;
     ket2.parity = parity_x(ket2.j);
+    terms.push((Complex64::new(amp2, 0.0), ket2));
 
-    UncoupledState {
-        terms: vec![
-            (Complex64::new(amp1, 0.0), ket1),
-            (Complex64::new(amp2, 0.0), ket2),
-        ],
-    }
+    UncoupledState { terms }
 }
 
 /// Stark Hamiltonian for E along x.

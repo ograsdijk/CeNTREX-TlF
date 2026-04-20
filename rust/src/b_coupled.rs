@@ -363,7 +363,7 @@ pub fn d_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledSta
 
 /// Stark Hamiltonian for E along x: H_Sx = -(d_-1 - d_+1)/sqrt(2).
 pub fn h_sx(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
-    // -(d_-1 - d_+1) = d_+1 - d_-1
+    // H_Sx = (d_+1 - d_-1) / sqrt(2)
     let res = d_p(psi, 1, constants) - d_p(psi, -1, constants);
     res / SQRT_2
 }
@@ -381,7 +381,6 @@ pub fn h_sz(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
 }
 
 /// Magnetic dipole operator (p-th spherical tensor component) for B state.
-/// Rust translation of Python mu_p (with gL = 1.0 hard-coded).
 pub fn mu_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledState {
     let g_l = constants.gl;
 
@@ -459,7 +458,7 @@ pub fn mu_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledSt
     CoupledState::from_vec(terms)
 }
 
-/// Zeeman Hamiltonian for B along x: H_Zx = -(μ_-1 - μ_+1)/sqrt(2).
+/// Zeeman Hamiltonian for B along x: H_Zx = (μ_+1 - μ_-1)/sqrt(2).
 pub fn h_zx(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
     let res = mu_p(psi, 1, constants) - mu_p(psi, -1, constants);
     res / SQRT_2
