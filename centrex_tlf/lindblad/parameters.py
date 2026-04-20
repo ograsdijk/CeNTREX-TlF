@@ -193,9 +193,8 @@ def generate_lindblad_parameters(transition_selectors: Sequence[Any], **kwargs: 
                 [
                     (f"ω{idx}", hamiltonian.Γ),
                     (f"φ{idx}", 0.0),
-                    (f"P{idx}", f"sin(ω{idx}*t+φ{idx})"),
-                    (str(symbols[0]), f"P{idx} > 0"),
-                    (str(symbols[1]), f"P{idx} <= 0"),
+                    (str(symbols[0]), f"square_wave(t, ω{idx}, φ{idx})"),
+                    (str(symbols[1]), f"1 - {symbols[0]}"),
                 ]
             )
         elif len(symbols) > 2:
