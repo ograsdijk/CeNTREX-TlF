@@ -89,7 +89,7 @@ def _solve_python_reference(
     save_start: bool,
     maxiters: int,
 ) -> LindbladResult:
-    rhs = reference_rhs if execution_mode in {"dense", "reference"} else structured_rhs
+    rhs = reference_rhs if execution_mode == "reference" else structured_rhs
     solution = solve_ivp(
         lambda t, y: rhs(prepared, y, t),
         t_span=t_span,
@@ -180,7 +180,7 @@ def _solve_scipy_with_rust_matrix_rhs(
         raise RuntimeError("rust plan is required for the Rust SciPy solver path")
     evaluator = create_lindblad_rhs_evaluator_py(
         prepared.rust_plan,
-        "reference" if execution_mode in {"dense", "reference"} else execution_mode,
+        execution_mode,
     )
     y0 = _flatten_complex_matrix_state(rho0)
     solution = solve_ivp(
@@ -207,9 +207,9 @@ def _solve_scipy_with_rust_matrix_rhs(
     return LindbladMatrixResult(t=times, matrix_y=matrices, layout=prepared.layout)
 
 
-def _solve_scipy_with_rust_split_rhs(
+def _solve_scipy_with_rust_packed_rhs(
     prepared: PreparedLindbladProblem,
-    rho0: np.ndarray,
+    packed_rho0: np.ndarray,
     t_span: tuple[float, float],
     *,
     execution_mode: str,
@@ -222,23 +222,22 @@ def _solve_scipy_with_rust_split_rhs(
     maxiters: int,
     jacobian: str,
     jacobian_format: str,
-) -> LindbladMatrixResult:
+) -> LindbladResult:
     from ..centrex_tlf_rust import create_lindblad_rhs_evaluator_py
 
     if prepared.rust_plan is None:
         raise RuntimeError("rust plan is required for the Rust SciPy solver path")
     evaluator = create_lindblad_rhs_evaluator_py(
         prepared.rust_plan,
-        "reference" if execution_mode in {"dense", "reference"} else execution_mode,
+        execution_mode,
     )
-    y0_complex = _flatten_complex_matrix_state(rho0)
-    y0 = _complex_to_split_real(y0_complex)
+    y0 = np.asarray(packed_rho0, dtype=np.float64)
     is_time_dependent = _plan_is_time_dependent(prepared)
     jacobian_cache: scipy.sparse.csc_matrix | np.ndarray | None = None
 
     def rhs(t: float, y: np.ndarray) -> np.ndarray:
         return np.asarray(
-            evaluator.rhs_split_py(np.ascontiguousarray(y, dtype=np.float64), t),
+            evaluator.rhs_packed_py(np.ascontiguousarray(y, dtype=np.float64), t),
             dtype=np.float64,
         )
 
@@ -248,7 +247,7 @@ def _solve_scipy_with_rust_split_rhs(
             raise RuntimeError("only jacobian='exact' is currently implemented")
         if jacobian_cache is not None and not is_time_dependent:
             return jacobian_cache
-        rows, cols, values = evaluator.jacobian_split_sparse_py(t)
+        rows, cols, values = evaluator.jacobian_packed_sparse_py(t)
         rows_arr = np.asarray(rows, dtype=np.int64)
         cols_arr = np.asarray(cols, dtype=np.int64)
         values_arr = np.asarray(values, dtype=np.float64)
@@ -278,15 +277,13 @@ def _solve_scipy_with_rust_split_rhs(
     if not solution.success:
         raise RuntimeError(solution.message)
     times = np.asarray(solution.t, dtype=np.float64)
-    split_states = np.asarray(solution.y.T, dtype=np.float64)
+    packed_states = np.asarray(solution.y.T, dtype=np.float64)
     if saveat is None and not save_start and times.size > 0 and np.isclose(times[0], t_span[0]):
         times = times[1:]
-        split_states = split_states[1:]
-    if split_states.shape[0] > maxiters + 1:
+        packed_states = packed_states[1:]
+    if packed_states.shape[0] > maxiters + 1:
         raise RuntimeError("scipy stiff rust solver exceeded maxiters budget")
-    flat_states = np.vstack([_split_real_to_complex(state) for state in split_states])
-    matrices = flat_states.reshape((-1, prepared.layout.n, prepared.layout.n))
-    return LindbladMatrixResult(t=times, matrix_y=matrices, layout=prepared.layout)
+    return LindbladResult(t=times, packed_y=packed_states, layout=prepared.layout)
 
 
 def solve_lindblad(
@@ -302,19 +299,18 @@ def solve_lindblad(
     dt: float = 1e-8,
     saveat: None | float | Sequence[float] | npt.NDArray[np.floating] = None,
     save_start: bool = True,
-    save_everystep: bool = True,
     maxiters: int = 100_000,
     execution_mode: str = "structured",
     jacobian: str = "exact",
     jacobian_format: str = "auto",
 ) -> LindbladResult | LindbladMatrixResult:
-    if solver not in {"explicit", "dopri5", "scipy", "scipy_bdf", "scipy_radau"}:
+    if solver not in {"explicit", "dopri5", "bdf", "scipy", "scipy_bdf", "scipy_radau"}:
         raise NotImplementedError(
-            "supported solvers are 'explicit', 'dopri5', 'scipy', 'scipy_bdf', and 'scipy_radau'"
+            "supported solvers are 'explicit'/'dopri5', 'bdf', 'scipy', 'scipy_bdf', and 'scipy_radau'"
         )
-    if execution_mode not in {"dense", "reference", "structured", "structured_blas", "structured_upper"}:
+    if execution_mode not in {"reference", "structured", "structured_upper"}:
         raise NotImplementedError(
-            "supported execution_mode values are 'dense', 'reference', 'structured', 'structured_blas', and 'structured_upper'"
+            "supported execution_mode values are 'reference', 'structured', and 'structured_upper'"
         )
     if len(t_span) != 2:
         raise ValueError("t_span must contain exactly two values")
@@ -347,9 +343,9 @@ def solve_lindblad(
         if jacobian_format not in {"auto", "sparse", "dense"}:
             raise NotImplementedError("jacobian_format must be 'auto', 'sparse', or 'dense'")
         chosen_format = "sparse" if jacobian_format == "auto" else jacobian_format
-        return _solve_scipy_with_rust_split_rhs(
+        return _solve_scipy_with_rust_packed_rhs(
             prepared,
-            rho0_array,
+            packed_rho0,
             t_span_tuple,
             execution_mode=execution_mode,
             method="BDF" if solver == "scipy_bdf" else "Radau",
@@ -362,40 +358,43 @@ def solve_lindblad(
             jacobian=jacobian,
             jacobian_format=chosen_format,
         )
+    if backend == "rust" and solver == "bdf" and prepared.rust_plan is not None:
+        from ..centrex_tlf_rust import solve_lindblad_bdf_py
+
+        times, packed_states = solve_lindblad_bdf_py(
+            prepared.rust_plan,
+            packed_rho0,
+            t_span_tuple[0],
+            t_span_tuple[1],
+            float(abstol),
+            float(reltol),
+            float(dt),
+            None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
+            bool(save_start),
+            int(maxiters),
+            execution_mode,
+        )
+        return LindbladResult(
+            t=np.asarray(times, dtype=np.float64),
+            packed_y=np.asarray(packed_states, dtype=np.float64),
+            layout=prepared.layout,
+        )
     if backend == "rust" and prepared.rust_plan is not None:
-        if solver == "explicit":
-            from ..centrex_tlf_rust import solve_lindblad_explicit_py
+        from ..centrex_tlf_rust import solve_lindblad_dopri5_py
 
-            times, packed_states = solve_lindblad_explicit_py(
-                prepared.rust_plan,
-                packed_rho0,
-                t_span_tuple[0],
-                t_span_tuple[1],
-                float(abstol),
-                float(reltol),
-                float(dt),
-                None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
-                bool(save_start),
-                bool(save_everystep),
-                int(maxiters),
-                "reference" if execution_mode in {"dense", "reference"} else execution_mode,
-            )
-        else:
-            from ..centrex_tlf_rust import solve_lindblad_dopri5_py
-
-            times, packed_states = solve_lindblad_dopri5_py(
-                prepared.rust_plan,
-                packed_rho0,
-                t_span_tuple[0],
-                t_span_tuple[1],
-                float(abstol),
-                float(reltol),
-                float(dt),
-                None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
-                bool(save_start),
-                int(maxiters),
-                "reference" if execution_mode in {"dense", "reference"} else execution_mode,
-            )
+        times, packed_states = solve_lindblad_dopri5_py(
+            prepared.rust_plan,
+            packed_rho0,
+            t_span_tuple[0],
+            t_span_tuple[1],
+            float(abstol),
+            float(reltol),
+            float(dt),
+            None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
+            bool(save_start),
+            int(maxiters),
+            execution_mode,
+        )
         return LindbladResult(
             t=np.asarray(times, dtype=np.float64),
             packed_y=np.asarray(packed_states, dtype=np.float64),

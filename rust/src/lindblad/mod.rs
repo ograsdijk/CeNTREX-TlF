@@ -4,15 +4,14 @@ pub mod layout;
 pub mod plan;
 pub mod python_api;
 pub mod rhs;
-pub mod solver;
+pub mod solver_bdf;
 pub mod solver_ode;
 
-use pyo3::prelude::*;
 use plan::PreparedLindbladPlan;
+use pyo3::prelude::*;
 use python_api::{
-    create_lindblad_rhs_evaluator_py,
-    evaluate_lindblad_hamiltonian_py, lindblad_jvp_py, lindblad_rhs_py,
-    prepare_lindblad_problem_py, solve_lindblad_dopri5_py, solve_lindblad_explicit_py,
+    create_lindblad_rhs_evaluator_py, evaluate_lindblad_hamiltonian_py, lindblad_jvp_py,
+    lindblad_rhs_py, prepare_lindblad_problem_py, solve_lindblad_bdf_py, solve_lindblad_dopri5_py,
     LindbladRhsEvaluator,
 };
 
@@ -24,7 +23,7 @@ pub fn register_python_api(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lindblad_rhs_py, m)?)?;
     m.add_function(wrap_pyfunction!(lindblad_jvp_py, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_lindblad_hamiltonian_py, m)?)?;
-    m.add_function(wrap_pyfunction!(solve_lindblad_explicit_py, m)?)?;
     m.add_function(wrap_pyfunction!(solve_lindblad_dopri5_py, m)?)?;
+    m.add_function(wrap_pyfunction!(solve_lindblad_bdf_py, m)?)?;
     Ok(())
 }

@@ -157,7 +157,11 @@ impl UpperTriLayout {
         }
     }
 
-    pub fn pack_from_dense(&self, dense: &[Complex64], upper: &mut [Complex64]) -> Result<(), String> {
+    pub fn pack_from_dense(
+        &self,
+        dense: &[Complex64],
+        upper: &mut [Complex64],
+    ) -> Result<(), String> {
         if dense.len() != self.n * self.n {
             return Err(format!(
                 "expected dense matrix length {}, got {}",
@@ -180,7 +184,11 @@ impl UpperTriLayout {
         Ok(())
     }
 
-    pub fn unpack_packed_state(&self, packed: &[f64], upper: &mut [Complex64]) -> Result<(), String> {
+    pub fn unpack_packed_state(
+        &self,
+        packed: &[f64],
+        upper: &mut [Complex64],
+    ) -> Result<(), String> {
         let expected = self.n * self.n;
         if packed.len() != expected {
             return Err(format!(
@@ -241,7 +249,11 @@ impl UpperTriLayout {
         Ok(())
     }
 
-    pub fn expand_to_dense(&self, upper: &[Complex64], dense: &mut [Complex64]) -> Result<(), String> {
+    pub fn expand_to_dense(
+        &self,
+        upper: &[Complex64],
+        dense: &mut [Complex64],
+    ) -> Result<(), String> {
         if upper.len() != self.len() {
             return Err(format!(
                 "expected upper-triangle buffer length {}, got {}",

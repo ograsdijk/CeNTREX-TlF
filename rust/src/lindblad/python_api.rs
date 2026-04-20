@@ -1,10 +1,10 @@
 use crate::lindblad::plan::{parse_plan_payload, PreparedLindbladPlan};
 use crate::lindblad::rhs::{
-    build_split_jacobian_sparse, rhs_matrix_into, rhs_matrix_into_with_profile, rhs_packed,
-    rhs_packed_into_with_profile, rhs_split_into_with_profile, ExecutionMode, RhsProfileStats,
-    RhsWorkspace,
+    build_packed_jacobian_sparse, build_split_jacobian_sparse, rhs_matrix_into,
+    rhs_matrix_into_with_profile, rhs_packed, rhs_packed_into_with_profile,
+    rhs_split_into_with_profile, ExecutionMode, RhsProfileStats, RhsWorkspace,
 };
-use crate::lindblad::solver::{solve_explicit, ExplicitSolverOptions};
+use crate::lindblad::solver_bdf::{solve_bdf, BdfSolverOptions};
 use crate::lindblad::solver_ode::{solve_dopri5, OdeSolverOptions};
 use num_complex::Complex64;
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1};
@@ -200,6 +200,28 @@ impl LindbladRhsEvaluator {
             PyArray1::from_vec(py, values),
         ))
     }
+
+    #[pyo3(signature = (t, tol = 0.0))]
+    pub fn jacobian_packed_sparse_py<'py>(
+        &self,
+        py: Python<'py>,
+        t: f64,
+        tol: f64,
+    ) -> PyResult<(
+        Bound<'py, PyArray1<i64>>,
+        Bound<'py, PyArray1<i64>>,
+        Bound<'py, PyArray1<f64>>,
+    )> {
+        let mut workspace = self.workspace.borrow_mut();
+        let (rows, cols, values) =
+            build_packed_jacobian_sparse(&self.plan, t, self.mode, &mut workspace, tol)
+                .map_err(PyValueError::new_err)?;
+        Ok((
+            PyArray1::from_vec(py, rows),
+            PyArray1::from_vec(py, cols),
+            PyArray1::from_vec(py, values),
+        ))
+    }
 }
 
 #[pyfunction(signature = (payload))]
@@ -266,67 +288,11 @@ pub fn evaluate_lindblad_hamiltonian_py<'py>(
     plan: PyRef<'py, PreparedLindbladPlan>,
     t: f64,
 ) -> PyResult<Bound<'py, PyArray2<Complex64>>> {
-    let matrix = plan.evaluate_hamiltonian(t).map_err(PyValueError::new_err)?;
+    let matrix = plan
+        .evaluate_hamiltonian(t)
+        .map_err(PyValueError::new_err)?;
     let array = PyArray1::from_vec(py, matrix);
     array.reshape((plan.n_states(), plan.n_states()))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    save_everystep = true,
-    maxiters = 100000,
-    mode = "structured"
-))]
-pub fn solve_lindblad_explicit_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    save_everystep: bool,
-    maxiters: usize,
-    mode: &str,
-) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let options = ExplicitSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat.map(|values| values.as_slice().map(|slice| slice.to_vec())).transpose().map_err(PyValueError::new_err)?,
-        save_start,
-        save_everystep,
-        maxiters,
-        mode: execution_mode,
-    };
-    let (times, states) = solve_explicit(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, times);
-    let n_rows = if plan.layout.packed_len() == 0 {
-        0
-    } else {
-        states.len() / plan.layout.packed_len()
-    };
-    let states_array = PyArray1::from_vec(py, states).reshape((n_rows, plan.layout.packed_len()))?;
-    Ok((times_array, states_array))
 }
 
 #[pyfunction(signature = (
@@ -370,6 +336,65 @@ pub fn solve_lindblad_dopri5_py<'py>(
         mode: execution_mode,
     };
     let (times, states) = solve_dopri5(
+        &plan,
+        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
+        t0,
+        t1,
+        &options,
+    )
+    .map_err(PyValueError::new_err)?;
+    let times_array = PyArray1::from_vec(py, times);
+    let n_rows = if plan.layout.packed_len() == 0 {
+        0
+    } else {
+        states.len() / plan.layout.packed_len()
+    };
+    let states_array =
+        PyArray1::from_vec(py, states).reshape((n_rows, plan.layout.packed_len()))?;
+    Ok((times_array, states_array))
+}
+
+#[pyfunction(signature = (
+    plan,
+    packed_rho0,
+    t0,
+    t1,
+    abstol,
+    reltol,
+    dt,
+    saveat = None,
+    save_start = true,
+    maxiters = 100000,
+    mode = "structured"
+))]
+pub fn solve_lindblad_bdf_py<'py>(
+    py: Python<'py>,
+    plan: PyRef<'py, PreparedLindbladPlan>,
+    packed_rho0: PyReadonlyArray1<'py, f64>,
+    t0: f64,
+    t1: f64,
+    abstol: f64,
+    reltol: f64,
+    dt: f64,
+    saveat: Option<PyReadonlyArray1<'py, f64>>,
+    save_start: bool,
+    maxiters: usize,
+    mode: &str,
+) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
+    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
+    let options = BdfSolverOptions {
+        abstol,
+        reltol,
+        dt,
+        saveat: saveat
+            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
+            .transpose()
+            .map_err(PyValueError::new_err)?,
+        save_start,
+        maxiters,
+        mode: execution_mode,
+    };
+    let (times, states) = solve_bdf(
         &plan,
         packed_rho0.as_slice().map_err(PyValueError::new_err)?,
         t0,

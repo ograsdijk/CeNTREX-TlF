@@ -1,9 +1,9 @@
+use crate::lindblad::blas::BlasConfig;
 use crate::lindblad::eval::{
-    eval_expression_into, eval_scalar_expression_into, scalar_value,
-    CompiledExpression, Instruction, InstructionOp, RuntimeValue,
+    eval_expression_into, eval_scalar_expression_into, scalar_value, CompiledExpression,
+    Instruction, InstructionOp, RuntimeValue,
 };
 use crate::lindblad::layout::{PackedHermitianLayout, UpperTriLayout};
-use crate::lindblad::blas::BlasConfig;
 use num_complex::Complex64;
 use numpy::{PyReadonlyArray1, PyReadonlyArrayDyn, PyUntypedArrayMethods};
 use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
@@ -116,7 +116,11 @@ pub struct HamiltonianPlan {
 }
 
 impl HamiltonianPlan {
-    pub fn fill(&self, parameter_values: &[RuntimeValue], t: f64) -> Result<Vec<Complex64>, String> {
+    pub fn fill(
+        &self,
+        parameter_values: &[RuntimeValue],
+        t: f64,
+    ) -> Result<Vec<Complex64>, String> {
         let mut matrix = vec![Complex64::new(0.0, 0.0); self.n * self.n];
         let mut temps: Vec<RuntimeValue> = Vec::with_capacity(self.temps.len());
         let mut eval_stack = Vec::new();
@@ -183,8 +187,10 @@ impl HamiltonianPlan {
                         for local_offset in 0..segment.values[0].len() {
                             let col = segment.start_col + local_offset;
                             let mut contribution = Complex64::new(0.0, 0.0);
-                            for (coeff_pos, coeff_index) in segment.coeff_indices.iter().enumerate() {
-                                contribution += coeff_values[*coeff_index] * segment.values[coeff_pos][local_offset];
+                            for (coeff_pos, coeff_index) in segment.coeff_indices.iter().enumerate()
+                            {
+                                contribution += coeff_values[*coeff_index]
+                                    * segment.values[coeff_pos][local_offset];
                             }
                             matrix[row_offset + col] += contribution;
                             if row_plan.row != col {
@@ -377,6 +383,125 @@ impl HamiltonianPlan {
 }
 
 #[derive(Clone, Debug)]
+pub struct HermitianSparsePattern {
+    pub n: usize,
+    pub nnz: usize,
+    pub row_ptrs: Vec<usize>,
+    pub col_indices: Vec<usize>,
+    pub col_ptrs: Vec<usize>,
+    pub row_indices_csc: Vec<usize>,
+    pub csc_to_csr: Vec<usize>,
+}
+
+impl HermitianSparsePattern {
+    pub fn from_hamiltonian_plan(plan: &HamiltonianPlan) -> Self {
+        let n = plan.n;
+        let mut mask = vec![false; n * n];
+
+        if plan.kind == "decomposed" {
+            for i in 0..n {
+                for j in i..n {
+                    if plan.static_matrix[i * n + j] != Complex64::new(0.0, 0.0) {
+                        mask[i * n + j] = true;
+                    }
+                }
+            }
+            for coeff in &plan.coefficients {
+                if !coeff.basis_row_segments.is_empty() {
+                    for seg in &coeff.basis_row_segments {
+                        for (offset, _) in seg.values.iter().enumerate() {
+                            let col = seg.start_col + offset;
+                            let (r, c) = if seg.row <= col {
+                                (seg.row, col)
+                            } else {
+                                (col, seg.row)
+                            };
+                            mask[r * n + c] = true;
+                        }
+                    }
+                } else {
+                    for bt in &coeff.basis_terms {
+                        let (r, c) = if bt.i <= bt.j {
+                            (bt.i, bt.j)
+                        } else {
+                            (bt.j, bt.i)
+                        };
+                        mask[r * n + c] = true;
+                    }
+                }
+            }
+        } else {
+            for entry in &plan.entries {
+                let (r, c) = if entry.i <= entry.j {
+                    (entry.i, entry.j)
+                } else {
+                    (entry.j, entry.i)
+                };
+                mask[r * n + c] = true;
+            }
+        }
+
+        let mut row_ptrs = Vec::with_capacity(n + 1);
+        let mut col_indices = Vec::new();
+        for i in 0..n {
+            row_ptrs.push(col_indices.len());
+            for j in i..n {
+                if mask[i * n + j] {
+                    col_indices.push(j);
+                }
+            }
+        }
+        row_ptrs.push(col_indices.len());
+        let nnz = col_indices.len();
+
+        let mut col_ptrs = vec![0usize; n + 1];
+        let mut row_indices_csc = Vec::with_capacity(nnz);
+        let mut csc_to_csr = Vec::with_capacity(nnz);
+
+        let mut counts = vec![0usize; n];
+        for i in 0..n {
+            for ptr in row_ptrs[i]..row_ptrs[i + 1] {
+                let j = col_indices[ptr];
+                if j > i {
+                    counts[j] += 1;
+                }
+            }
+        }
+        let mut offset = 0usize;
+        for j in 0..n {
+            col_ptrs[j] = offset;
+            offset += counts[j];
+        }
+        col_ptrs[n] = offset;
+
+        row_indices_csc.resize(offset, 0);
+        csc_to_csr.resize(offset, 0);
+        let mut write_pos = col_ptrs.clone();
+        for i in 0..n {
+            for ptr in row_ptrs[i]..row_ptrs[i + 1] {
+                let j = col_indices[ptr];
+                if j > i {
+                    let pos = write_pos[j];
+                    row_indices_csc[pos] = i;
+                    csc_to_csr[pos] = ptr;
+                    write_pos[j] += 1;
+                }
+            }
+        }
+
+        Self {
+            n,
+            nnz,
+            row_ptrs,
+            col_indices,
+            col_ptrs,
+            row_indices_csc,
+            csc_to_csr,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct StructuredJump {
     pub target: usize,
     pub source: usize,
@@ -396,11 +521,14 @@ pub struct PreparedLindbladPlan {
     pub parameter_graph: ParameterGraph,
     pub hamiltonian_plan: HamiltonianPlan,
     pub dense_c_array: Vec<Complex64>,
+    pub dense_cdagger_c: Vec<Complex64>,
     pub n_collapse: usize,
     pub structured_jumps: Vec<StructuredJump>,
     pub source_decay_rates: Vec<f64>,
     pub incoming_transfers_by_target: Vec<Vec<IncomingTransfer>>,
     pub blas_config: Option<BlasConfig>,
+    pub hamiltonian_sparse_pattern: HermitianSparsePattern,
+    pub is_time_dependent: bool,
 }
 
 impl PreparedLindbladPlan {
@@ -459,8 +587,14 @@ impl PreparedLindbladPlan {
     ) -> Result<(), String> {
         self.parameter_graph
             .evaluate_into(t, parameter_values, eval_stack, scalar_stack)?;
-        self.hamiltonian_plan
-            .fill_into(parameter_values.as_slice(), t, temps, eval_stack, scalar_stack, matrix)
+        self.hamiltonian_plan.fill_into(
+            parameter_values.as_slice(),
+            t,
+            temps,
+            eval_stack,
+            scalar_stack,
+            matrix,
+        )
     }
 }
 
@@ -684,13 +818,17 @@ fn parse_hamiltonian_plan(obj: &Bound<'_, PyAny>) -> PyResult<HamiltonianPlan> {
                                     required_item(segment_dict, "values_re")?.extract()?;
                                 let values_im: Vec<Vec<f64>> =
                                     required_item(segment_dict, "values_im")?.extract()?;
-                                if values_re.len() != values_im.len() || values_re.len() != coeff_indices.len() {
+                                if values_re.len() != values_im.len()
+                                    || values_re.len() != coeff_indices.len()
+                                {
                                     return Err(PyErr::new::<PyValueError, _>(
                                         "row_plans values must align with coeff_indices",
                                     ));
                                 }
                                 let mut values = Vec::with_capacity(values_re.len());
-                                for (row_re, row_im) in values_re.into_iter().zip(values_im.into_iter()) {
+                                for (row_re, row_im) in
+                                    values_re.into_iter().zip(values_im.into_iter())
+                                {
                                     if row_re.len() != row_im.len() {
                                         return Err(PyErr::new::<PyValueError, _>(
                                             "row_plans value rows must have matching real/imag lengths",
@@ -703,7 +841,8 @@ fn parse_hamiltonian_plan(obj: &Bound<'_, PyAny>) -> PyResult<HamiltonianPlan> {
                                     values.push(entry_values);
                                 }
                                 segments.push(DenseRowSegment {
-                                    start_col: required_item(segment_dict, "start_col")?.extract()?,
+                                    start_col: required_item(segment_dict, "start_col")?
+                                        .extract()?,
                                     coeff_indices,
                                     values,
                                 });
@@ -793,6 +932,25 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
         .map_err(PyValueError::new_err)?
         .to_vec();
 
+    let n_collapse_count = dense_shape[0];
+    let collapse_size = n_states * n_states;
+    let zero = Complex64::new(0.0, 0.0);
+    let mut dense_cdagger_c = vec![zero; n_collapse_count * collapse_size];
+    for collapse_idx in 0..n_collapse_count {
+        let base = collapse_idx * collapse_size;
+        let c = &dense_values[base..(base + collapse_size)];
+        let cdc = &mut dense_cdagger_c[base..(base + collapse_size)];
+        for i in 0..n_states {
+            for j in 0..n_states {
+                let mut value = zero;
+                for alpha in 0..n_states {
+                    value += c[alpha * n_states + i].conj() * c[alpha * n_states + j];
+                }
+                cdc[i * n_states + j] = value;
+            }
+        }
+    }
+
     let structured_jumps_any = required_item(dict, "structured_jumps")?;
     let structured_jumps_list: &Bound<'_, PyList> = structured_jumps_any.cast()?;
     let mut structured_jumps = Vec::with_capacity(structured_jumps_list.len());
@@ -826,15 +984,46 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
         _ => None,
     };
 
+    let hamiltonian_sparse_pattern =
+        HermitianSparsePattern::from_hamiltonian_plan(&hamiltonian_plan);
+
+    let is_time_dependent = {
+        let expr_uses_time = |expr: &CompiledExpression| -> bool {
+            expr.instructions
+                .iter()
+                .any(|instr| instr.op == InstructionOp::Time)
+        };
+        let params_use_time = parameter_graph
+            .compounds
+            .iter()
+            .any(|c| expr_uses_time(&c.expression));
+        let ham_uses_time = if hamiltonian_plan.kind == "decomposed" {
+            hamiltonian_plan
+                .coefficients
+                .iter()
+                .any(|c| expr_uses_time(&c.expression))
+        } else {
+            hamiltonian_plan.temps.iter().any(|t| expr_uses_time(t))
+                || hamiltonian_plan
+                    .entries
+                    .iter()
+                    .any(|e| expr_uses_time(&e.expression))
+        };
+        params_use_time || ham_uses_time
+    };
+
     Ok(PreparedLindbladPlan {
         layout,
         parameter_graph,
         hamiltonian_plan,
         dense_c_array: dense_values,
-        n_collapse: dense_shape[0],
+        dense_cdagger_c,
+        n_collapse: n_collapse_count,
         structured_jumps,
         source_decay_rates,
         incoming_transfers_by_target,
         blas_config,
+        hamiltonian_sparse_pattern,
+        is_time_dependent,
     })
 }

@@ -51,10 +51,13 @@ fn load_zher2k(config: &BlasConfig) -> Result<&'static LoadedHer2k, String> {
             .collect();
         let module = LoadLibraryW(wide_path.as_ptr());
         if module.is_null() {
-            return Err(format!("failed to load BLAS library {}", config.library_path));
+            return Err(format!(
+                "failed to load BLAS library {}",
+                config.library_path
+            ));
         }
-        let symbol_name =
-            CString::new(config.zher2k_symbol.as_str()).map_err(|err| format!("invalid symbol name: {err}"))?;
+        let symbol_name = CString::new(config.zher2k_symbol.as_str())
+            .map_err(|err| format!("invalid symbol name: {err}"))?;
         let function = GetProcAddress(module, symbol_name.as_ptr());
         if function.is_null() {
             return Err(format!(

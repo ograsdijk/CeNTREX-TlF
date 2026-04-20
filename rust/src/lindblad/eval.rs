@@ -98,7 +98,11 @@ fn as_real(value: &RuntimeValue) -> Result<f64, String> {
     Ok(scalar.re)
 }
 
-fn binary_elementwise<F>(left: &RuntimeValue, right: &RuntimeValue, op: F) -> Result<RuntimeValue, String>
+fn binary_elementwise<F>(
+    left: &RuntimeValue,
+    right: &RuntimeValue,
+    op: F,
+) -> Result<RuntimeValue, String>
 where
     F: Fn(Complex64, Complex64) -> Complex64,
 {
@@ -111,7 +115,10 @@ where
                 return Err("tuple lengths do not match for elementwise operation".to_string());
             }
             Ok(RuntimeValue::Tuple(
-                left.iter().zip(right.iter()).map(|(l, r)| op(*l, *r)).collect(),
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| op(*l, *r))
+                    .collect(),
             ))
         }
         (RuntimeValue::Tuple(left), RuntimeValue::Scalar(right)) => Ok(RuntimeValue::Tuple(
@@ -149,7 +156,8 @@ fn gaussian_2d(
 ) -> f64 {
     let dx = x - mean_x;
     let dy = y - mean_y;
-    amplitude * (-((dx * dx) / (2.0 * sigma_x * sigma_x) + (dy * dy) / (2.0 * sigma_y * sigma_y))).exp()
+    amplitude
+        * (-((dx * dx) / (2.0 * sigma_x * sigma_x) + (dy * dy) / (2.0 * sigma_y * sigma_y))).exp()
 }
 
 fn gaussian_2d_rotated(
@@ -181,7 +189,12 @@ fn phase_modulation(t: f64, beta: f64, omega: f64) -> Complex64 {
 }
 
 fn square_wave(t: f64, omega: f64, phase: f64) -> f64 {
-    0.5 * (1.0 + if (omega * t + phase).sin() >= 0.0 { 1.0 } else { -1.0 })
+    0.5 * (1.0
+        + if (omega * t + phase).sin() >= 0.0 {
+            1.0
+        } else {
+            -1.0
+        })
 }
 
 fn resonant_polarization_modulation(t: f64, gamma: f64, omega: f64) -> Complex64 {
@@ -305,7 +318,12 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
             0.0,
         )),
         7 => RuntimeValue::Scalar(Complex64::new(
-            variable_on_off(as_real(&args[0])?, as_real(&args[1])?, as_real(&args[2])?, as_real(&args[3])?),
+            variable_on_off(
+                as_real(&args[0])?,
+                as_real(&args[1])?,
+                as_real(&args[2])?,
+                as_real(&args[3])?,
+            ),
             0.0,
         )),
         8 => RuntimeValue::Scalar(Complex64::new(
@@ -324,7 +342,11 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
             rabi_from_intensity(
                 as_real(&args[0])?,
                 as_real(&args[1])?,
-                if args.len() > 2 { as_real(&args[2])? } else { 2.6675506e-30 },
+                if args.len() > 2 {
+                    as_real(&args[2])?
+                } else {
+                    2.6675506e-30
+                },
             ),
             0.0,
         )),
@@ -342,7 +364,11 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
                 rabi_from_intensity(
                     intensity,
                     as_real(&args[7])?,
-                    if args.len() > 8 { as_real(&args[8])? } else { 2.6675506e-30 },
+                    if args.len() > 8 {
+                        as_real(&args[8])?
+                    } else {
+                        2.6675506e-30
+                    },
                 ),
                 0.0,
             ))
@@ -361,13 +387,22 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
                 rabi_from_intensity(
                     intensity,
                     as_real(&args[7])?,
-                    if args.len() > 8 { as_real(&args[8])? } else { 2.6675506e-30 },
+                    if args.len() > 8 {
+                        as_real(&args[8])?
+                    } else {
+                        2.6675506e-30
+                    },
                 ),
                 0.0,
             ))
         }
         12 => RuntimeValue::Scalar(Complex64::new(
-            variable_on_off_duty(as_real(&args[0])?, as_real(&args[1])?, as_real(&args[2])?, as_real(&args[3])?),
+            variable_on_off_duty(
+                as_real(&args[0])?,
+                as_real(&args[1])?,
+                as_real(&args[2])?,
+                as_real(&args[3])?,
+            ),
             0.0,
         )),
         13 => {
@@ -379,7 +414,11 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
     Ok(value)
 }
 
-fn compare(left: &RuntimeValue, right: &RuntimeValue, op: InstructionOp) -> Result<RuntimeValue, String> {
+fn compare(
+    left: &RuntimeValue,
+    right: &RuntimeValue,
+    op: InstructionOp,
+) -> Result<RuntimeValue, String> {
     let lhs = as_real(left)?;
     let rhs = as_real(right)?;
     let result = match op {
@@ -391,7 +430,10 @@ fn compare(left: &RuntimeValue, right: &RuntimeValue, op: InstructionOp) -> Resu
         InstructionOp::Ne => lhs != rhs,
         _ => return Err(format!("unsupported comparison op {:?}", op)),
     };
-    Ok(RuntimeValue::Scalar(Complex64::new(if result { 1.0 } else { 0.0 }, 0.0)))
+    Ok(RuntimeValue::Scalar(Complex64::new(
+        if result { 1.0 } else { 0.0 },
+        0.0,
+    )))
 }
 
 #[derive(Clone, Debug)]
@@ -425,48 +467,84 @@ pub fn eval_expression_into(
             InstructionOp::Temp => stack.push(temps[instruction.index].clone()),
             InstructionOp::Time => stack.push(RuntimeValue::Scalar(Complex64::new(t, 0.0))),
             InstructionOp::Add => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on ADD".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on ADD".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on ADD".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on ADD".to_string())?;
                 stack.push(binary_elementwise(&left, &right, |a, b| a + b)?);
             }
             InstructionOp::Sub => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on SUB".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on SUB".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on SUB".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on SUB".to_string())?;
                 stack.push(binary_elementwise(&left, &right, |a, b| a - b)?);
             }
             InstructionOp::Mul => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on MUL".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on MUL".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on MUL".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on MUL".to_string())?;
                 stack.push(binary_elementwise(&left, &right, |a, b| a * b)?);
             }
             InstructionOp::Div => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on DIV".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on DIV".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on DIV".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on DIV".to_string())?;
                 stack.push(binary_elementwise(&left, &right, |a, b| a / b)?);
             }
             InstructionOp::Pow => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on POW".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on POW".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on POW".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on POW".to_string())?;
                 stack.push(binary_elementwise(&left, &right, |a, b| a.powc(b))?);
             }
-            InstructionOp::Neg => match stack.pop().ok_or_else(|| "stack underflow on NEG".to_string())? {
+            InstructionOp::Neg => match stack
+                .pop()
+                .ok_or_else(|| "stack underflow on NEG".to_string())?
+            {
                 RuntimeValue::Scalar(value) => stack.push(RuntimeValue::Scalar(-value)),
-                RuntimeValue::Tuple(values) => stack.push(RuntimeValue::Tuple(values.into_iter().map(|value| -value).collect())),
+                RuntimeValue::Tuple(values) => stack.push(RuntimeValue::Tuple(
+                    values.into_iter().map(|value| -value).collect(),
+                )),
             },
-            InstructionOp::Conj => match stack.pop().ok_or_else(|| "stack underflow on CONJ".to_string())? {
+            InstructionOp::Conj => match stack
+                .pop()
+                .ok_or_else(|| "stack underflow on CONJ".to_string())?
+            {
                 RuntimeValue::Scalar(value) => stack.push(RuntimeValue::Scalar(value.conj())),
-                RuntimeValue::Tuple(values) => stack.push(RuntimeValue::Tuple(values.into_iter().map(|value| value.conj()).collect())),
+                RuntimeValue::Tuple(values) => stack.push(RuntimeValue::Tuple(
+                    values.into_iter().map(|value| value.conj()).collect(),
+                )),
             },
             InstructionOp::BuiltinFunc => {
                 let argc = instruction.argc;
-                let start = stack.len().checked_sub(argc).ok_or_else(|| "stack underflow on BUILTIN_FUNC".to_string())?;
+                let start = stack
+                    .len()
+                    .checked_sub(argc)
+                    .ok_or_else(|| "stack underflow on BUILTIN_FUNC".to_string())?;
                 let result = apply_builtin(instruction.function, &stack[start..])?;
                 stack.truncate(start);
                 stack.push(result);
             }
             InstructionOp::HelperFunc => {
                 let argc = instruction.argc;
-                let start = stack.len().checked_sub(argc).ok_or_else(|| "stack underflow on HELPER_FUNC".to_string())?;
+                let start = stack
+                    .len()
+                    .checked_sub(argc)
+                    .ok_or_else(|| "stack underflow on HELPER_FUNC".to_string())?;
                 let result = apply_helper(instruction.function, &stack[start..])?;
                 stack.truncate(start);
                 stack.push(result);
@@ -477,8 +555,12 @@ pub fn eval_expression_into(
             | InstructionOp::Le
             | InstructionOp::Eq
             | InstructionOp::Ne => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on comparison".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on comparison".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on comparison".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on comparison".to_string())?;
                 stack.push(compare(&left, &right, instruction.op)?);
             }
         }
@@ -486,7 +568,9 @@ pub fn eval_expression_into(
     if stack.len() != 1 {
         return Err("expression evaluation did not end with a single stack value".to_string());
     }
-    stack.pop().ok_or_else(|| "expression evaluation produced no result".to_string())
+    stack
+        .pop()
+        .ok_or_else(|| "expression evaluation produced no result".to_string())
 }
 
 pub fn eval_expression(
@@ -547,9 +631,17 @@ fn apply_helper_scalar(function_id: i64, args: &[Complex64]) -> Result<Complex64
             ),
             0.0,
         ),
-        3 => phase_modulation(scalar_arg(args, 0), scalar_arg(args, 1), scalar_arg(args, 2)),
+        3 => phase_modulation(
+            scalar_arg(args, 0),
+            scalar_arg(args, 1),
+            scalar_arg(args, 2),
+        ),
         4 => Complex64::new(
-            square_wave(scalar_arg(args, 0), scalar_arg(args, 1), scalar_arg(args, 2)),
+            square_wave(
+                scalar_arg(args, 0),
+                scalar_arg(args, 1),
+                scalar_arg(args, 2),
+            ),
             0.0,
         ),
         5 => resonant_polarization_modulation(
@@ -558,7 +650,11 @@ fn apply_helper_scalar(function_id: i64, args: &[Complex64]) -> Result<Complex64
             scalar_arg(args, 2),
         ),
         6 => Complex64::new(
-            sawtooth_wave(scalar_arg(args, 0), scalar_arg(args, 1), scalar_arg(args, 2)),
+            sawtooth_wave(
+                scalar_arg(args, 0),
+                scalar_arg(args, 1),
+                scalar_arg(args, 2),
+            ),
             0.0,
         ),
         7 => Complex64::new(
@@ -618,7 +714,8 @@ fn apply_helper_scalar(function_id: i64, args: &[Complex64]) -> Result<Complex64
             0.0,
         ),
         13 => {
-            let n = ((scalar_arg(args, 0) - scalar_arg(args, 1)) / scalar_arg(args, 2)).floor() as i64;
+            let n =
+                ((scalar_arg(args, 0) - scalar_arg(args, 1)) / scalar_arg(args, 2)).floor() as i64;
             Complex64::new(if n % 2 == 0 { 1.0 } else { -1.0 }, 0.0)
         }
         _ => return Err(format!("unknown helper function id {}", function_id)),
@@ -641,48 +738,78 @@ pub fn eval_scalar_expression_into(
             InstructionOp::Temp => stack.push(as_scalar(&temps[instruction.index])?),
             InstructionOp::Time => stack.push(Complex64::new(t, 0.0)),
             InstructionOp::Add => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on ADD".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on ADD".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on ADD".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on ADD".to_string())?;
                 stack.push(left + right);
             }
             InstructionOp::Sub => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on SUB".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on SUB".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on SUB".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on SUB".to_string())?;
                 stack.push(left - right);
             }
             InstructionOp::Mul => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on MUL".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on MUL".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on MUL".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on MUL".to_string())?;
                 stack.push(left * right);
             }
             InstructionOp::Div => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on DIV".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on DIV".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on DIV".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on DIV".to_string())?;
                 stack.push(left / right);
             }
             InstructionOp::Pow => {
-                let right = stack.pop().ok_or_else(|| "stack underflow on POW".to_string())?;
-                let left = stack.pop().ok_or_else(|| "stack underflow on POW".to_string())?;
+                let right = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on POW".to_string())?;
+                let left = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on POW".to_string())?;
                 stack.push(left.powc(right));
             }
             InstructionOp::Neg => {
-                let value = stack.pop().ok_or_else(|| "stack underflow on NEG".to_string())?;
+                let value = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on NEG".to_string())?;
                 stack.push(-value);
             }
             InstructionOp::Conj => {
-                let value = stack.pop().ok_or_else(|| "stack underflow on CONJ".to_string())?;
+                let value = stack
+                    .pop()
+                    .ok_or_else(|| "stack underflow on CONJ".to_string())?;
                 stack.push(value.conj());
             }
             InstructionOp::BuiltinFunc => {
                 let argc = instruction.argc;
-                let start = stack.len().checked_sub(argc).ok_or_else(|| "stack underflow on BUILTIN_FUNC".to_string())?;
+                let start = stack
+                    .len()
+                    .checked_sub(argc)
+                    .ok_or_else(|| "stack underflow on BUILTIN_FUNC".to_string())?;
                 let result = apply_builtin_scalar(instruction.function, &stack[start..])?;
                 stack.truncate(start);
                 stack.push(result);
             }
             InstructionOp::HelperFunc => {
                 let argc = instruction.argc;
-                let start = stack.len().checked_sub(argc).ok_or_else(|| "stack underflow on HELPER_FUNC".to_string())?;
+                let start = stack
+                    .len()
+                    .checked_sub(argc)
+                    .ok_or_else(|| "stack underflow on HELPER_FUNC".to_string())?;
                 let result = apply_helper_scalar(instruction.function, &stack[start..])?;
                 stack.truncate(start);
                 stack.push(result);
@@ -713,7 +840,9 @@ pub fn eval_scalar_expression_into(
     if stack.len() != 1 {
         return Err("expression evaluation did not end with a single stack value".to_string());
     }
-    stack.pop().ok_or_else(|| "expression evaluation produced no result".to_string())
+    stack
+        .pop()
+        .ok_or_else(|| "expression evaluation produced no result".to_string())
 }
 
 pub fn scalar_value(value: RuntimeValue) -> Result<Complex64, String> {

@@ -1,7 +1,7 @@
 use crate::lindblad::blas::commutator_her2k;
 use crate::lindblad::eval::RuntimeValue;
 use crate::lindblad::layout::UpperTriLayout;
-use crate::lindblad::plan::PreparedLindbladPlan;
+use crate::lindblad::plan::{HermitianSparsePattern, PreparedLindbladPlan};
 use num_complex::Complex64;
 use std::time::Instant;
 
@@ -15,8 +15,8 @@ pub enum ExecutionMode {
 impl ExecutionMode {
     pub fn from_str(value: &str) -> Result<Self, String> {
         match value {
-            "reference" | "reference_dense" => Ok(Self::ReferenceDense),
-            "structured" | "structured_blas" | "structured_jumps" => Ok(Self::StructuredBlas),
+            "reference" => Ok(Self::ReferenceDense),
+            "structured" => Ok(Self::StructuredBlas),
             "structured_upper" => Ok(Self::StructuredUpper),
             _ => Err(format!("unsupported execution mode {:?}", value)),
         }
@@ -77,16 +77,160 @@ fn add_commutator_upper(
 ) {
     let n = upper_layout.n;
     let neg_i = Complex64::new(0.0, -1.0);
+
+    #[inline(always)]
+    fn u(layout: &UpperTriLayout, data: &[Complex64], i: usize, j: usize) -> Complex64 {
+        data[layout.index_unchecked(i, j)]
+    }
+
     for i in 0..n {
         for j in i..n {
             let mut hrho = Complex64::new(0.0, 0.0);
             let mut rhoh = Complex64::new(0.0, 0.0);
-            for k in 0..n {
-                hrho += upper_layout.get_hermitian(hamiltonian_upper, i, k)
-                    * upper_layout.get_hermitian(rho_upper, k, j);
-                rhoh += upper_layout.get_hermitian(rho_upper, i, k)
-                    * upper_layout.get_hermitian(hamiltonian_upper, k, j);
+
+            // k < i: H[i,k]=conj(U_h[k,i]), rho[i,k]=conj(U_r[k,i]),
+            //        rho[k,j]=U_r[k,j] (k<i<=j), H[k,j]=U_h[k,j] (k<i<=j)
+            for k in 0..i {
+                let h_ki = u(upper_layout, hamiltonian_upper, k, i);
+                let r_ki = u(upper_layout, rho_upper, k, i);
+                let r_kj = u(upper_layout, rho_upper, k, j);
+                let h_kj = u(upper_layout, hamiltonian_upper, k, j);
+
+                hrho += h_ki.conj() * r_kj;
+                rhoh += r_ki.conj() * h_kj;
             }
+
+            // k = i: H[i,i]=U_h[i,i], rho[i,i]=U_r[i,i],
+            //        rho[i,j]=U_r[i,j], H[i,j]=U_h[i,j]
+            {
+                let h_ii = u(upper_layout, hamiltonian_upper, i, i);
+                let r_ii = u(upper_layout, rho_upper, i, i);
+                let r_ij = u(upper_layout, rho_upper, i, j);
+                let h_ij = u(upper_layout, hamiltonian_upper, i, j);
+
+                hrho += h_ii * r_ij;
+                rhoh += r_ii * h_ij;
+            }
+
+            // i < k < j: H[i,k]=U_h[i,k], rho[i,k]=U_r[i,k],
+            //            rho[k,j]=U_r[k,j] (k<j), H[k,j]=U_h[k,j] (k<j)
+            for k in (i + 1)..j {
+                let h_ik = u(upper_layout, hamiltonian_upper, i, k);
+                let r_ik = u(upper_layout, rho_upper, i, k);
+                let r_kj = u(upper_layout, rho_upper, k, j);
+                let h_kj = u(upper_layout, hamiltonian_upper, k, j);
+
+                hrho += h_ik * r_kj;
+                rhoh += r_ik * h_kj;
+            }
+
+            // k = j (only when j > i): H[i,j]=U_h[i,j], rho[i,j]=U_r[i,j],
+            //                          rho[j,j]=U_r[j,j], H[j,j]=U_h[j,j]
+            if j > i {
+                let h_ij = u(upper_layout, hamiltonian_upper, i, j);
+                let r_ij = u(upper_layout, rho_upper, i, j);
+                let r_jj = u(upper_layout, rho_upper, j, j);
+                let h_jj = u(upper_layout, hamiltonian_upper, j, j);
+
+                hrho += h_ij * r_jj;
+                rhoh += r_ij * h_jj;
+            }
+
+            // k > j: H[i,k]=U_h[i,k] (i<k), rho[i,k]=U_r[i,k] (i<k),
+            //        rho[k,j]=conj(U_r[j,k]), H[k,j]=conj(U_h[j,k])
+            for k in (j + 1)..n {
+                let h_ik = u(upper_layout, hamiltonian_upper, i, k);
+                let r_ik = u(upper_layout, rho_upper, i, k);
+                let r_jk = u(upper_layout, rho_upper, j, k);
+                let h_jk = u(upper_layout, hamiltonian_upper, j, k);
+
+                hrho += h_ik * r_jk.conj();
+                rhoh += r_ik * h_jk.conj();
+            }
+
+            drho_upper[upper_layout.index_unchecked(i, j)] = neg_i * (hrho - rhoh);
+        }
+    }
+}
+
+fn fill_sparse_h_values(
+    pattern: &HermitianSparsePattern,
+    upper_layout: &UpperTriLayout,
+    hamiltonian_upper: &[Complex64],
+    h_sparse: &mut [Complex64],
+) {
+    let n = pattern.n;
+    for i in 0..n {
+        for ptr in pattern.row_ptrs[i]..pattern.row_ptrs[i + 1] {
+            let j = pattern.col_indices[ptr];
+            h_sparse[ptr] = hamiltonian_upper[upper_layout.index_unchecked(i, j)];
+        }
+    }
+}
+
+#[inline(always)]
+fn get_rho_upper(
+    upper_layout: &UpperTriLayout,
+    rho_upper: &[Complex64],
+    i: usize,
+    j: usize,
+) -> Complex64 {
+    if i <= j {
+        rho_upper[upper_layout.index_unchecked(i, j)]
+    } else {
+        rho_upper[upper_layout.index_unchecked(j, i)].conj()
+    }
+}
+
+fn add_commutator_sparse_upper(
+    pattern: &HermitianSparsePattern,
+    h_sparse: &[Complex64],
+    upper_layout: &UpperTriLayout,
+    rho_upper: &[Complex64],
+    drho_upper: &mut [Complex64],
+) {
+    let n = pattern.n;
+    let neg_i = Complex64::new(0.0, -1.0);
+
+    for i in 0..n {
+        for j in i..n {
+            let mut hrho = Complex64::new(0.0, 0.0);
+            let mut rhoh = Complex64::new(0.0, 0.0);
+
+            // H[i,k] nonzeros from CSR (upper triangle: k >= i)
+            for ptr in pattern.row_ptrs[i]..pattern.row_ptrs[i + 1] {
+                let k = pattern.col_indices[ptr];
+                let h_ik = h_sparse[ptr];
+                hrho += h_ik * get_rho_upper(upper_layout, rho_upper, k, j);
+            }
+
+            // H[i,k] nonzeros from lower triangle: H[i,k] = conj(H[k,i]) for k < i
+            for csc_ptr in pattern.col_ptrs[i]..pattern.col_ptrs[i + 1] {
+                let k = pattern.row_indices_csc[csc_ptr];
+                let h_ik = h_sparse[pattern.csc_to_csr[csc_ptr]].conj();
+                hrho += h_ik * get_rho_upper(upper_layout, rho_upper, k, j);
+            }
+
+            // H[k,j] nonzeros from CSR (upper triangle: k <= j, stored as row k)
+            // We need column j of H. From CSC: rows k < j with H[k,j] nonzero
+            for csc_ptr in pattern.col_ptrs[j]..pattern.col_ptrs[j + 1] {
+                let k = pattern.row_indices_csc[csc_ptr];
+                let h_kj = h_sparse[pattern.csc_to_csr[csc_ptr]];
+                rhoh += get_rho_upper(upper_layout, rho_upper, i, k) * h_kj;
+            }
+
+            // H[k,j] nonzeros where k >= j (diagonal + lower): H[k,j] = conj(H[j,k]) for k > j
+            // From CSR row j: columns k >= j where H[j,k] nonzero → H[k,j] = conj(H[j,k])
+            for ptr in pattern.row_ptrs[j]..pattern.row_ptrs[j + 1] {
+                let k = pattern.col_indices[ptr];
+                let h_kj = if k == j {
+                    h_sparse[ptr]
+                } else {
+                    h_sparse[ptr].conj()
+                };
+                rhoh += get_rho_upper(upper_layout, rho_upper, i, k) * h_kj;
+            }
+
             drho_upper[upper_layout.index_unchecked(i, j)] = neg_i * (hrho - rhoh);
         }
     }
@@ -99,6 +243,7 @@ fn add_dense_dissipator(plan: &PreparedLindbladPlan, rho: &[Complex64], out: &mu
     for collapse_idx in 0..plan.n_collapse {
         let base = collapse_idx * collapse_size;
         let collapse = &plan.dense_c_array[base..(base + collapse_size)];
+        let cdagger_c = &plan.dense_cdagger_c[base..(base + collapse_size)];
 
         for i in 0..n {
             for j in 0..n {
@@ -113,17 +258,6 @@ fn add_dense_dissipator(plan: &PreparedLindbladPlan, rho: &[Complex64], out: &mu
                     }
                 }
                 out[i * n + j] += value;
-            }
-        }
-
-        let mut cdagger_c = vec![zero; collapse_size];
-        for i in 0..n {
-            for j in 0..n {
-                let mut value = zero;
-                for alpha in 0..n {
-                    value += collapse[alpha * n + i].conj() * collapse[alpha * n + j];
-                }
-                cdagger_c[i * n + j] = value;
             }
         }
 
@@ -162,7 +296,11 @@ fn add_structured_dissipator_legacy(
     }
 }
 
-fn add_structured_dissipator(plan: &PreparedLindbladPlan, rho: &[Complex64], out: &mut [Complex64]) {
+fn add_structured_dissipator(
+    plan: &PreparedLindbladPlan,
+    rho: &[Complex64],
+    out: &mut [Complex64],
+) {
     let n = plan.n_states();
     for source in 0..n {
         let rate_source = plan.source_decay_rates[source];
@@ -200,8 +338,8 @@ fn add_structured_dissipator_upper(
     for (target, incoming) in plan.incoming_transfers_by_target.iter().enumerate() {
         let target_diag = upper_layout.index_unchecked(target, target);
         for transfer in incoming {
-            out_upper[target_diag] +=
-                transfer.rate * rho_upper[upper_layout.index_unchecked(transfer.source, transfer.source)];
+            out_upper[target_diag] += transfer.rate
+                * rho_upper[upper_layout.index_unchecked(transfer.source, transfer.source)];
         }
     }
 }
@@ -224,10 +362,13 @@ pub struct RhsWorkspace {
     drho: Vec<Complex64>,
     drho_upper: Vec<Complex64>,
     scratch: Vec<Complex64>,
+    h_sparse_values: Vec<Complex64>,
     parameter_values: Vec<RuntimeValue>,
     hamiltonian_temps: Vec<RuntimeValue>,
     eval_stack: Vec<RuntimeValue>,
     scalar_stack: Vec<Complex64>,
+    hamiltonian_valid: bool,
+    h_sparse_valid: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -256,10 +397,13 @@ impl RhsWorkspace {
             drho: vec![Complex64::new(0.0, 0.0); matrix_len],
             drho_upper: vec![Complex64::new(0.0, 0.0); upper_layout.len()],
             scratch: vec![Complex64::new(0.0, 0.0); matrix_len],
+            h_sparse_values: vec![Complex64::new(0.0, 0.0); plan.hamiltonian_sparse_pattern.nnz],
             parameter_values: Vec::with_capacity(plan.parameter_graph.slot_names.len()),
             hamiltonian_temps: Vec::with_capacity(plan.hamiltonian_plan.temps.len()),
             eval_stack: Vec::new(),
             scalar_stack: Vec::new(),
+            hamiltonian_valid: false,
+            h_sparse_valid: false,
         }
     }
 }
@@ -304,22 +448,51 @@ fn rhs_from_workspace_rho(
 ) -> Result<(), String> {
     let n = plan.n_states();
     let total_start = Instant::now();
+    let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
     let parameter_start = Instant::now();
-    plan.parameter_graph.evaluate_into(
-        t,
-        &mut workspace.parameter_values,
-        &mut workspace.eval_stack,
-        &mut workspace.scalar_stack,
-    )?;
+    if !can_skip {
+        plan.parameter_graph.evaluate_into(
+            t,
+            &mut workspace.parameter_values,
+            &mut workspace.eval_stack,
+            &mut workspace.scalar_stack,
+        )?;
+    }
     if let Some(stats) = profile.as_mut() {
         stats.parameter_eval_seconds += parameter_start.elapsed().as_secs_f64();
     }
     let hamiltonian_start = Instant::now();
-    match mode {
-        ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
-            if plan.hamiltonian_plan.kind == "decomposed"
-                && plan.hamiltonian_plan.dense_fill_mode == "upper_expand"
-            {
+    if !can_skip {
+        match mode {
+            ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
+                if plan.hamiltonian_plan.kind == "decomposed"
+                    && plan.hamiltonian_plan.dense_fill_mode == "upper_expand"
+                {
+                    plan.hamiltonian_plan.fill_upper_into(
+                        workspace.parameter_values.as_slice(),
+                        t,
+                        &mut workspace.hamiltonian_temps,
+                        &mut workspace.eval_stack,
+                        &mut workspace.scalar_stack,
+                        &workspace.upper_layout,
+                        workspace.hamiltonian_upper.as_mut_slice(),
+                    )?;
+                    workspace.upper_layout.expand_to_dense(
+                        workspace.hamiltonian_upper.as_slice(),
+                        workspace.hamiltonian.as_mut_slice(),
+                    )?;
+                } else {
+                    plan.hamiltonian_plan.fill_into(
+                        workspace.parameter_values.as_slice(),
+                        t,
+                        &mut workspace.hamiltonian_temps,
+                        &mut workspace.eval_stack,
+                        &mut workspace.scalar_stack,
+                        workspace.hamiltonian.as_mut_slice(),
+                    )?;
+                }
+            }
+            ExecutionMode::StructuredUpper => {
                 plan.hamiltonian_plan.fill_upper_into(
                     workspace.parameter_values.as_slice(),
                     t,
@@ -329,32 +502,10 @@ fn rhs_from_workspace_rho(
                     &workspace.upper_layout,
                     workspace.hamiltonian_upper.as_mut_slice(),
                 )?;
-                workspace.upper_layout.expand_to_dense(
-                    workspace.hamiltonian_upper.as_slice(),
-                    workspace.hamiltonian.as_mut_slice(),
-                )?;
-            } else {
-                plan.hamiltonian_plan.fill_into(
-                    workspace.parameter_values.as_slice(),
-                    t,
-                    &mut workspace.hamiltonian_temps,
-                    &mut workspace.eval_stack,
-                    &mut workspace.scalar_stack,
-                    workspace.hamiltonian.as_mut_slice(),
-                )?;
             }
         }
-        ExecutionMode::StructuredUpper => {
-            plan.hamiltonian_plan.fill_upper_into(
-                workspace.parameter_values.as_slice(),
-                t,
-                &mut workspace.hamiltonian_temps,
-                &mut workspace.eval_stack,
-                &mut workspace.scalar_stack,
-                &workspace.upper_layout,
-                workspace.hamiltonian_upper.as_mut_slice(),
-            )?;
-        }
+        workspace.hamiltonian_valid = true;
+        workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {
         stats.hamiltonian_fill_seconds += hamiltonian_start.elapsed().as_secs_f64();
@@ -373,10 +524,22 @@ fn rhs_from_workspace_rho(
             )?;
         }
         ExecutionMode::StructuredUpper => {
-            workspace.upper_layout.clear(workspace.drho_upper.as_mut_slice())?;
-            add_commutator_upper(
+            workspace
+                .upper_layout
+                .clear(workspace.drho_upper.as_mut_slice())?;
+            if !workspace.h_sparse_valid {
+                fill_sparse_h_values(
+                    &plan.hamiltonian_sparse_pattern,
+                    &workspace.upper_layout,
+                    workspace.hamiltonian_upper.as_slice(),
+                    workspace.h_sparse_values.as_mut_slice(),
+                );
+                workspace.h_sparse_valid = true;
+            }
+            add_commutator_sparse_upper(
+                &plan.hamiltonian_sparse_pattern,
+                workspace.h_sparse_values.as_slice(),
                 &workspace.upper_layout,
-                workspace.hamiltonian_upper.as_slice(),
                 workspace.rho_upper.as_slice(),
                 workspace.drho_upper.as_mut_slice(),
             );
@@ -387,12 +550,16 @@ fn rhs_from_workspace_rho(
     }
     let dissipator_start = Instant::now();
     match mode {
-        ExecutionMode::ReferenceDense => {
-            add_dense_dissipator(plan, workspace.rho.as_slice(), workspace.drho.as_mut_slice())
-        }
-        ExecutionMode::StructuredBlas => {
-            add_structured_dissipator(plan, workspace.rho.as_slice(), workspace.drho.as_mut_slice())
-        }
+        ExecutionMode::ReferenceDense => add_dense_dissipator(
+            plan,
+            workspace.rho.as_slice(),
+            workspace.drho.as_mut_slice(),
+        ),
+        ExecutionMode::StructuredBlas => add_structured_dissipator(
+            plan,
+            workspace.rho.as_slice(),
+            workspace.drho.as_mut_slice(),
+        ),
         ExecutionMode::StructuredUpper => add_structured_dissipator_upper(
             plan,
             &workspace.upper_layout,
@@ -566,6 +733,43 @@ pub fn build_split_jacobian_sparse(
     Ok((rows, cols, values))
 }
 
+pub fn build_packed_jacobian_sparse(
+    plan: &PreparedLindbladPlan,
+    t: f64,
+    mode: ExecutionMode,
+    workspace: &mut RhsWorkspace,
+    tol: f64,
+) -> Result<(Vec<i64>, Vec<i64>, Vec<f64>), String> {
+    let dim = plan.layout.packed_len();
+    let tol_abs = tol.abs();
+    let mut rows = Vec::new();
+    let mut cols = Vec::new();
+    let mut values = Vec::new();
+    let mut basis = vec![0.0_f64; dim];
+    let mut output = vec![0.0_f64; dim];
+    for col in 0..dim {
+        basis[col] = 1.0;
+        rhs_packed_into(
+            plan,
+            basis.as_slice(),
+            t,
+            mode,
+            workspace,
+            output.as_mut_slice(),
+        )?;
+        basis[col] = 0.0;
+        for row in 0..dim {
+            let value = output[row];
+            if value.abs() > tol_abs {
+                rows.push(row as i64);
+                cols.push(col as i64);
+                values.push(value);
+            }
+        }
+    }
+    Ok((rows, cols, values))
+}
+
 pub fn rhs_packed_into_with_profile(
     plan: &PreparedLindbladPlan,
     packed_state: &[f64],
@@ -627,6 +831,13 @@ pub fn rhs_packed(
 ) -> Result<Vec<f64>, String> {
     let mut workspace = RhsWorkspace::new(plan);
     let mut packed = vec![0.0; plan.layout.packed_len()];
-    rhs_packed_into(plan, packed_state, t, mode, &mut workspace, packed.as_mut_slice())?;
+    rhs_packed_into(
+        plan,
+        packed_state,
+        t,
+        mode,
+        &mut workspace,
+        packed.as_mut_slice(),
+    )?;
     Ok(packed)
 }

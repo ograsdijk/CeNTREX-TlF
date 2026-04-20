@@ -100,7 +100,9 @@ pub fn solve_dopri5(
             .map_err(map_integration_error)?;
 
         let mut times = Vec::with_capacity(saveat.len() + usize::from(options.save_start));
-        let mut states = Vec::with_capacity((saveat.len() + usize::from(options.save_start)) * plan.layout.packed_len());
+        let mut states = Vec::with_capacity(
+            (saveat.len() + usize::from(options.save_start)) * plan.layout.packed_len(),
+        );
         let mut push_time = |time: f64| -> Result<(), String> {
             let value: DVector<f64> = output
                 .evaluate(time)
