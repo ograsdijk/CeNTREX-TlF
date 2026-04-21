@@ -84,17 +84,19 @@ def test_quantumselector_get_indices():
 
 
 def test_find_closest_vector_idx():
+    rng = np.random.default_rng(42)
     vector_array = np.eye(10).astype(np.complex128)
-    idx_compare = np.random.randint(0, 10)
+    idx_compare = rng.integers(0, 10)
     state_vec = vector_array[idx_compare, :]
     idx = states.find_closest_vector_idx(state_vec, vector_array)
     assert idx == idx_compare
 
 
 def test_check_approx_state_exact_state():
+    rng = np.random.default_rng(42)
     QN = states.generate_coupled_states_ground(Js=[0, 1])
-    ida = np.random.randint(0, len(QN))
-    idb = np.random.randint(0, len(QN))
+    ida = rng.integers(0, len(QN))
+    idb = rng.integers(0, len(QN))
     approx = 1 * QN[ida]
     exact = 1 * QN[ida] + 0.1 * QN[idb]
     states.check_approx_state_exact_state(approx, exact)

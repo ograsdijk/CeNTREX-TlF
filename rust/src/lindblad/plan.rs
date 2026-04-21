@@ -24,14 +24,6 @@ pub struct ParameterGraph {
 }
 
 impl ParameterGraph {
-    pub fn evaluate(&self, t: f64) -> Result<Vec<RuntimeValue>, String> {
-        let mut slots = Vec::new();
-        let mut eval_stack = Vec::new();
-        let mut scalar_stack = Vec::new();
-        self.evaluate_into(t, &mut slots, &mut eval_stack, &mut scalar_stack)?;
-        Ok(slots)
-    }
-
     pub fn evaluate_into(
         &self,
         t: f64,
@@ -41,10 +33,7 @@ impl ParameterGraph {
     ) -> Result<(), String> {
         slots.clear();
         slots.extend(self.base_values.iter().cloned());
-        slots.resize(
-            self.slot_names.len(),
-            RuntimeValue::Scalar(Complex64::new(0.0, 0.0)),
-        );
+        slots.resize(self.slot_names.len(), RuntimeValue::Scalar(Complex64::ZERO));
         for compound in &self.compounds {
             slots[compound.slot] = if compound.expression.scalar_only {
                 RuntimeValue::Scalar(eval_scalar_expression_into(
@@ -103,39 +92,31 @@ pub struct DecomposedHamiltonianCoefficient {
     pub basis_row_segments: Vec<BasisRowSegment>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HamiltonianKind {
+    Entrywise,
+    Decomposed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DenseFillMode {
+    Direct,
+    UpperExpand,
+}
+
 #[derive(Clone, Debug)]
 pub struct HamiltonianPlan {
     pub n: usize,
     pub temps: Vec<CompiledExpression>,
     pub entries: Vec<HamiltonianEntry>,
-    pub kind: String,
-    pub dense_fill_mode: String,
+    pub kind: HamiltonianKind,
+    pub dense_fill_mode: DenseFillMode,
     pub static_matrix: Vec<Complex64>,
     pub coefficients: Vec<DecomposedHamiltonianCoefficient>,
     pub row_plans: Vec<DenseRowPlan>,
 }
 
 impl HamiltonianPlan {
-    pub fn fill(
-        &self,
-        parameter_values: &[RuntimeValue],
-        t: f64,
-    ) -> Result<Vec<Complex64>, String> {
-        let mut matrix = vec![Complex64::new(0.0, 0.0); self.n * self.n];
-        let mut temps: Vec<RuntimeValue> = Vec::with_capacity(self.temps.len());
-        let mut eval_stack = Vec::new();
-        let mut scalar_stack = Vec::new();
-        self.fill_into(
-            parameter_values,
-            t,
-            &mut temps,
-            &mut eval_stack,
-            &mut scalar_stack,
-            matrix.as_mut_slice(),
-        )?;
-        Ok(matrix)
-    }
-
     pub fn fill_into(
         &self,
         parameter_values: &[RuntimeValue],
@@ -152,7 +133,7 @@ impl HamiltonianPlan {
                 matrix.len()
             ));
         }
-        if self.kind == "decomposed" {
+        if self.kind == HamiltonianKind::Decomposed {
             matrix.copy_from_slice(self.static_matrix.as_slice());
             let coeff_values = if !self.row_plans.is_empty() {
                 let mut values = Vec::with_capacity(self.coefficients.len());
@@ -186,7 +167,7 @@ impl HamiltonianPlan {
                     for segment in &row_plan.segments {
                         for local_offset in 0..segment.values[0].len() {
                             let col = segment.start_col + local_offset;
-                            let mut contribution = Complex64::new(0.0, 0.0);
+                            let mut contribution = Complex64::ZERO;
                             for (coeff_pos, coeff_index) in segment.coeff_indices.iter().enumerate()
                             {
                                 contribution += coeff_values[*coeff_index]
@@ -243,7 +224,7 @@ impl HamiltonianPlan {
             }
             return Ok(());
         }
-        matrix.fill(Complex64::new(0.0, 0.0));
+        matrix.fill(Complex64::ZERO);
         temps.clear();
         for temp in &self.temps {
             temps.push(if temp.scalar_only {
@@ -301,7 +282,7 @@ impl HamiltonianPlan {
             ));
         }
         upper_layout.clear(upper)?;
-        if self.kind == "decomposed" {
+        if self.kind == HamiltonianKind::Decomposed {
             for i in 0..self.n {
                 for j in i..self.n {
                     let dense_index = i * self.n + j;
@@ -398,10 +379,10 @@ impl HermitianSparsePattern {
         let n = plan.n;
         let mut mask = vec![false; n * n];
 
-        if plan.kind == "decomposed" {
+        if plan.kind == HamiltonianKind::Decomposed {
             for i in 0..n {
                 for j in i..n {
-                    if plan.static_matrix[i * n + j] != Complex64::new(0.0, 0.0) {
+                    if plan.static_matrix[i * n + j] != Complex64::ZERO {
                         mask[i * n + j] = true;
                     }
                 }
@@ -541,7 +522,7 @@ impl PreparedLindbladPlan {
         let mut temps = Vec::new();
         let mut eval_stack = Vec::new();
         let mut scalar_stack = Vec::new();
-        let mut matrix = vec![Complex64::new(0.0, 0.0); self.n_states() * self.n_states()];
+        let mut matrix = vec![Complex64::ZERO; self.n_states() * self.n_states()];
         self.evaluate_hamiltonian_into(
             t,
             &mut parameter_values,
@@ -551,29 +532,6 @@ impl PreparedLindbladPlan {
             matrix.as_mut_slice(),
         )?;
         Ok(matrix)
-    }
-
-    pub fn evaluate_hamiltonian_upper_into(
-        &self,
-        t: f64,
-        parameter_values: &mut Vec<RuntimeValue>,
-        temps: &mut Vec<RuntimeValue>,
-        eval_stack: &mut Vec<RuntimeValue>,
-        scalar_stack: &mut Vec<Complex64>,
-        upper_layout: &UpperTriLayout,
-        upper: &mut [Complex64],
-    ) -> Result<(), String> {
-        self.parameter_graph
-            .evaluate_into(t, parameter_values, eval_stack, scalar_stack)?;
-        self.hamiltonian_plan.fill_upper_into(
-            parameter_values.as_slice(),
-            t,
-            temps,
-            eval_stack,
-            scalar_stack,
-            upper_layout,
-            upper,
-        )
     }
 
     pub fn evaluate_hamiltonian_into(
@@ -721,13 +679,22 @@ fn parse_parameter_graph(obj: &Bound<'_, PyAny>) -> PyResult<ParameterGraph> {
 fn parse_hamiltonian_plan(obj: &Bound<'_, PyAny>) -> PyResult<HamiltonianPlan> {
     let dict: &Bound<'_, PyDict> = obj.cast()?;
     let n: usize = required_item(dict, "n")?.extract()?;
-    let kind: String = dict
+    let kind_str: String = dict
         .get_item("kind")?
         .map(|value| value.extract())
         .transpose()?
         .unwrap_or_else(|| "entrywise".to_string());
+    let kind = match kind_str.as_str() {
+        "decomposed" => HamiltonianKind::Decomposed,
+        "entrywise" => HamiltonianKind::Entrywise,
+        other => {
+            return Err(PyErr::new::<PyValueError, _>(format!(
+                "unknown hamiltonian kind: {other}"
+            )))
+        }
+    };
 
-    if kind == "decomposed" {
+    if kind == HamiltonianKind::Decomposed {
         let static_matrix_any = required_item(dict, "static_matrix")?;
         let static_matrix: PyReadonlyArrayDyn<'_, Complex64> = static_matrix_any.extract()?;
         let static_values = static_matrix
@@ -793,11 +760,17 @@ fn parse_hamiltonian_plan(obj: &Bound<'_, PyAny>) -> PyResult<HamiltonianPlan> {
             temps: Vec::new(),
             entries: Vec::new(),
             kind,
-            dense_fill_mode: dict
-                .get_item("dense_fill_mode")?
-                .map(|value| value.extract())
-                .transpose()?
-                .unwrap_or_else(|| "direct".to_string()),
+            dense_fill_mode: {
+                let s: String = dict
+                    .get_item("dense_fill_mode")?
+                    .map(|value| value.extract())
+                    .transpose()?
+                    .unwrap_or_else(|| "direct".to_string());
+                match s.as_str() {
+                    "upper_expand" => DenseFillMode::UpperExpand,
+                    _ => DenseFillMode::Direct,
+                }
+            },
             static_matrix: static_values,
             coefficients,
             row_plans: {
@@ -885,12 +858,18 @@ fn parse_hamiltonian_plan(obj: &Bound<'_, PyAny>) -> PyResult<HamiltonianPlan> {
         temps,
         entries,
         kind,
-        dense_fill_mode: dict
-            .get_item("dense_fill_mode")?
-            .map(|value| value.extract())
-            .transpose()?
-            .unwrap_or_else(|| "direct".to_string()),
-        static_matrix: vec![Complex64::new(0.0, 0.0); n * n],
+        dense_fill_mode: {
+            let s: String = dict
+                .get_item("dense_fill_mode")?
+                .map(|value| value.extract())
+                .transpose()?
+                .unwrap_or_else(|| "direct".to_string());
+            match s.as_str() {
+                "upper_expand" => DenseFillMode::UpperExpand,
+                _ => DenseFillMode::Direct,
+            }
+        },
+        static_matrix: vec![Complex64::ZERO; n * n],
         coefficients: Vec::new(),
         row_plans: Vec::new(),
     })
@@ -934,7 +913,7 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
 
     let n_collapse_count = dense_shape[0];
     let collapse_size = n_states * n_states;
-    let zero = Complex64::new(0.0, 0.0);
+    let zero = Complex64::ZERO;
     let mut dense_cdagger_c = vec![zero; n_collapse_count * collapse_size];
     for collapse_idx in 0..n_collapse_count {
         let base = collapse_idx * collapse_size;
@@ -997,7 +976,7 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
             .compounds
             .iter()
             .any(|c| expr_uses_time(&c.expression));
-        let ham_uses_time = if hamiltonian_plan.kind == "decomposed" {
+        let ham_uses_time = if hamiltonian_plan.kind == HamiltonianKind::Decomposed {
             hamiltonian_plan
                 .coefficients
                 .iter()

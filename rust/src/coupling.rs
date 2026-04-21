@@ -5,11 +5,11 @@ use num_complex::Complex64;
 pub fn angular_part(pol_vec: [Complex64; 3], f: i32, mf: i32, fp: i32, mfp: i32) -> Complex64 {
     let q = mf - mfp;
     if q.abs() > 1 {
-        return Complex64::new(0.0, 0.0);
+        return Complex64::ZERO;
     }
 
     let sqrt2 = 2.0_f64.sqrt();
-    let i = Complex64::new(0.0, 1.0);
+    let i = Complex64::I;
 
     let p_q = match q {
         1 => -(pol_vec[0] + i * pol_vec[1]) / sqrt2,
@@ -56,16 +56,16 @@ pub fn ed_me_coupled(
 ) -> Complex64 {
     // ---------- selection-rule early exits ----------
     if (bra.omega - ket.omega).abs() > 1 {
-        return Complex64::new(0.0, 0.0);
+        return Complex64::ZERO;
     }
     if (bra.j - ket.j).abs() > 1 {
-        return Complex64::new(0.0, 0.0);
+        return Complex64::ZERO;
     }
     if (bra.f - ket.f).abs() > 1 {
-        return Complex64::new(0.0, 0.0);
+        return Complex64::ZERO;
     }
     if !rme_only && (bra.mf - ket.mf).abs() > 1 {
-        return Complex64::new(0.0, 0.0);
+        return Complex64::ZERO;
     }
 
     // ---------- bra quantum numbers ----------
@@ -87,7 +87,7 @@ pub fn ed_me_coupled(
     // q = Ω − Ω'
     let q = omega - omegap;
     if q.abs() > 1 {
-        return Complex64::new(0.0, 0.0);
+        return Complex64::ZERO;
     }
 
     // ---------- phase: (-1)^(F1' + F1 + F' + I1 + I2 − Ω) ----------
@@ -146,7 +146,7 @@ pub fn ed_me_coupled(
     let me_scalar = phase * prefactor * sixj1 * sixj2 * threej;
 
     if me_scalar == 0.0 {
-        return Complex64::new(0.0, 0.0);
+        return Complex64::ZERO;
     }
 
     let mut me = Complex64::new(me_scalar, 0.0);
@@ -174,7 +174,7 @@ pub fn generate_ed_me_mixed_state(
     pol_vec: [Complex64; 3],
     reduced: bool,
 ) -> Complex64 {
-    let mut me = Complex64::new(0.0, 0.0);
+    let mut me = Complex64::ZERO;
 
     // ME = Σ_{a,b} amp_bra* · amp_ket · ED_ME_coupled(basis_bra, basis_ket)
     for (amp_bra, basis_bra) in bra.terms.iter() {
@@ -206,7 +206,7 @@ pub fn generate_coupling_matrix(
     reduced: bool,
 ) -> Vec<Complex64> {
     let n = qn.len();
-    let mut h = vec![Complex64::new(0.0, 0.0); n * n];
+    let mut h = vec![Complex64::ZERO; n * n];
 
     for &i in ground_indices {
         let ground_state = &qn[i];
@@ -217,7 +217,7 @@ pub fn generate_coupling_matrix(
             let me = generate_ed_me_mixed_state(excited_state, ground_state, pol_vec, reduced);
 
             h[i * n + j] = me;
-            if me != Complex64::new(0.0, 0.0) {
+            if me != Complex64::ZERO {
                 h[j * n + i] = me.conj();
             }
         }

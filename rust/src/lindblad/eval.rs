@@ -1,4 +1,4 @@
-use num_complex::{Complex64, ComplexFloat};
+use num_complex::Complex64;
 use std::f64::consts::PI;
 
 #[derive(Clone, Debug)]
@@ -130,19 +130,24 @@ where
     }
 }
 
-fn apply_builtin(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue, String> {
+fn apply_builtin_scalar(function_id: i64, value: Complex64) -> Result<Complex64, String> {
     let builtin = BuiltinFunctionId::from_i64(function_id)?;
-    let value = as_scalar(&args[0])?;
-    let result = match builtin {
+    Ok(match builtin {
         BuiltinFunctionId::Sin => value.sin(),
         BuiltinFunctionId::Cos => value.cos(),
         BuiltinFunctionId::Tan => value.tan(),
         BuiltinFunctionId::Exp => value.exp(),
-        BuiltinFunctionId::Abs => Complex64::new(value.abs(), 0.0),
+        BuiltinFunctionId::Abs => Complex64::new(value.norm(), 0.0),
         BuiltinFunctionId::Real => Complex64::new(value.re, 0.0),
         BuiltinFunctionId::Imag => Complex64::new(value.im, 0.0),
-    };
-    Ok(RuntimeValue::Scalar(result))
+    })
+}
+
+fn apply_builtin(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue, String> {
+    Ok(RuntimeValue::Scalar(apply_builtin_scalar(
+        function_id,
+        as_scalar(&args[0])?,
+    )?))
 }
 
 fn gaussian_2d(
@@ -273,60 +278,8 @@ fn helper_args_to_tuple(arg: &RuntimeValue) -> Result<&[Complex64], String> {
 }
 
 fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue, String> {
-    let value = match function_id {
-        1 => RuntimeValue::Scalar(Complex64::new(
-            gaussian_2d(
-                as_real(&args[0])?,
-                as_real(&args[1])?,
-                as_real(&args[2])?,
-                as_real(&args[3])?,
-                as_real(&args[4])?,
-                as_real(&args[5])?,
-                as_real(&args[6])?,
-            ),
-            0.0,
-        )),
-        2 => RuntimeValue::Scalar(Complex64::new(
-            gaussian_2d_rotated(
-                as_real(&args[0])?,
-                as_real(&args[1])?,
-                as_real(&args[2])?,
-                as_real(&args[3])?,
-                as_real(&args[4])?,
-                as_real(&args[5])?,
-                as_real(&args[6])?,
-                as_real(&args[7])?,
-            ),
-            0.0,
-        )),
-        3 => RuntimeValue::Scalar(phase_modulation(
-            as_real(&args[0])?,
-            as_real(&args[1])?,
-            as_real(&args[2])?,
-        )),
-        4 => RuntimeValue::Scalar(Complex64::new(
-            square_wave(as_real(&args[0])?, as_real(&args[1])?, as_real(&args[2])?),
-            0.0,
-        )),
-        5 => RuntimeValue::Scalar(resonant_polarization_modulation(
-            as_real(&args[0])?,
-            as_real(&args[1])?,
-            as_real(&args[2])?,
-        )),
-        6 => RuntimeValue::Scalar(Complex64::new(
-            sawtooth_wave(as_real(&args[0])?, as_real(&args[1])?, as_real(&args[2])?),
-            0.0,
-        )),
-        7 => RuntimeValue::Scalar(Complex64::new(
-            variable_on_off(
-                as_real(&args[0])?,
-                as_real(&args[1])?,
-                as_real(&args[2])?,
-                as_real(&args[3])?,
-            ),
-            0.0,
-        )),
-        8 => RuntimeValue::Scalar(Complex64::new(
+    match function_id {
+        8 => Ok(RuntimeValue::Scalar(Complex64::new(
             multipass_2d_intensity(
                 as_real(&args[0])?,
                 as_real(&args[1])?,
@@ -337,19 +290,7 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
                 as_real(&args[6])?,
             )?,
             0.0,
-        )),
-        9 => RuntimeValue::Scalar(Complex64::new(
-            rabi_from_intensity(
-                as_real(&args[0])?,
-                as_real(&args[1])?,
-                if args.len() > 2 {
-                    as_real(&args[2])?
-                } else {
-                    2.6675506e-30
-                },
-            ),
-            0.0,
-        )),
+        ))),
         10 => {
             let intensity = multipass_2d_intensity(
                 as_real(&args[0])?,
@@ -360,7 +301,7 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
                 as_real(&args[5])?,
                 as_real(&args[6])?,
             )?;
-            RuntimeValue::Scalar(Complex64::new(
+            Ok(RuntimeValue::Scalar(Complex64::new(
                 rabi_from_intensity(
                     intensity,
                     as_real(&args[7])?,
@@ -371,47 +312,16 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
                     },
                 ),
                 0.0,
-            ))
+            )))
         }
-        11 => {
-            let intensity = gaussian_2d(
-                as_real(&args[0])?,
-                as_real(&args[1])?,
-                as_real(&args[2])?,
-                as_real(&args[3])?,
-                as_real(&args[4])?,
-                as_real(&args[5])?,
-                as_real(&args[6])?,
-            );
-            RuntimeValue::Scalar(Complex64::new(
-                rabi_from_intensity(
-                    intensity,
-                    as_real(&args[7])?,
-                    if args.len() > 8 {
-                        as_real(&args[8])?
-                    } else {
-                        2.6675506e-30
-                    },
-                ),
-                0.0,
-            ))
+        _ => {
+            let scalar_args: Result<Vec<Complex64>, _> = args.iter().map(as_scalar).collect();
+            Ok(RuntimeValue::Scalar(apply_helper_scalar(
+                function_id,
+                &scalar_args?,
+            )?))
         }
-        12 => RuntimeValue::Scalar(Complex64::new(
-            variable_on_off_duty(
-                as_real(&args[0])?,
-                as_real(&args[1])?,
-                as_real(&args[2])?,
-                as_real(&args[3])?,
-            ),
-            0.0,
-        )),
-        13 => {
-            let n = ((as_real(&args[0])? - as_real(&args[1])?) / as_real(&args[2])?).floor() as i64;
-            RuntimeValue::Scalar(Complex64::new(if n % 2 == 0 { 1.0 } else { -1.0 }, 0.0))
-        }
-        _ => return Err(format!("unknown helper function id {}", function_id)),
-    };
-    Ok(value)
+    }
 }
 
 fn compare(
@@ -571,31 +481,6 @@ pub fn eval_expression_into(
     stack
         .pop()
         .ok_or_else(|| "expression evaluation produced no result".to_string())
-}
-
-pub fn eval_expression(
-    expression: &CompiledExpression,
-    slots: &[RuntimeValue],
-    t: f64,
-    temps: &[RuntimeValue],
-) -> Result<RuntimeValue, String> {
-    let mut stack: Vec<RuntimeValue> = Vec::with_capacity(expression.instructions.len());
-    eval_expression_into(expression, slots, t, temps, &mut stack)
-}
-
-fn apply_builtin_scalar(function_id: i64, args: &[Complex64]) -> Result<Complex64, String> {
-    let builtin = BuiltinFunctionId::from_i64(function_id)?;
-    let value = args[0];
-    let result = match builtin {
-        BuiltinFunctionId::Sin => value.sin(),
-        BuiltinFunctionId::Cos => value.cos(),
-        BuiltinFunctionId::Tan => value.tan(),
-        BuiltinFunctionId::Exp => value.exp(),
-        BuiltinFunctionId::Abs => Complex64::new(value.abs(), 0.0),
-        BuiltinFunctionId::Real => Complex64::new(value.re, 0.0),
-        BuiltinFunctionId::Imag => Complex64::new(value.im, 0.0),
-    };
-    Ok(result)
 }
 
 fn scalar_arg(args: &[Complex64], index: usize) -> f64 {
@@ -800,7 +685,7 @@ pub fn eval_scalar_expression_into(
                     .len()
                     .checked_sub(argc)
                     .ok_or_else(|| "stack underflow on BUILTIN_FUNC".to_string())?;
-                let result = apply_builtin_scalar(instruction.function, &stack[start..])?;
+                let result = apply_builtin_scalar(instruction.function, stack[start])?;
                 stack.truncate(start);
                 stack.push(result);
             }

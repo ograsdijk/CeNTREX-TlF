@@ -190,12 +190,11 @@ def generate_reduced_X_hamiltonian(
     if transform is None:
         S_transform = generate_transform_matrix(QN, QNc)
     else:
-        assert transform.shape[0] == len(QN), (
-            (
-                f"shape of transform incorrect; requires {len(QN), len(QN)}, "
+        if transform.shape[0] != len(QN):
+            raise ValueError(
+                f"shape of transform incorrect; requires {(len(QN), len(QN))}, "
                 f"not {transform.shape}"
-            ),
-        )
+            )
         S_transform = transform
 
     H_X = S_transform.conj().T @ H_X_uc_func(E, B) @ S_transform

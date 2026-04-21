@@ -107,7 +107,7 @@ impl LindbladRhsEvaluator {
                 state.len()
             )));
         }
-        let mut out = vec![Complex64::new(0.0, 0.0); n * n];
+        let mut out = vec![Complex64::ZERO; n * n];
         let mut workspace = self.workspace.borrow_mut();
         if self.profiling_enabled.get() {
             let mut profile = self.profile.borrow_mut();

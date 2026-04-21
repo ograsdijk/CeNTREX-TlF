@@ -1,4 +1,3 @@
-pub const A0: f64 = 0.529177210903e-10; // m
 pub const DEBYE: f64 = 3.333333333333333e-30; // C·m
 pub const DEBYE_HZ_V_CM: f64 = 503411.7791722602; // Hz/(V/cm)
 pub const B_EPSILON: f64 = 6.689873e9; // Hz
@@ -46,7 +45,7 @@ impl Default for XConstants {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Constants for the B state Hamiltonian.
 pub struct BConstants {
     /// Rotational constant (Hz)

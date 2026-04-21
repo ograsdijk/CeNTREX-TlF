@@ -47,7 +47,8 @@ def generate_unitary_transformation_matrix(
         if i < j:
             syms = hamiltonian[i, j].free_symbols
             syms = [s for s in syms if str(s)[0] == "ω"]
-            assert len(syms) == 1, f"Too many/few couplings, syms = {syms}"
+            if len(syms) != 1:
+                raise ValueError(f"Too many/few couplings, syms = {syms}")
             coupled_states.append((i, j, syms[0]))
 
     # solve equations to generate unitary transformation to rotating frame
@@ -169,65 +170,33 @@ def generate_symbolic_hamiltonian(
     Returns:
         smp.MutableDenseMatrix: Symbolic Hamiltonian matrix.
     """
-    assert not has_off_diagonal_elements(H_int), (
-        "Hamiltonian should not have off-diagonal elements"
-    )
     n_states = H_int.shape[0]
-    # initialize empty hamiltonian
+    if has_off_diagonal_elements(H_int):
+        raise ValueError("Hamiltonian should not have off-diagonal elements")
+
     hamiltonian = smp.zeros(*H_int.shape)
     energies = smp.symbols(f"E:{n_states}")
     hamiltonian += smp.eye(n_states) * np.asarray(energies)
 
-    # generate t symbol for non-rotating frame
     t = smp.Symbol("t", real=True)
 
-    # iterate over couplings
+    def _add_coupling_terms(hamiltonian, field, val, ω, t):
+        for i, j in zip(*np.nonzero(field.field)):
+            if i < j:
+                hamiltonian[i, j] += val * field.field[i, j] * smp.exp(1j * ω * t)
+                hamiltonian[j, i] += (
+                    smp.conjugate(val) * field.field[j, i] * smp.exp(-1j * ω * t)
+                )
+
     for idc, (Ω, coupling) in enumerate(zip(Ωs, couplings)):
-        # generate transition frequency symbol
         ω = smp.Symbol(f"ω{idc}", real=True)
-        # main coupling matrix element
         main_coupling = coupling.main_coupling
-        # iterate over fields (polarizations) in the coupling
         for idf, field in enumerate(coupling.fields):
-            if pols:
-                P = pols[idc]
-                if P:
-                    _P = P[idf]
-                    val = (_P * Ω / main_coupling) / 2
-                    for i, j in zip(*np.nonzero(field.field)):
-                        if i < j:
-                            hamiltonian[i, j] += (
-                                val * field.field[i, j] * smp.exp(1j * ω * t)
-                            )
-                            hamiltonian[j, i] += (
-                                smp.conjugate(val)
-                                * field.field[j, i]
-                                * smp.exp(-1j * ω * t)
-                            )
-                else:
-                    val = (Ω / main_coupling) / 2
-                    for i, j in zip(*np.nonzero(field.field)):
-                        if i < j:
-                            hamiltonian[i, j] += (
-                                val * field.field[i, j] * smp.exp(1j * ω * t)
-                            )
-                            hamiltonian[j, i] += (
-                                smp.conjugate(val)
-                                * field.field[j, i]
-                                * smp.exp(-1j * ω * t)
-                            )
+            if pols and pols[idc]:
+                val = (pols[idc][idf] * Ω / main_coupling) / 2
             else:
                 val = (Ω / main_coupling) / 2
-                for i, j in zip(*np.nonzero(field.field)):
-                    if i < j:
-                        hamiltonian[i, j] += (
-                            val * field.field[i, j] * smp.exp(1j * ω * t)
-                        )
-                        hamiltonian[j, i] += (
-                            smp.conjugate(val)
-                            * field.field[j, i]
-                            * smp.exp(-1j * ω * t)
-                        )
+            _add_coupling_terms(hamiltonian, field, val, ω, t)
 
     return hamiltonian
 
@@ -310,9 +279,8 @@ def generate_total_symbolic_hamiltonian(
         if qn_compact is provided, also returns the states corresponding to the
         compacted hamiltonian, i.e. ham, QN_compact
     """
-    assert not has_off_diagonal_elements(H_int), (
-        "Hamiltonian should not have off-diagonal elements"
-    )
+    if has_off_diagonal_elements(H_int):
+        raise ValueError("Hamiltonian should not have off-diagonal elements")
     Ωs = [t.Ω for t in transitions]
     Δs = [t.δ for t in transitions]
     pols: List[Optional[Sequence[smp.Symbol]]] = []

@@ -43,24 +43,35 @@ pub fn solve_bdf(
         return Err("only forward integration is supported".to_string());
     }
 
-    let plan_clone = plan.clone();
+    let plan_rc = Rc::new(plan.clone());
     let mode = options.mode;
     let workspace: Rc<RefCell<RhsWorkspace>> = Rc::new(RefCell::new(RhsWorkspace::new(plan)));
+    let rhs_error: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
 
     let rhs_workspace = workspace.clone();
-    let rhs_plan = plan_clone.clone();
+    let rhs_plan = plan_rc.clone();
+    let rhs_err = rhs_error.clone();
     let rhs_fn = move |x: &V, _p: &V, t: f64, y: &mut V| {
         let mut ws = rhs_workspace.borrow_mut();
-        rhs_packed_into(&rhs_plan, x.as_slice(), t, mode, &mut ws, y.as_mut_slice())
-            .expect("lindblad rhs failed inside diffsol bdf");
+        if let Err(err) =
+            rhs_packed_into(&rhs_plan, x.as_slice(), t, mode, &mut ws, y.as_mut_slice())
+        {
+            *rhs_err.borrow_mut() = Some(err);
+            y.as_mut_slice().fill(0.0);
+        }
     };
 
     let jac_workspace = workspace.clone();
-    let jac_plan = plan_clone.clone();
+    let jac_plan = plan_rc.clone();
+    let jac_err = rhs_error.clone();
     let jac_fn = move |_x: &V, _p: &V, t: f64, v: &V, y: &mut V| {
         let mut ws = jac_workspace.borrow_mut();
-        rhs_packed_into(&jac_plan, v.as_slice(), t, mode, &mut ws, y.as_mut_slice())
-            .expect("lindblad jac*v failed inside diffsol bdf");
+        if let Err(err) =
+            rhs_packed_into(&jac_plan, v.as_slice(), t, mode, &mut ws, y.as_mut_slice())
+        {
+            *jac_err.borrow_mut() = Some(err);
+            y.as_mut_slice().fill(0.0);
+        }
     };
 
     let y0_vec = y0.to_vec();
@@ -80,6 +91,13 @@ pub fn solve_bdf(
         )
         .build()
         .map_err(|e| format!("diffsol build error: {e}"))?;
+
+    let check_rhs_error = || -> Result<(), String> {
+        if let Some(err) = rhs_error.borrow_mut().take() {
+            return Err(format!("lindblad rhs failed inside diffsol bdf: {err}"));
+        }
+        Ok(())
+    };
 
     let mut solver = problem
         .bdf::<FaerSparseLU<f64>>()
@@ -111,11 +129,13 @@ pub fn solve_bdf(
                     Ok(OdeSolverStopReason::RootFound(..)) => break,
                     Err(e) => return Err(format!("diffsol step error: {e}")),
                 }
+                check_rhs_error()?;
                 step_count += 1;
                 if step_count > options.maxiters {
                     return Err("diffsol bdf exceeded maxiters".to_string());
                 }
             }
+            check_rhs_error()?;
             let state = solver.state();
             times.push(state.t);
             states.extend_from_slice(state.y.as_slice());
@@ -151,6 +171,7 @@ pub fn solve_bdf(
             Ok(OdeSolverStopReason::RootFound(..)) => break,
             Err(e) => return Err(format!("diffsol step error: {e}")),
         }
+        check_rhs_error()?;
         step_count += 1;
         if step_count > options.maxiters {
             return Err("diffsol bdf exceeded maxiters".to_string());

@@ -29,7 +29,7 @@ def test_compact_symbolic_hamiltonian_indices():
 
     hamiltonian = smp.ones(5)
     indices = np.array([2, 3])
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         arr = lindblad.utils_compact.compact_symbolic_hamiltonian_indices(
             hamiltonian, indices
         )

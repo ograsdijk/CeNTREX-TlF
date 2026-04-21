@@ -24,11 +24,11 @@ impl ExecutionMode {
 }
 
 fn matmul_into(a: &[Complex64], b: &[Complex64], out: &mut [Complex64], n: usize) {
-    out.fill(Complex64::new(0.0, 0.0));
+    out.fill(Complex64::ZERO);
     for i in 0..n {
         for k in 0..n {
             let aik = a[i * n + k];
-            if aik == Complex64::new(0.0, 0.0) {
+            if aik == Complex64::ZERO {
                 continue;
             }
             for j in 0..n {
@@ -47,7 +47,7 @@ fn add_commutator_dense(
 ) {
     matmul_into(hamiltonian, rho, out, n);
     matmul_into(rho, hamiltonian, scratch, n);
-    let neg_i = Complex64::new(0.0, -1.0);
+    let neg_i = -Complex64::I;
     for idx in 0..out.len() {
         out[idx] = neg_i * (out[idx] - scratch[idx]);
     }
@@ -66,90 +66,6 @@ fn add_commutator(
     } else {
         add_commutator_dense(hamiltonian, rho, out, scratch, n);
         Ok(())
-    }
-}
-
-fn add_commutator_upper(
-    upper_layout: &UpperTriLayout,
-    hamiltonian_upper: &[Complex64],
-    rho_upper: &[Complex64],
-    drho_upper: &mut [Complex64],
-) {
-    let n = upper_layout.n;
-    let neg_i = Complex64::new(0.0, -1.0);
-
-    #[inline(always)]
-    fn u(layout: &UpperTriLayout, data: &[Complex64], i: usize, j: usize) -> Complex64 {
-        data[layout.index_unchecked(i, j)]
-    }
-
-    for i in 0..n {
-        for j in i..n {
-            let mut hrho = Complex64::new(0.0, 0.0);
-            let mut rhoh = Complex64::new(0.0, 0.0);
-
-            // k < i: H[i,k]=conj(U_h[k,i]), rho[i,k]=conj(U_r[k,i]),
-            //        rho[k,j]=U_r[k,j] (k<i<=j), H[k,j]=U_h[k,j] (k<i<=j)
-            for k in 0..i {
-                let h_ki = u(upper_layout, hamiltonian_upper, k, i);
-                let r_ki = u(upper_layout, rho_upper, k, i);
-                let r_kj = u(upper_layout, rho_upper, k, j);
-                let h_kj = u(upper_layout, hamiltonian_upper, k, j);
-
-                hrho += h_ki.conj() * r_kj;
-                rhoh += r_ki.conj() * h_kj;
-            }
-
-            // k = i: H[i,i]=U_h[i,i], rho[i,i]=U_r[i,i],
-            //        rho[i,j]=U_r[i,j], H[i,j]=U_h[i,j]
-            {
-                let h_ii = u(upper_layout, hamiltonian_upper, i, i);
-                let r_ii = u(upper_layout, rho_upper, i, i);
-                let r_ij = u(upper_layout, rho_upper, i, j);
-                let h_ij = u(upper_layout, hamiltonian_upper, i, j);
-
-                hrho += h_ii * r_ij;
-                rhoh += r_ii * h_ij;
-            }
-
-            // i < k < j: H[i,k]=U_h[i,k], rho[i,k]=U_r[i,k],
-            //            rho[k,j]=U_r[k,j] (k<j), H[k,j]=U_h[k,j] (k<j)
-            for k in (i + 1)..j {
-                let h_ik = u(upper_layout, hamiltonian_upper, i, k);
-                let r_ik = u(upper_layout, rho_upper, i, k);
-                let r_kj = u(upper_layout, rho_upper, k, j);
-                let h_kj = u(upper_layout, hamiltonian_upper, k, j);
-
-                hrho += h_ik * r_kj;
-                rhoh += r_ik * h_kj;
-            }
-
-            // k = j (only when j > i): H[i,j]=U_h[i,j], rho[i,j]=U_r[i,j],
-            //                          rho[j,j]=U_r[j,j], H[j,j]=U_h[j,j]
-            if j > i {
-                let h_ij = u(upper_layout, hamiltonian_upper, i, j);
-                let r_ij = u(upper_layout, rho_upper, i, j);
-                let r_jj = u(upper_layout, rho_upper, j, j);
-                let h_jj = u(upper_layout, hamiltonian_upper, j, j);
-
-                hrho += h_ij * r_jj;
-                rhoh += r_ij * h_jj;
-            }
-
-            // k > j: H[i,k]=U_h[i,k] (i<k), rho[i,k]=U_r[i,k] (i<k),
-            //        rho[k,j]=conj(U_r[j,k]), H[k,j]=conj(U_h[j,k])
-            for k in (j + 1)..n {
-                let h_ik = u(upper_layout, hamiltonian_upper, i, k);
-                let r_ik = u(upper_layout, rho_upper, i, k);
-                let r_jk = u(upper_layout, rho_upper, j, k);
-                let h_jk = u(upper_layout, hamiltonian_upper, j, k);
-
-                hrho += h_ik * r_jk.conj();
-                rhoh += r_ik * h_jk.conj();
-            }
-
-            drho_upper[upper_layout.index_unchecked(i, j)] = neg_i * (hrho - rhoh);
-        }
     }
 }
 
@@ -190,12 +106,12 @@ fn add_commutator_sparse_upper(
     drho_upper: &mut [Complex64],
 ) {
     let n = pattern.n;
-    let neg_i = Complex64::new(0.0, -1.0);
+    let neg_i = -Complex64::I;
 
     for i in 0..n {
         for j in i..n {
-            let mut hrho = Complex64::new(0.0, 0.0);
-            let mut rhoh = Complex64::new(0.0, 0.0);
+            let mut hrho = Complex64::ZERO;
+            let mut rhoh = Complex64::ZERO;
 
             // H[i,k] nonzeros from CSR (upper triangle: k >= i)
             for ptr in pattern.row_ptrs[i]..pattern.row_ptrs[i + 1] {
@@ -239,7 +155,7 @@ fn add_commutator_sparse_upper(
 fn add_dense_dissipator(plan: &PreparedLindbladPlan, rho: &[Complex64], out: &mut [Complex64]) {
     let n = plan.n_states();
     let collapse_size = n * n;
-    let zero = Complex64::new(0.0, 0.0);
+    let zero = Complex64::ZERO;
     for collapse_idx in 0..plan.n_collapse {
         let base = collapse_idx * collapse_size;
         let collapse = &plan.dense_c_array[base..(base + collapse_size)];
@@ -271,27 +187,6 @@ fn add_dense_dissipator(plan: &PreparedLindbladPlan, rho: &[Complex64], out: &mu
                 }
                 out[i * n + j] -= 0.5 * (left + right);
             }
-        }
-    }
-}
-
-fn add_structured_dissipator_legacy(
-    plan: &PreparedLindbladPlan,
-    rho: &[Complex64],
-    out: &mut [Complex64],
-) {
-    let n = plan.n_states();
-    for jump in &plan.structured_jumps {
-        out[jump.target * n + jump.target] += jump.rate * rho[jump.source * n + jump.source];
-    }
-    for source in 0..n {
-        let rate = plan.source_decay_rates[source];
-        if rate == 0.0 {
-            continue;
-        }
-        for col in 0..n {
-            out[source * n + col] -= 0.5 * rate * rho[source * n + col];
-            out[col * n + source] -= 0.5 * rate * rho[col * n + source];
         }
     }
 }
@@ -367,6 +262,8 @@ pub struct RhsWorkspace {
     hamiltonian_temps: Vec<RuntimeValue>,
     eval_stack: Vec<RuntimeValue>,
     scalar_stack: Vec<Complex64>,
+    split_input: Vec<Complex64>,
+    split_output: Vec<Complex64>,
     hamiltonian_valid: bool,
     h_sparse_valid: bool,
 }
@@ -390,18 +287,20 @@ impl RhsWorkspace {
         let upper_layout = UpperTriLayout::new(n).expect("valid upper-triangle layout");
         Self {
             upper_layout: upper_layout.clone(),
-            rho: vec![Complex64::new(0.0, 0.0); matrix_len],
-            rho_upper: vec![Complex64::new(0.0, 0.0); upper_layout.len()],
-            hamiltonian_upper: vec![Complex64::new(0.0, 0.0); upper_layout.len()],
-            hamiltonian: vec![Complex64::new(0.0, 0.0); matrix_len],
-            drho: vec![Complex64::new(0.0, 0.0); matrix_len],
-            drho_upper: vec![Complex64::new(0.0, 0.0); upper_layout.len()],
-            scratch: vec![Complex64::new(0.0, 0.0); matrix_len],
-            h_sparse_values: vec![Complex64::new(0.0, 0.0); plan.hamiltonian_sparse_pattern.nnz],
+            rho: vec![Complex64::ZERO; matrix_len],
+            rho_upper: vec![Complex64::ZERO; upper_layout.len()],
+            hamiltonian_upper: vec![Complex64::ZERO; upper_layout.len()],
+            hamiltonian: vec![Complex64::ZERO; matrix_len],
+            drho: vec![Complex64::ZERO; matrix_len],
+            drho_upper: vec![Complex64::ZERO; upper_layout.len()],
+            scratch: vec![Complex64::ZERO; matrix_len],
+            h_sparse_values: vec![Complex64::ZERO; plan.hamiltonian_sparse_pattern.nnz],
             parameter_values: Vec::with_capacity(plan.parameter_graph.slot_names.len()),
             hamiltonian_temps: Vec::with_capacity(plan.hamiltonian_plan.temps.len()),
             eval_stack: Vec::new(),
             scalar_stack: Vec::new(),
+            split_input: vec![Complex64::ZERO; matrix_len],
+            split_output: vec![Complex64::ZERO; matrix_len],
             hamiltonian_valid: false,
             h_sparse_valid: false,
         }
@@ -465,8 +364,9 @@ fn rhs_from_workspace_rho(
     if !can_skip {
         match mode {
             ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
-                if plan.hamiltonian_plan.kind == "decomposed"
-                    && plan.hamiltonian_plan.dense_fill_mode == "upper_expand"
+                if plan.hamiltonian_plan.kind == crate::lindblad::plan::HamiltonianKind::Decomposed
+                    && plan.hamiltonian_plan.dense_fill_mode
+                        == crate::lindblad::plan::DenseFillMode::UpperExpand
                 {
                     plan.hamiltonian_plan.fill_upper_into(
                         workspace.parameter_values.as_slice(),
@@ -513,7 +413,7 @@ fn rhs_from_workspace_rho(
     let commutator_start = Instant::now();
     match mode {
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
-            workspace.drho.fill(Complex64::new(0.0, 0.0));
+            workspace.drho.fill(Complex64::ZERO);
             add_commutator(
                 plan,
                 workspace.hamiltonian.as_slice(),
@@ -635,18 +535,6 @@ pub fn rhs_matrix_into(
     rhs_matrix_into_with_profile(plan, rho, t, mode, workspace, out, None)
 }
 
-pub fn rhs_matrix(
-    plan: &PreparedLindbladPlan,
-    rho: &[Complex64],
-    t: f64,
-    mode: ExecutionMode,
-) -> Result<Vec<Complex64>, String> {
-    let mut workspace = RhsWorkspace::new(plan);
-    let mut out = vec![Complex64::new(0.0, 0.0); plan.n_states() * plan.n_states()];
-    rhs_matrix_into(plan, rho, t, mode, &mut workspace, out.as_mut_slice())?;
-    Ok(out)
-}
-
 pub fn rhs_split_into_with_profile(
     plan: &PreparedLindbladPlan,
     split_state: &[f64],
@@ -656,8 +544,10 @@ pub fn rhs_split_into_with_profile(
     out: &mut [f64],
     profile: Option<&mut RhsProfileStats>,
 ) -> Result<(), String> {
-    let mut input = vec![Complex64::new(0.0, 0.0); plan.n_states() * plan.n_states()];
-    let mut output = vec![Complex64::new(0.0, 0.0); plan.n_states() * plan.n_states()];
+    let mut input = std::mem::take(&mut workspace.split_input);
+    let mut output = std::mem::take(&mut workspace.split_output);
+    input.fill(Complex64::ZERO);
+    output.fill(Complex64::ZERO);
     split_real_to_complex(split_state, input.as_mut_slice())?;
     rhs_matrix_into_with_profile(
         plan,
@@ -668,7 +558,10 @@ pub fn rhs_split_into_with_profile(
         output.as_mut_slice(),
         profile,
     )?;
-    complex_to_split_real(output.as_slice(), out)
+    let result = complex_to_split_real(output.as_slice(), out);
+    workspace.split_input = input;
+    workspace.split_output = output;
+    result
 }
 
 pub fn build_split_jacobian_sparse(
@@ -684,10 +577,10 @@ pub fn build_split_jacobian_sparse(
     let mut rows = Vec::new();
     let mut cols = Vec::new();
     let mut values = Vec::new();
-    let mut basis = vec![Complex64::new(0.0, 0.0); dim_complex];
-    let mut output = vec![Complex64::new(0.0, 0.0); dim_complex];
+    let mut basis = vec![Complex64::ZERO; dim_complex];
+    let mut output = vec![Complex64::ZERO; dim_complex];
     for col_complex in 0..dim_complex {
-        basis[col_complex] = Complex64::new(1.0, 0.0);
+        basis[col_complex] = Complex64::ONE;
         rhs_matrix_into(
             plan,
             basis.as_slice(),
@@ -696,7 +589,7 @@ pub fn build_split_jacobian_sparse(
             workspace,
             output.as_mut_slice(),
         )?;
-        basis[col_complex] = Complex64::new(0.0, 0.0);
+        basis[col_complex] = Complex64::ZERO;
 
         let col_real = col_complex as i64;
         let col_imag = (dim_complex + col_complex) as i64;

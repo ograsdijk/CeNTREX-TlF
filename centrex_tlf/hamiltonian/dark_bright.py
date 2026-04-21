@@ -99,4 +99,3 @@ def generate_transform_matrix_symbolic(
     T = T.subs([(s, v) for s, v in zip(solve_symbols, sol[0])])
 
     return DarkBrightTransformation(n_levels, a, Δ, T)
-    return DarkBrightTransformation(n_levels, a, Δ, T)

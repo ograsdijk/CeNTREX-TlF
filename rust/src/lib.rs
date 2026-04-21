@@ -24,22 +24,27 @@ use wigner::{wigner_3j_f, wigner_6j_f};
 fn parse_uncoupled_state(s: &Bound<'_, PyAny>) -> PyResult<UncoupledBasisState> {
     let j: i32 = s.getattr("J")?.extract()?;
     let mj: i32 = s.getattr("mJ")?.extract()?;
-    let i1: f64 = s.getattr("I1")?.extract()?;
-    let m1: f64 = s.getattr("m1")?.extract()?;
-    let i2: f64 = s.getattr("I2")?.extract()?;
-    let m2: f64 = s.getattr("m2")?.extract()?;
+    let i1: i32 = (s.getattr("I1")?.extract::<f64>()? * 2.0).round() as i32;
+    let m1: i32 = (s.getattr("m1")?.extract::<f64>()? * 2.0).round() as i32;
+    let i2: i32 = (s.getattr("I2")?.extract::<f64>()? * 2.0).round() as i32;
+    let m2: i32 = (s.getattr("m2")?.extract::<f64>()? * 2.0).round() as i32;
     let omega: i32 = s.getattr("Omega")?.extract()?;
-    let p: i32 = s.getattr("P")?.extract()?;
+    let p_obj = s.getattr("P")?;
+    let parity: i8 = if p_obj.is_none() {
+        0
+    } else {
+        p_obj.extract::<i8>()?
+    };
 
     Ok(UncoupledBasisState {
         j,
         mj,
-        i1: (i1 * 2.0).round() as i32,
-        m1: (m1 * 2.0).round() as i32,
-        i2: (i2 * 2.0).round() as i32,
-        m2: (m2 * 2.0).round() as i32,
+        i1,
+        m1,
+        i2,
+        m2,
         omega,
-        parity: p as i8,
+        parity,
     })
 }
 
@@ -73,7 +78,7 @@ fn parse_coupled_basis_state(s: &Bound<'_, PyAny>) -> PyResult<CoupledBasisState
         i2: (s.getattr("I2")?.extract::<f64>()? * 2.0).round() as i32,
         f1: (s.getattr("F1")?.extract::<f64>()? * 2.0).round() as i32,
         omega: s.getattr("Omega")?.extract()?,
-        p: parse_optional_parity(s)?,
+        parity: parse_optional_parity(s)?,
         electronic_state: parse_electronic_state(s)?,
     })
 }
@@ -85,30 +90,7 @@ fn parse_basis_state_enum(s: &Bound<'_, PyAny>) -> PyResult<states::BasisStateEn
             s,
         )?))
     } else {
-        let j: i32 = s.getattr("J")?.extract()?;
-        let mj: i32 = s.getattr("mJ")?.extract()?;
-        let i1: i32 = (s.getattr("I1")?.extract::<f64>()? * 2.0).round() as i32;
-        let m1: i32 = (s.getattr("m1")?.extract::<f64>()? * 2.0).round() as i32;
-        let i2: i32 = (s.getattr("I2")?.extract::<f64>()? * 2.0).round() as i32;
-        let m2: i32 = (s.getattr("m2")?.extract::<f64>()? * 2.0).round() as i32;
-        let omega: i32 = s.getattr("Omega")?.extract()?;
-        let p_obj = s.getattr("P")?;
-        let parity: i8 = if p_obj.is_none() {
-            0
-        } else {
-            p_obj.extract::<i8>()?
-        };
-
-        Ok(states::BasisStateEnum::Uncoupled(UncoupledBasisState {
-            j,
-            mj,
-            i1,
-            m1,
-            i2,
-            m2,
-            omega,
-            parity,
-        }))
+        Ok(states::BasisStateEnum::Uncoupled(parse_uncoupled_state(s)?))
     }
 }
 

@@ -833,7 +833,8 @@ def get_unique_basisstates_from_basisstates(
         Uses equality comparison to determine uniqueness. BasisStates with identical
         quantum numbers are considered duplicates.
     """
-    assert isinstance(states[0], BasisState), "Not a sequence of BasisState objects"
+    if not isinstance(states[0], BasisState):
+        raise TypeError("Not a sequence of BasisState objects")
     return get_unique_list(states)
 
 
@@ -869,7 +870,8 @@ def get_unique_basisstates_from_states(
         - Keeps only unique basis states (amplitudes discarded)
         - Useful for constructing minimal Hilbert space for calculations
     """
-    assert isinstance(states[0], CoupledState), "Not a sequence of State objects"
+    if not isinstance(states[0], CoupledState):
+        raise TypeError("Not a sequence of State objects")
     return get_unique_basisstates_from_basisstates(
         [s for S in states for a, s in S.data]
     )

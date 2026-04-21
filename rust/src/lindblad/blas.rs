@@ -90,8 +90,8 @@ pub fn commutator_her2k(
     if hamiltonian.len() != n * n || rho.len() != n * n || out.len() != n * n {
         return Err("invalid matrix lengths for HER2K commutator".to_string());
     }
-    out.fill(Complex64::new(0.0, 0.0));
-    let alpha = Complex64::new(0.0, 1.0);
+    out.fill(Complex64::ZERO);
+    let alpha = Complex64::I;
     let loaded = load_zher2k(config)?;
     unsafe {
         (loaded.function)(

@@ -5,6 +5,7 @@ use ode_solvers::dop_shared::{IntegrationError, OutputType, System};
 use ode_solvers::dopri5::Dopri5;
 use ode_solvers::DVector;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct OdeSolverOptions {
@@ -21,12 +22,13 @@ struct LindbladOdeSystem {
     plan: PreparedLindbladPlan,
     mode: ExecutionMode,
     workspace: RefCell<RhsWorkspace>,
+    error: Rc<RefCell<Option<String>>>,
 }
 
 impl System<f64, DVector<f64>> for LindbladOdeSystem {
     fn system(&self, x: f64, y: &DVector<f64>, dy: &mut DVector<f64>) {
         let mut workspace = self.workspace.borrow_mut();
-        match rhs_packed_into(
+        if let Err(err) = rhs_packed_into(
             &self.plan,
             y.as_slice(),
             x,
@@ -34,8 +36,8 @@ impl System<f64, DVector<f64>> for LindbladOdeSystem {
             &mut workspace,
             dy.as_mut_slice(),
         ) {
-            Ok(()) => {}
-            Err(err) => panic!("lindblad rhs failed inside ode_solvers: {err}"),
+            *self.error.borrow_mut() = Some(err);
+            dy.as_mut_slice().fill(0.0);
         }
     }
 }
@@ -64,10 +66,14 @@ pub fn solve_dopri5(
     if t1 < t0 {
         return Err("only forward integration is supported".to_string());
     }
+    let maxiters_u32 = u32::try_from(options.maxiters)
+        .map_err(|_| format!("maxiters {} exceeds u32::MAX", options.maxiters))?;
+    let rhs_error: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let system = LindbladOdeSystem {
         plan: plan.clone(),
         mode: options.mode,
         workspace: RefCell::new(RhsWorkspace::new(plan)),
+        error: rhs_error.clone(),
     };
     let y0 = DVector::from_vec(y0.to_vec());
     let mut stepper = Dopri5::from_param(
@@ -84,7 +90,7 @@ pub fn solve_dopri5(
         10.0,
         t1 - t0,
         0.0,
-        options.maxiters as u32,
+        maxiters_u32,
         1000,
         if options.saveat.is_some() {
             OutputType::Continuous
@@ -93,11 +99,19 @@ pub fn solve_dopri5(
         },
     );
 
+    let check_rhs_error = || -> Result<(), String> {
+        if let Some(err) = rhs_error.borrow_mut().take() {
+            return Err(format!("lindblad rhs failed inside ode_solvers: {err}"));
+        }
+        Ok(())
+    };
+
     if let Some(saveat) = options.saveat.as_ref() {
         let mut output = ContinuousOutputModel::default();
         stepper
             .integrate_with_continuous_output_model(&mut output)
             .map_err(map_integration_error)?;
+        check_rhs_error()?;
 
         let mut times = Vec::with_capacity(saveat.len() + usize::from(options.save_start));
         let mut states = Vec::with_capacity(
@@ -124,6 +138,7 @@ pub fn solve_dopri5(
     }
 
     stepper.integrate().map_err(map_integration_error)?;
+    check_rhs_error()?;
     let times = stepper.x_out().clone();
     let mut states = Vec::with_capacity(times.len() * plan.layout.packed_len());
     for state in stepper.y_out().iter() {

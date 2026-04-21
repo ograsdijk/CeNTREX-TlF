@@ -57,11 +57,6 @@ def generate_dissipator_term(
 ) -> smp.Matrix:
     nstates = density_matrix.shape[0]
 
-    # Ensure collapse operators are complex-valued for proper conjugation
-    if not np.iscomplexobj(C_array):
-        C_array = C_array.astype(np.complex128)
-
-    # Ensure collapse operators are complex-valued for proper conjugation
     if not np.iscomplexobj(C_array):
         C_array = C_array.astype(np.complex128)
 

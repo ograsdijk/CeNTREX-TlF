@@ -9,35 +9,9 @@ from centrex_tlf.states import (
     UncoupledBasisState,
     UncoupledState,
 )
+from centrex_tlf.states.utils import reorder_evecs
 
 __all__ = ["reorder_evecs", "matrix_to_states", "reduced_basis_hamiltonian"]
-
-
-def reorder_evecs(
-    V_in: npt.NDArray[np.complex128],
-    E_in: npt.NDArray[np.complex128],
-    V_ref: npt.NDArray[np.complex128],
-) -> Tuple[npt.NDArray[np.complex128], npt.NDArray[np.complex128]]:
-    """Reshuffle eigenvectors and eigenergies based on a reference
-
-    Args:
-        V_in (np.ndarray): eigenvector matrix to be reorganized
-        E_in (np.ndarray): energy vector to be reorganized
-        V_ref (np.ndarray): reference eigenvector matrix
-
-    Returns:
-        (np.ndarray, np.ndarray): energy vector, eigenvector matrix
-    """
-    # take dot product between each eigenvector in V and state_vec
-    overlap_vectors = np.absolute(np.matmul(np.conj(V_in.T), V_ref))
-
-    # find which state has the largest overlap:
-    index = np.argsort(np.argmax(overlap_vectors, axis=1))
-    # store energy and state
-    E_out = E_in[index]
-    V_out = V_in[:, index]
-
-    return E_out, V_out
 
 
 @overload

@@ -53,12 +53,6 @@ impl PackedHermitianLayout {
         Ok(())
     }
 
-    pub fn pack(&self, matrix: &[Complex64]) -> Result<Vec<f64>, String> {
-        let mut packed = vec![0.0_f64; self.packed_len()];
-        self.pack_into(matrix, packed.as_mut_slice())?;
-        Ok(packed)
-    }
-
     pub fn unpack_into(&self, packed: &[f64], matrix: &mut [Complex64]) -> Result<(), String> {
         if packed.len() != self.packed_len() {
             return Err(format!(
@@ -74,7 +68,7 @@ impl PackedHermitianLayout {
                 matrix.len()
             ));
         }
-        matrix.fill(Complex64::new(0.0, 0.0));
+        matrix.fill(Complex64::ZERO);
         for i in 0..self.n {
             matrix[i * self.n + i] = Complex64::new(packed[i], 0.0);
         }
@@ -88,12 +82,6 @@ impl PackedHermitianLayout {
             }
         }
         Ok(())
-    }
-
-    pub fn unpack(&self, packed: &[f64]) -> Result<Vec<Complex64>, String> {
-        let mut matrix = vec![Complex64::new(0.0, 0.0); self.n * self.n];
-        self.unpack_into(packed, matrix.as_mut_slice())?;
-        Ok(matrix)
     }
 }
 
@@ -139,22 +127,13 @@ impl UpperTriLayout {
                 upper.len()
             ));
         }
-        upper.fill(Complex64::new(0.0, 0.0));
+        upper.fill(Complex64::ZERO);
         Ok(())
     }
 
     #[inline]
     pub fn index_unchecked(&self, i: usize, j: usize) -> usize {
         self.row_offsets[i] + (j - i)
-    }
-
-    #[inline]
-    pub fn get_hermitian(&self, upper: &[Complex64], i: usize, j: usize) -> Complex64 {
-        if i <= j {
-            upper[self.index_unchecked(i, j)]
-        } else {
-            upper[self.index_unchecked(j, i)].conj()
-        }
     }
 
     pub fn pack_from_dense(
@@ -268,7 +247,7 @@ impl UpperTriLayout {
                 dense.len()
             ));
         }
-        dense.fill(Complex64::new(0.0, 0.0));
+        dense.fill(Complex64::ZERO);
         for i in 0..self.n {
             for j in i..self.n {
                 let value = upper[self.index(i, j)?];

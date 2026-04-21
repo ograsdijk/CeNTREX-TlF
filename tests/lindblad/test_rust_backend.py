@@ -15,7 +15,7 @@ from centrex_tlf.lindblad.reference_dense import (
     reference_rhs,
     structured_rhs,
 )
-from centrex_tlf.lindblad.solve import LindbladMatrixResult, solve_lindblad
+from centrex_tlf.lindblad.solve import LindbladMatrixResult, LindbladResult, solve_lindblad
 from centrex_tlf.lindblad.state_layout import PackedHermitianLayout
 from centrex_tlf.lindblad.utils_setup import OBESystem
 
@@ -245,15 +245,11 @@ def test_rust_matrix_rhs_evaluator_matches_packed_rhs() -> None:
     rho = np.array([[0.7, 0.1 + 0.05j], [0.1 - 0.05j, 0.3]], dtype=np.complex128)
     packed = prepared.layout.pack(rho)
     rhs_packed = np.asarray(rust.lindblad_rhs_py(rust_plan, packed, 0.31, "structured"), dtype=np.float64)
-    rhs_packed_blas = np.asarray(
-        rust.lindblad_rhs_py(rust_plan, packed, 0.31, "structured_blas"), dtype=np.float64
-    )
     rhs_packed_upper = np.asarray(
         rust.lindblad_rhs_py(rust_plan, packed, 0.31, "structured_upper"), dtype=np.float64
     )
     rhs_matrix = np.asarray(evaluator.rhs_matrix_py(rho.reshape(-1), 0.31), dtype=np.complex128).reshape(2, 2)
-    np.testing.assert_allclose(rhs_packed, rhs_packed_blas, atol=1e-11, rtol=1e-11)
-    np.testing.assert_allclose(rhs_packed_upper, rhs_packed_blas, atol=1e-11, rtol=1e-11)
+    np.testing.assert_allclose(rhs_packed_upper, rhs_packed, atol=1e-11, rtol=1e-11)
     np.testing.assert_allclose(prepared.layout.pack(rhs_matrix), rhs_packed, atol=1e-11, rtol=1e-11)
 
 
@@ -451,26 +447,6 @@ def test_rust_scipy_solver_matches_python_structured_reference() -> None:
     )
     np.testing.assert_allclose(rust_result.packed_y, python_result.packed_y, atol=5e-7, rtol=5e-6)
 
-    rust_blas_result = solve_lindblad(
-        system,
-        rho0,
-        (0.0, 0.5),
-        parameters=parameters,
-        backend="rust",
-        solver="scipy",
-        execution_mode="structured_blas",
-        saveat=saveat,
-        dt=1e-3,
-        reltol=1e-8,
-        abstol=1e-10,
-    )
-    np.testing.assert_allclose(
-        rust_result.packed_y,
-        rust_blas_result.packed_y,
-        atol=5e-7,
-        rtol=5e-6,
-    )
-
 
 def test_rust_scipy_bdf_solver_matches_python_reference() -> None:
     system = _make_two_level_system()
@@ -504,43 +480,11 @@ def test_rust_scipy_bdf_solver_matches_python_reference() -> None:
         abstol=1e-10,
     )
 
-    assert isinstance(rust_result, LindbladMatrixResult)
+    assert isinstance(rust_result, LindbladResult)
     np.testing.assert_allclose(rust_result.t, python_result.t, atol=1e-12, rtol=0.0)
     np.testing.assert_allclose(
         rust_result.density_matrices(),
         python_result.density_matrices(),
-        atol=5e-7,
-        rtol=5e-6,
-    )
-    rust_blas_result = solve_lindblad(
-        system,
-        rho0,
-        (0.0, 0.5),
-        parameters=parameters,
-        backend="rust",
-        solver="scipy",
-        execution_mode="structured",
-        saveat=saveat,
-        dt=1e-3,
-        reltol=1e-8,
-        abstol=1e-10,
-    )
-    rust_upper_result = solve_lindblad(
-        system,
-        rho0,
-        (0.0, 0.5),
-        parameters=parameters,
-        backend="rust",
-        solver="scipy",
-        execution_mode="structured_upper",
-        saveat=saveat,
-        dt=1e-3,
-        reltol=1e-8,
-        abstol=1e-10,
-    )
-    np.testing.assert_allclose(
-        rust_upper_result.packed_y,
-        rust_blas_result.packed_y,
         atol=5e-7,
         rtol=5e-6,
     )

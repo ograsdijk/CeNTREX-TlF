@@ -5,6 +5,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from centrex_tlf import couplings, transitions
 
@@ -12,13 +13,18 @@ EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "examples"
 if str(EXAMPLES_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLES_DIR))
 
-from effective_downfolding import build_transition_ground_basis_state
-from precomputed_field_basis import (
-    operator_bundle,
-    prepare_precomputed_adiabatic_obe_model,
-    project_common_state_to_initial_adiabatic_basis,
-    solve_precomputed_adiabatic_model,
-)
+try:
+    from effective_downfolding import build_transition_ground_basis_state
+    from precomputed_field_basis import (
+        operator_bundle,
+        prepare_precomputed_adiabatic_obe_model,
+        project_common_state_to_initial_adiabatic_basis,
+        solve_precomputed_adiabatic_model,
+    )
+except ImportError:
+    pytestmark = pytest.mark.skip(
+        reason="effective_downfolding / precomputed_field_basis not available"
+    )
 
 
 def electric_reference_vector(axis: str, value: float) -> np.ndarray:

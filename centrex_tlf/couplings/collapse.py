@@ -53,19 +53,25 @@ def collapse_matrices(
         >>> # Create collapse operators for X→B transitions
         >>> C_array = collapse_matrices(QN, ground_states, excited_states, gamma=2π*36e6)
     """
-    # Initialize list of collapse matrices
     C_list: List[npt.NDArray[np.floating]] = []
 
-    # Start looping over ground and excited states
+    qn_index = {id(state): idx for idx, state in enumerate(QN)}
+    for state in ground_states:
+        if id(state) not in qn_index:
+            qn_index[id(state)] = QN.index(state)
+    for state in excited_states:
+        if id(state) not in qn_index:
+            qn_index[id(state)] = QN.index(state)
+
     for excited_state in excited_states:
-        j = QN.index(excited_state)
+        j = qn_index[id(excited_state)]
         BRs = calculate_br(excited_state, ground_states)
         if not np.allclose(np.sum(BRs), 1.0):
             warnings.warn(
                 f"Branching ratio sum > 1, difference = {np.sum(BRs) - 1:.2e}"
             )
         for ground_state, BR in zip(ground_states, BRs):
-            i = QN.index(ground_state)
+            i = qn_index[id(ground_state)]
 
             if np.sqrt(BR) > tol:
                 # Initialize the coupling matrix

@@ -119,7 +119,8 @@ def _binary_elementwise(
         scalar = _as_scalar(right)
         return tuple(op(item, scalar) for item in left)
     scalar = _as_scalar(left)
-    assert isinstance(right, tuple)
+    if not isinstance(right, tuple):
+        raise TypeError(f"expected right operand to be a tuple, got {type(right)}")
     return tuple(op(scalar, item) for item in right)
 
 

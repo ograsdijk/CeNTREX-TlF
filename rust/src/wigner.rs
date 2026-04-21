@@ -11,6 +11,7 @@
 
 use std::cmp::{max, min};
 
+#[inline]
 fn fact(n: i32) -> f64 {
     if n < 0 {
         return 0.0;
@@ -25,6 +26,7 @@ fn fact(n: i32) -> f64 {
     acc
 }
 
+#[inline]
 fn triangle_ok(tj1: i32, tj2: i32, tj3: i32) -> bool {
     // Triangle inequalities and parity:
     // |j1 - j2| <= j3 <= j1 + j2 and j1 + j2 + j3 integer.
@@ -42,6 +44,7 @@ fn triangle_ok(tj1: i32, tj2: i32, tj3: i32) -> bool {
 }
 
 /// Racah triangle coefficient Δ(j1,j2,j3) in 2j notation.
+#[inline]
 fn delta_coeff(tj1: i32, tj2: i32, tj3: i32) -> f64 {
     if !triangle_ok(tj1, tj2, tj3) {
         return 0.0;
@@ -64,6 +67,7 @@ fn delta_coeff(tj1: i32, tj2: i32, tj3: i32) -> f64 {
 /// Wigner 3j symbol in 2j / 2m notation.
 ///
 /// Arguments: (2j1, 2j2, 2j3, 2m1, 2m2, 2m3)
+#[inline]
 pub fn wigner_3j(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32) -> f64 {
     // Selection rules
     if tm1 + tm2 + tm3 != 0 {
@@ -143,6 +147,7 @@ pub fn wigner_3j(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32) -> 
 /// Wigner 6j symbol in 2j notation.
 ///
 /// Arguments: (2j1, 2j2, 2j3, 2j4, 2j5, 2j6)
+#[inline]
 pub fn wigner_6j(tj1: i32, tj2: i32, tj3: i32, tj4: i32, tj5: i32, tj6: i32) -> f64 {
     // Triangle conditions on the four triples
     if !triangle_ok(tj1, tj2, tj3)
@@ -213,6 +218,7 @@ fn to_two_j(x: f64) -> i32 {
 }
 
 /// Wigner 3j symbol for float inputs (wraps integer implementation).
+#[inline]
 pub fn wigner_3j_f(j1: f64, j2: f64, j3: f64, m1: f64, m2: f64, m3: f64) -> f64 {
     let tj1 = to_two_j(j1);
     let tj2 = to_two_j(j2);
@@ -225,6 +231,7 @@ pub fn wigner_3j_f(j1: f64, j2: f64, j3: f64, m1: f64, m2: f64, m3: f64) -> f64 
 }
 
 /// Wigner 6j symbol for float inputs (wraps integer implementation).
+#[inline]
 pub fn wigner_6j_f(j1: f64, j2: f64, j3: f64, j4: f64, j5: f64, j6: f64) -> f64 {
     let tj1 = to_two_j(j1);
     let tj2 = to_two_j(j2);
@@ -239,6 +246,7 @@ pub fn wigner_6j_f(j1: f64, j2: f64, j3: f64, j4: f64, j5: f64, j6: f64) -> f64 
 /// Clebsch-Gordan coefficient <j1 m1 j2 m2 | j3 m3>
 ///
 /// Arguments: (2j1, 2m1, 2j2, 2m2, 2j3, 2m3)
+#[inline]
 pub fn clebsch_gordan(tj1: i32, tm1: i32, tj2: i32, tm2: i32, tj3: i32, tm3: i32) -> f64 {
     // CG(j1,m1,j2,m2,j3,m3) = (-1)^(j1-j2+m3) * sqrt(2j3+1) * 3j(j1,j2,j3,m1,m2,-m3)
 
@@ -259,4 +267,101 @@ pub fn clebsch_gordan(tj1: i32, tm1: i32, tj2: i32, tm2: i32, tj3: i32, tm3: i32
     let factor = ((tj3 + 1) as f64).sqrt();
 
     phase * factor * w3j
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approx_eq(a: f64, b: f64, tol: f64) {
+        assert!(
+            (a - b).abs() < tol,
+            "expected {a} ≈ {b} (diff = {})",
+            (a - b).abs()
+        );
+    }
+
+    #[test]
+    fn test_wigner_3j_basic() {
+        // 3j(1, 1, 0 | 0, 0, 0) = (-1)^(1-0) / sqrt(3) = -1/sqrt(3)
+        approx_eq(wigner_3j(2, 2, 0, 0, 0, 0), -1.0 / 3.0_f64.sqrt(), 1e-12);
+    }
+
+    #[test]
+    fn test_wigner_3j_selection_rule_m() {
+        assert_eq!(wigner_3j(2, 2, 2, 2, 2, 0), 0.0);
+    }
+
+    #[test]
+    fn test_wigner_3j_selection_rule_triangle() {
+        assert_eq!(wigner_3j(2, 2, 10, 0, 0, 0), 0.0);
+    }
+
+    #[test]
+    fn test_wigner_3j_half_integer() {
+        // (1/2, 1/2, 1 | 1/2, -1/2, 0) in 2j notation: (1,1,2 | 1,-1,0)
+        let val = wigner_3j(1, 1, 2, 1, -1, 0);
+        approx_eq(val, 1.0 / 6.0_f64.sqrt(), 1e-12);
+    }
+
+    #[test]
+    fn test_wigner_3j_f_matches_int() {
+        let f = wigner_3j_f(1.0, 1.0, 0.0, 0.0, 0.0, 0.0);
+        let i = wigner_3j(2, 2, 0, 0, 0, 0);
+        approx_eq(f, i, 1e-14);
+    }
+
+    #[test]
+    fn test_wigner_6j_basic() {
+        // {1, 1, 1; 1, 1, 1} = 1/6
+        approx_eq(wigner_6j(2, 2, 2, 2, 2, 2), 1.0 / 6.0, 1e-12);
+    }
+
+    #[test]
+    fn test_wigner_6j_triangle_violation() {
+        assert_eq!(wigner_6j(2, 2, 10, 2, 2, 2), 0.0);
+    }
+
+    #[test]
+    fn test_wigner_6j_f_matches_int() {
+        let f = wigner_6j_f(1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+        let i = wigner_6j(2, 2, 2, 2, 2, 2);
+        approx_eq(f, i, 1e-14);
+    }
+
+    #[test]
+    fn test_clebsch_gordan_basic() {
+        // <1,0; 1,0 | 2,0> = sqrt(2/3)
+        let cg = clebsch_gordan(2, 0, 2, 0, 4, 0);
+        approx_eq(cg, (2.0 / 3.0_f64).sqrt(), 1e-12);
+    }
+
+    #[test]
+    fn test_clebsch_gordan_m_conservation() {
+        assert_eq!(clebsch_gordan(2, 2, 2, 2, 2, 0), 0.0);
+    }
+
+    #[test]
+    fn test_clebsch_gordan_half_integer() {
+        // <1/2,1/2; 1/2,-1/2 | 1,0> in 2j: <1,1; 1,-1 | 2,0>
+        let cg = clebsch_gordan(1, 1, 1, -1, 2, 0);
+        approx_eq(cg, 1.0 / 2.0_f64.sqrt(), 1e-12);
+    }
+
+    #[test]
+    fn test_fact() {
+        assert_eq!(fact(0), 1.0);
+        assert_eq!(fact(1), 1.0);
+        assert_eq!(fact(5), 120.0);
+        assert_eq!(fact(10), 3628800.0);
+        assert_eq!(fact(-1), 0.0);
+    }
+
+    #[test]
+    fn test_wigner_3j_symmetry() {
+        // even permutation: 3j(j1,j2,j3,m1,m2,m3) = 3j(j2,j3,j1,m2,m3,m1)
+        let a = wigner_3j(2, 4, 2, 0, 0, 0);
+        let b = wigner_3j(4, 2, 2, 0, 0, 0);
+        approx_eq(a, b, 1e-14);
+    }
 }

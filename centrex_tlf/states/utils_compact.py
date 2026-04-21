@@ -34,69 +34,31 @@ def compact_QN_coupled_indices(
     QNcompact = [qn for idx, qn in enumerate(QN) if idx not in indices_compact[1:]]
 
     state_rep = cast(CoupledBasisState, QNcompact[indices_compact[0]].largest)
+
+    def _rebuild(state: CoupledBasisState, **overrides) -> CoupledBasisState:
+        return CoupledBasisState(
+            F=overrides.get("F", state.F),
+            mF=overrides.get("mF", state.mF),
+            F1=overrides.get("F1", state.F1),
+            J=overrides.get("J", state.J),
+            I1=state.I1,
+            I2=state.I2,
+            Omega=overrides.get("Omega", state.Omega),
+            P=overrides.get("P", state.P),
+            electronic_state=state.electronic_state,
+            basis=overrides.get("basis", state.basis),
+        )
+
     if len(Js) != 1:
-        state_rep = CoupledBasisState(
-            F=state_rep.F,
-            mF=state_rep.mF,
-            F1=state_rep.F1,
-            J=None,
-            I1=state_rep.I1,
-            I2=state_rep.I2,
-            Omega=state_rep.Omega,
-            P=state_rep.P,
-            electronic_state=state_rep.electronic_state,
-            basis=state_rep.basis,
-        )
-        # state_rep.J = None
+        state_rep = _rebuild(state_rep, J=None)
     if len(F1s) != 1:
-        state_rep = CoupledBasisState(
-            F=state_rep.F,
-            mF=state_rep.mF,
-            F1=None,
-            J=state_rep.J,
-            I1=state_rep.I1,
-            I2=state_rep.I2,
-            Omega=state_rep.Omega,
-            P=state_rep.P,
-            electronic_state=state_rep.electronic_state,
-            basis=state_rep.basis,
-        )
+        state_rep = _rebuild(state_rep, F1=None)
     if len(Fs) != 1:
-        state_rep = CoupledBasisState(
-            F=None,
-            mF=state_rep.mF,
-            F1=state_rep.F1,
-            J=state_rep.J,
-            I1=state_rep.I1,
-            I2=state_rep.I2,
-            Omega=state_rep.Omega,
-            P=state_rep.P,
-            electronic_state=state_rep.electronic_state,
-        )
+        state_rep = _rebuild(state_rep, F=None)
     if len(mFs) != 1:
-        state_rep = CoupledBasisState(
-            F=state_rep.F,
-            mF=None,
-            F1=state_rep.F1,
-            J=state_rep.J,
-            I1=state_rep.I1,
-            I2=state_rep.I2,
-            Omega=state_rep.Omega,
-            P=state_rep.P,
-            electronic_state=state_rep.electronic_state,
-        )
+        state_rep = _rebuild(state_rep, mF=None)
     if len(Ps) != 1:
-        state_rep = CoupledBasisState(
-            F=state_rep.F,
-            mF=state_rep.mF,
-            F1=state_rep.F1,
-            J=state_rep.J,
-            I1=state_rep.I1,
-            I2=state_rep.I2,
-            Omega=state_rep.Omega,
-            P=None,
-            electronic_state=state_rep.electronic_state,
-        )
+        state_rep = _rebuild(state_rep, P=None)
 
     # make it a state again instead of uncoupled basisstate
     QNcompact[indices_compact[0]] = (1.0 + 0j) * state_rep

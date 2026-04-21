@@ -30,11 +30,13 @@ import sympy as sp
 from .utils import CGc
 
 
-def _half_int_to_int2(x: float | int) -> int:
+def _half_int_to_int2(x: float | int | None) -> int:
     """Convert integer/half-integer quantum numbers to an exact int via 2*x.
 
     This is used for deterministic hashing across processes.
     """
+    if x is None:
+        return 0
     return int(round(2 * float(x)))
 
 
@@ -81,13 +83,18 @@ class Parity(Enum):
     Neg = -1
 
 
-@dataclass
 class BasisState(abc.ABC):
     J: int
     electronic_state: Optional[ElectronicState]
-    isCoupled: bool
-    isUncoupled: bool
     basis: Optional[Basis]
+
+    @property
+    def isCoupled(self) -> bool:
+        return isinstance(self, CoupledBasisState)
+
+    @property
+    def isUncoupled(self) -> bool:
+        return isinstance(self, UncoupledBasisState)
 
     # scalar product (psi * a)
     def __mul__(self, a: Union[float, complex, int]):
@@ -128,63 +135,42 @@ class CoupledBasisState(BasisState):
         "Ω",
         "P",
         "electronic_state",
-        "isCoupled",
-        "isUncoupled",
         "basis",
         "v",
         "_hash",
         "_frozen",
     )
+
     _hash: int
 
-    # constructor
     def __init__(
         self,
-        F: int | None,
-        mF: int | None,
-        F1: float | None,
-        J: int | None,
-        I1: float,
-        I2: float,
-        Omega: int = 0,
+        F: Optional[int] = None,
+        mF: Optional[int] = None,
+        F1: Optional[float] = None,
+        J: Optional[int] = None,
+        I1: Optional[float] = None,
+        I2: Optional[float] = None,
+        Omega: Optional[int] = None,
         P: Optional[int] = None,
         electronic_state: Optional[ElectronicState] = None,
-        energy: Optional[float] = None,
-        Ω: Optional[int] = None,
-        v: Optional[int] = None,
         basis: Optional[Basis] = None,
+        v: Optional[str] = None,
+        **kwargs,
     ):
+        if "Ω" in kwargs:
+            Omega = kwargs.pop("Ω") if Omega is None else Omega
         object.__setattr__(self, "_frozen", False)
-
         self.F = F
         self.mF = mF
         self.F1 = F1
         self.J = J
         self.I1 = I1
         self.I2 = I2
-
-        if Ω is not None:
-            self.Ω: int = Ω
-            self.Omega = self.Ω
-        elif Omega is not None:
-            self.Omega = Omega
-            self.Ω = self.Omega
-        else:
-            raise AssertionError("need to supply either Omega or Ω")
-        if P is not None:
-            self.P: Optional[int] = P
-        else:
-            self.P = None
-        #     raise AssertionError("need to supply parity P")
-        if electronic_state is not None and not isinstance(
-            electronic_state, ElectronicState
-        ):
-            raise TypeError(
-                f"Supply electronic state as ElectronicState enum, not {type(electronic_state)}"
-            )
+        self.Omega = Omega
+        self.Ω = Omega
+        self.P = P
         self.electronic_state = electronic_state
-        self.isCoupled = True
-        self.isUncoupled = False
 
         # determine which basis we are in
         if basis is not None:
@@ -261,7 +247,7 @@ class CoupledBasisState(BasisState):
                 "can only matmul CoupledBasisState with CoupledBasisState or "
                 f"UncoupledBasisState (not {type(other)})"
             )
-        if other.isCoupled:
+        if isinstance(other, CoupledBasisState):
             if self == other:
                 return 1
             else:
@@ -371,6 +357,7 @@ class CoupledBasisState(BasisState):
 
     def state_string_custom(self, quantum_numbers: List[str]) -> str:
         F, mF, F1, J, I1, I2, P, Omega, v = self._format_quantum_numbers_helper()
+        formatted = {"F": F, "mF": mF, "F1": F1, "J": J, "I1": I1, "I2": I2, "P": P, "Omega": Omega, "v": v}
 
         string = ""
         for name in quantum_numbers:
@@ -382,7 +369,7 @@ class CoupledBasisState(BasisState):
                     if name == "Ω":
                         string += f"{name} = {Omega}, "
                     else:
-                        string += f"{name} = {eval(name)}, "
+                        string += f"{name} = {formatted.get(name, val)}, "
         string = string.strip(", ")
         return "|" + string + ">"
 
@@ -428,9 +415,17 @@ class CoupledBasisState(BasisState):
 
         for mF1 in mF1s:
             for mJ in mJs:
+                if abs(mJ + m1s[0]) > F1 and abs(mJ + m1s[-1]) > F1:
+                    continue
                 for m1 in m1s:
+                    if mJ + m1 != mF1:
+                        continue
                     for m2 in m2s:
+                        if mF1 + m2 != mF:
+                            continue
                         amp = CGc(J, mJ, I1, m1, F1, mF1) * CGc(F1, mF1, I2, m2, F, mF)
+                        if amp == 0:
+                            continue
                         basis_state = UncoupledBasisState(
                             J,
                             mJ,
@@ -631,8 +626,6 @@ class UncoupledBasisState(BasisState):
         "Omega",
         "P",
         "electronic_state",
-        "isCoupled",
-        "isUncoupled",
         "basis",
         "v",
         "_hash",
@@ -674,9 +667,6 @@ class UncoupledBasisState(BasisState):
             raise ValueError("need to supply electronic state")
         else:
             self.electronic_state = electronic_state
-        self.isCoupled = False
-        self.isUncoupled = True
-
         if basis is not None:
             self.basis = basis
         else:
@@ -733,7 +723,7 @@ class UncoupledBasisState(BasisState):
 
     # inner product
     def __matmul__(self, other):
-        if other.isUncoupled:
+        if isinstance(other, UncoupledBasisState):
             if self == other:
                 return 1
             else:
@@ -1287,8 +1277,18 @@ class State(Generic[S]):
         Returns:
             Complex array representing the state vector in the given basis
         """
-        state_vector = [1 * state @ self for state in QN]
-        return np.array(state_vector, dtype=complex)
+        amp_map: dict[object, complex] = {}
+        for amp, basis_state in self.data:
+            amp_map[basis_state] = amp_map.get(basis_state, 0j) + amp
+        result = np.zeros(len(QN), dtype=complex)
+        for i, state in enumerate(QN):
+            if isinstance(state, BasisState):
+                val = amp_map.get(state)
+                if val is not None:
+                    result[i] = val
+            else:
+                result[i] = 1 * state @ self
+        return result
 
     def density_matrix(
         self,
@@ -1387,9 +1387,9 @@ class CoupledState(State):
         state_in_uncoupled_basis = UncoupledState()
 
         for amp, basis_state in self.data:
-            if basis_state.isUncoupled:
+            if isinstance(basis_state, UncoupledBasisState):
                 state_in_uncoupled_basis += UncoupledState([(amp, basis_state)])
-            if basis_state.isCoupled:
+            elif isinstance(basis_state, CoupledBasisState):
                 state_in_uncoupled_basis += amp * basis_state.transform_to_uncoupled()
 
         return state_in_uncoupled_basis
@@ -1445,9 +1445,9 @@ class UncoupledState(State):
         state_in_coupled_basis = CoupledState()
 
         for amp, basis_state in self.data:
-            if basis_state.isCoupled:
+            if isinstance(basis_state, CoupledBasisState):
                 state_in_coupled_basis += CoupledState([(amp, basis_state)])
-            if basis_state.isUncoupled:
+            elif isinstance(basis_state, UncoupledBasisState):
                 state_in_coupled_basis += amp * basis_state.transform_to_coupled()
 
         return state_in_coupled_basis

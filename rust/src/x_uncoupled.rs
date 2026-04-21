@@ -217,7 +217,7 @@ pub fn h_sx(psi: UncoupledBasisState, constants: &XConstants) -> UncoupledState 
 
 /// Stark Hamiltonian for E along y.
 pub fn h_sy(psi: UncoupledBasisState, constants: &XConstants) -> UncoupledState {
-    let imag_unit = Complex64::new(0.0, 1.0);
+    let imag_unit = Complex64::I;
     -constants.d_tlf * imag_unit * (r1m(psi, constants) + r1p(psi, constants)) / 2.0f64.sqrt()
 }
 
