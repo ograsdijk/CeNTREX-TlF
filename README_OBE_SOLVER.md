@@ -180,6 +180,30 @@ Supported batch outputs in the first implementation are:
 Full density-matrix batch output is intentionally not supported yet because it
 can allocate very large arrays.
 
+Runtime parameters can be built with typed `Parameter` objects. The object owns
+the base slot name/default, can be used in runtime expressions, and can also be
+used directly as a scan key:
+
+```python
+from centrex_tlf.lindblad import LindbladParameters, Time, gaussian, sine
+
+params = LindbladParameters()
+t = Time()
+omega0 = params.real("omega0", 2 * np.pi * 1e6)
+delta0 = params.real("delta0", 0.0)
+z0 = params.real("z0", -0.01)
+vz = params.real("vz", 180.0)
+sigma_z = params.real("sigma_z", 0.003)
+
+z = z0 + vz * t
+params.bind(selector.Ω, omega0 * gaussian(z, center=0.0, sigma=sigma_z))
+params.bind(selector.δ, sine(t, offset=delta0, amplitude=0.0))
+```
+
+`params.real(name, default)` and `params.complex(name, default)` both return a
+`Parameter`. If the Hamiltonian symbol itself should be scanned, use that exact
+symbol name as the parameter name and no explicit `bind` is needed.
+
 Parameter scans can avoid rebuilding the Rust plan for every trajectory. The
 batch solver accepts per-trajectory base-parameter overrides and reevaluates
 compound parameters in Rust:
@@ -230,8 +254,17 @@ grid_shape = grid.metadata["grid_shape"]
 values_on_grid = grid.values.reshape(*grid_shape, grid.values.shape[-1])
 ```
 
+The same `parameter_scan` and `grid_scan` calls also accept `Parameter` objects:
+
+```python
+parameter_scan(..., parameter_slots=[omega0, delta0], parameter_batch=parameter_values)
+grid_scan(..., scan={delta0: detuning_axis, omega0: rabi_axis})
+```
+
 Only base parameters can be scanned directly. Compound parameters are updated by
-changing their base-parameter dependencies.
+changing their base-parameter dependencies. Legacy string slot names are still
+accepted, but new examples should prefer `Parameter` objects so renames and
+multi-drive scans are less fragile.
 
 ## Benchmark
 

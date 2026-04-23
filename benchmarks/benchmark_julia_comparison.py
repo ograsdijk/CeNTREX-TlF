@@ -18,6 +18,7 @@ import numpy as np
 from centrex_tlf import transitions, couplings, lindblad, hamiltonian, states, utils
 from centrex_tlf.lindblad.plan_static import prepare_lindblad_problem
 from centrex_tlf.lindblad.solve import solve_lindblad
+from centrex_tlf.lindblad.parameters import LindbladParameters
 
 trans = transitions.R0_F1_3o2_F2
 
@@ -54,12 +55,15 @@ print("=" * 80)
 
 print("\n--- Rust Solvers ---")
 
-params_rust = {str(s): 0.0 for s in system.H_symbolic.free_symbols}
+params_rust = LindbladParameters()
+param_values = {str(s): 0.0 for s in system.H_symbolic.free_symbols}
 for s in system.coupling_symbols:
-    params_rust[str(s)] = Gamma
+    param_values[str(s)] = Gamma
 for group in system.polarization_symbols:
     for s in group if isinstance(group, (list, tuple)) else [group]:
-        params_rust[str(s)] = 1.0
+        param_values[str(s)] = 1.0
+for name, value in param_values.items():
+    params_rust.real(name, value)
 
 prepared_rust = prepare_lindblad_problem(
     system,

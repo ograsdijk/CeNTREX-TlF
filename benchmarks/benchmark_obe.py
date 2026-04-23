@@ -11,6 +11,7 @@ import numpy as np
 from centrex_tlf import couplings, lindblad, transitions
 from centrex_tlf.lindblad.solve import solve_lindblad
 from centrex_tlf.lindblad.plan_static import prepare_lindblad_problem
+from centrex_tlf.lindblad.parameters import LindbladParameters
 
 
 def setup_system():
@@ -28,12 +29,15 @@ def setup_system():
 
 def make_parameters(system):
     Gamma = 2 * np.pi * 1.56e6
-    parameters = {str(s): 0.0 for s in system.H_symbolic.free_symbols}
+    values = {str(s): 0.0 for s in system.H_symbolic.free_symbols}
+    parameters = LindbladParameters()
     for s in system.coupling_symbols:
-        parameters[str(s)] = Gamma
+        values[str(s)] = Gamma
     for group in system.polarization_symbols:
         for s in group if isinstance(group, (list, tuple)) else [group]:
-            parameters[str(s)] = 1.0
+            values[str(s)] = 1.0
+    for name, value in values.items():
+        parameters.real(name, value)
     return parameters
 
 
