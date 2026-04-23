@@ -277,6 +277,36 @@ fn helper_args_to_tuple(arg: &RuntimeValue) -> Result<&[Complex64], String> {
     }
 }
 
+fn linear_interp(x: f64, grid: &[Complex64], values: &[Complex64]) -> Result<f64, String> {
+    if grid.len() != values.len() {
+        return Err("linear_interp grid and values must have the same length".to_string());
+    }
+    if grid.is_empty() {
+        return Err("linear_interp grid must contain at least one point".to_string());
+    }
+    if grid.len() == 1 {
+        return as_real(&RuntimeValue::Scalar(values[0]));
+    }
+    let first = as_real(&RuntimeValue::Scalar(grid[0]))?;
+    if x <= first {
+        return as_real(&RuntimeValue::Scalar(values[0]));
+    }
+    for idx in 0..(grid.len() - 1) {
+        let left = as_real(&RuntimeValue::Scalar(grid[idx]))?;
+        let right = as_real(&RuntimeValue::Scalar(grid[idx + 1]))?;
+        if right <= left {
+            return Err("linear_interp grid must be strictly increasing".to_string());
+        }
+        if x <= right {
+            let y_left = as_real(&RuntimeValue::Scalar(values[idx]))?;
+            let y_right = as_real(&RuntimeValue::Scalar(values[idx + 1]))?;
+            let frac = (x - left) / (right - left);
+            return Ok(y_left + frac * (y_right - y_left));
+        }
+    }
+    as_real(&RuntimeValue::Scalar(values[values.len() - 1]))
+}
+
 fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue, String> {
     match function_id {
         8 => Ok(RuntimeValue::Scalar(Complex64::new(
@@ -314,6 +344,14 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
                 0.0,
             )))
         }
+        14 => Ok(RuntimeValue::Scalar(Complex64::new(
+            linear_interp(
+                as_real(&args[0])?,
+                helper_args_to_tuple(&args[1])?,
+                helper_args_to_tuple(&args[2])?,
+            )?,
+            0.0,
+        ))),
         _ => {
             let scalar_args: Result<Vec<Complex64>, _> = args.iter().map(as_scalar).collect();
             Ok(RuntimeValue::Scalar(apply_helper_scalar(
@@ -551,7 +589,7 @@ fn apply_helper_scalar(function_id: i64, args: &[Complex64]) -> Result<Complex64
             ),
             0.0,
         ),
-        8 | 10 => {
+        8 | 10 | 14 => {
             return Err("tuple-valued helper used in scalar evaluator".to_string());
         }
         9 => Complex64::new(

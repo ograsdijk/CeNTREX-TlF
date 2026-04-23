@@ -6,7 +6,9 @@ from typing import Any
 
 import numpy as np
 import numpy.typing as npt
+import sympy as smp
 
+from .parameters import Parameter
 from .plan_static import PreparedLindbladProblem
 
 __all__ = [
@@ -16,6 +18,9 @@ __all__ = [
     "parameter_scan",
     "grid_scan",
 ]
+
+
+ParameterSlot = str | smp.Symbol | Parameter
 
 
 @dataclass
@@ -84,14 +89,15 @@ def _pack_rho0_batch(prepared: PreparedLindbladProblem, rho0_batch: np.ndarray) 
 
 def _parameter_slot_indices(
     prepared: PreparedLindbladProblem,
-    parameter_slots: Sequence[str] | None,
+    parameter_slots: Sequence[ParameterSlot] | None,
 ) -> list[int]:
     if parameter_slots is None:
         return []
     slot_names = list(prepared.parameter_graph["slot_names"])
     base_count = len(prepared.parameter_graph["base_values"])
     indices = []
-    for name in parameter_slots:
+    for slot in parameter_slots:
+        name = _parameter_slot_name(slot)
         try:
             index = slot_names.index(name)
         except ValueError as exc:
@@ -104,13 +110,25 @@ def _parameter_slot_indices(
     return indices
 
 
+def _parameter_slot_name(slot: ParameterSlot) -> str:
+    if isinstance(slot, Parameter):
+        return slot.name
+    return str(slot)
+
+
+def _parameter_slot_names(parameter_slots: Sequence[ParameterSlot] | None) -> list[str] | None:
+    if parameter_slots is None:
+        return None
+    return [_parameter_slot_name(slot) for slot in parameter_slots]
+
+
 def solve_lindblad_batch(
     prepared: PreparedLindbladProblem,
     rho0_batch: npt.NDArray[np.complex128] | npt.NDArray[np.float64],
     t_span: Sequence[float],
     *,
     parameter_batch: npt.NDArray[np.complex128] | None = None,
-    parameter_slots: Sequence[str] | None = None,
+    parameter_slots: Sequence[ParameterSlot] | None = None,
     solver: str = "dopri5_fast",
     execution_mode: str = "expanded_sparse",
     abstol: float = 1e-7,
@@ -206,7 +224,7 @@ def solve_lindblad_batch(
         output=output,
         output_indices=None if output_indices is None else list(output_indices),
         trajectory_count=trajectory_count,
-        parameter_slots=None if parameter_slots is None else list(parameter_slots),
+        parameter_slots=_parameter_slot_names(parameter_slots),
         parameter_values=parameter_values,
         solver_stats=dict(solver_stats) if collect_stats else None,
         metadata={} if metadata is None else dict(metadata),
@@ -227,7 +245,7 @@ def parameter_scan(
     rho0: npt.NDArray[np.complex128] | npt.NDArray[np.float64],
     t_span: Sequence[float],
     *,
-    parameter_slots: Sequence[str],
+    parameter_slots: Sequence[ParameterSlot],
     parameter_batch: npt.NDArray[np.complex128],
     **kwargs: Any,
 ) -> LindbladBatchResult:
@@ -257,12 +275,13 @@ def grid_scan(
     rho0: npt.NDArray[np.complex128] | npt.NDArray[np.float64],
     t_span: Sequence[float],
     *,
-    scan: Mapping[str, Sequence[complex] | npt.NDArray[np.complexfloating]],
+    scan: Mapping[ParameterSlot, Sequence[complex] | npt.NDArray[np.complexfloating]],
     **kwargs: Any,
 ) -> LindbladBatchResult:
     if not scan:
         raise ValueError("scan must contain at least one parameter")
     parameter_slots = list(scan)
+    parameter_slot_names = _parameter_slot_names(parameter_slots)
     axes = [np.asarray(values, dtype=np.complex128).reshape(-1) for values in scan.values()]
     if any(axis.size == 0 for axis in axes):
         raise ValueError("scan axes must be non-empty")
@@ -363,7 +382,7 @@ def grid_scan(
         output=output,
         output_indices=None if output_indices is None else list(output_indices),
         trajectory_count=trajectory_count,
-        parameter_slots=parameter_slots,
+        parameter_slots=parameter_slot_names,
         parameter_values=None,
         solver_stats=dict(solver_stats) if collect_stats else None,
         metadata={} if metadata is None else dict(metadata),
@@ -372,7 +391,7 @@ def grid_scan(
         {
             "scan_kind": "grid",
             "grid_shape": tuple(int(axis.size) for axis in axes),
-            "grid_axes": {name: axis for name, axis in zip(parameter_slots, axes)},
+            "grid_axes": {name: axis for name, axis in zip(parameter_slot_names or [], axes)},
             "compact_grid": True,
         }
     )

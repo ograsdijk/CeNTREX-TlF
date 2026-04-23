@@ -23,6 +23,7 @@ __all__ = [
     "multipass_2d_rabi",
     "gaussian_beam_rabi",
     "alternating_sign",
+    "linear_interp",
 ]
 
 
@@ -40,6 +41,7 @@ class HelperFunctionId(IntEnum):
     GAUSSIAN_BEAM_RABI = 11
     VARIABLE_ON_OFF_DUTY = 12
     ALTERNATING_SIGN = 13
+    LINEAR_INTERP = 14
 
 
 def gaussian_2d(
@@ -186,6 +188,28 @@ def alternating_sign(x: float, x0: float, width: float) -> float:
     return 1.0 if n % 2 == 0 else -1.0
 
 
+def linear_interp(x: float, grid: Iterable[float], values: Iterable[float]) -> float:
+    grid_values = tuple(float(item) for item in grid)
+    y_values = tuple(float(item) for item in values)
+    if len(grid_values) != len(y_values):
+        raise ValueError("linear_interp grid and values must have the same length")
+    if len(grid_values) == 0:
+        raise ValueError("linear_interp grid must contain at least one point")
+    if len(grid_values) == 1:
+        return y_values[0]
+    if any(right <= left for left, right in zip(grid_values, grid_values[1:])):
+        raise ValueError("linear_interp grid must be strictly increasing")
+    if x <= grid_values[0]:
+        return y_values[0]
+    if x >= grid_values[-1]:
+        return y_values[-1]
+    for left_idx, (left, right) in enumerate(zip(grid_values, grid_values[1:])):
+        if left <= x <= right:
+            frac = (x - left) / (right - left)
+            return y_values[left_idx] + frac * (y_values[left_idx + 1] - y_values[left_idx])
+    return y_values[-1]
+
+
 HELPER_FUNCTIONS: Mapping[str, Callable[..., complex | float]] = {
     "gaussian_2d": gaussian_2d,
     "gaussian_2d_rotated": gaussian_2d_rotated,
@@ -201,6 +225,7 @@ HELPER_FUNCTIONS: Mapping[str, Callable[..., complex | float]] = {
     "variable_on_off_duty": variable_on_off_duty,
     "variable_on_off_duty_invT": variable_on_off_duty_invT,
     "alternating_sign": alternating_sign,
+    "linear_interp": linear_interp,
 }
 
 HELPER_FUNCTION_IDS: Mapping[str, HelperFunctionId] = {
@@ -218,6 +243,7 @@ HELPER_FUNCTION_IDS: Mapping[str, HelperFunctionId] = {
     "variable_on_off_duty": HelperFunctionId.VARIABLE_ON_OFF_DUTY,
     "variable_on_off_duty_invT": HelperFunctionId.VARIABLE_ON_OFF_DUTY,
     "alternating_sign": HelperFunctionId.ALTERNATING_SIGN,
+    "linear_interp": HelperFunctionId.LINEAR_INTERP,
 }
 
 HELPER_FUNCTION_NAMES: Mapping[int, str] = {

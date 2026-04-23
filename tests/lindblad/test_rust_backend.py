@@ -7,7 +7,14 @@ import sympy as smp
 
 from centrex_tlf.lindblad.ir import evaluate_parameter_graph_py, fill_hamiltonian_py
 from centrex_tlf.lindblad.batch import grid_scan, solve_lindblad_batch
-from centrex_tlf.lindblad.parameters import LindbladParameters, adapt_lindblad_parameters
+from centrex_tlf.lindblad.parameters import (
+    LindbladParameters,
+    Time,
+    adapt_lindblad_parameters,
+    gaussian,
+    sine,
+    tabulated,
+)
 from centrex_tlf.lindblad.plan_static import prepare_lindblad_problem
 from centrex_tlf.lindblad.reference_dense import (
     apply_dense_dissipator_reference,
@@ -103,6 +110,87 @@ def test_lowered_hamiltonian_matches_python_evaluation() -> None:
             rust.prepare_lindblad_problem_py(prepared.to_payload()),
             0.37,
         ),
+        dtype=np.complex128,
+    )
+    np.testing.assert_allclose(h_rust, h_python)
+
+
+def test_typed_lindblad_parameters_lower_and_scan() -> None:
+    system = _make_two_level_system()
+    omega_symbol, delta_symbol = system.coupling_symbols
+    params = LindbladParameters()
+    omega = params.real("omega0", 0.6)
+    delta = params.real("delta0", 0.0)
+    params.bind(omega_symbol, omega)
+    params.bind(delta_symbol, delta)
+
+    prepared = prepare_lindblad_problem(
+        system,
+        params,
+        backend="rust",
+        hamiltonian_representation="decomposed",
+    )
+    assert prepared.parameter_graph["slot_names"][:2] == ["omega0", "delta0"]
+
+    batch = grid_scan(
+        prepared,
+        _ground_state_density(),
+        (0.0, 0.5),
+        scan={
+            omega: np.array([0.4, 0.7]),
+            delta: np.array([-0.1, 0.2]),
+        },
+        solver="dopri5_fast",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    assert batch.parameter_slots == ["omega0", "delta0"]
+    assert batch.metadata["grid_shape"] == (2, 2)
+    assert set(batch.metadata["grid_axes"]) == {"omega0", "delta0"}
+
+
+def test_typed_runtime_expression_helpers_match_python_evaluation() -> None:
+    system = _make_two_level_system()
+    omega_symbol, delta_symbol = system.coupling_symbols
+    params = LindbladParameters()
+    omega0 = params.real("omega0", 0.9)
+    z0 = params.real("z0", -0.1)
+    vz = params.real("vz", 0.8)
+    sigma_z = params.real("sigma_z", 0.4)
+    detuning_offset = params.real("detuning_offset", 0.05)
+    detuning_mod = params.real("detuning_mod", 0.02)
+    detuning_omega = params.real("detuning_omega", 1.7)
+    field_grid = params.real("field_grid", [-1.0, 0.0, 1.0])
+    field_values = params.real("field_values", [0.5, 1.0, 0.25])
+    t = Time()
+    z = z0 + vz * t
+    rabi_profile = (
+        omega0
+        * gaussian(z, center=0.0, sigma=sigma_z)
+        * tabulated(z, field_grid, field_values)
+    )
+    detuning = sine(
+        t,
+        offset=detuning_offset,
+        amplitude=detuning_mod,
+        angular_frequency=detuning_omega,
+    )
+    params.bind(omega_symbol, rabi_profile)
+    params.bind(delta_symbol, detuning)
+
+    prepared = prepare_lindblad_problem(system, params, backend="python")
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    time = 0.37
+    slots = evaluate_parameter_graph_py(prepared.parameter_graph, time)
+    h_python = fill_hamiltonian_py(prepared.hamiltonian_plan, slots, time)
+    h_rust = np.asarray(
+        rust.evaluate_lindblad_hamiltonian_py(rust_plan, time),
         dtype=np.complex128,
     )
     np.testing.assert_allclose(h_rust, h_python)
