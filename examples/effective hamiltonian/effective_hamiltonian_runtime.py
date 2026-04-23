@@ -1191,6 +1191,68 @@ def _single_target_decay_kernels(
     )
 
 
+def _full_recycling_decay_kernel(
+    c_array: np.ndarray,
+    source_indices: np.ndarray,
+    target_indices: np.ndarray,
+) -> np.ndarray:
+    source_indices = np.asarray(source_indices, dtype=np.int64)
+    target_indices = np.asarray(target_indices, dtype=np.int64)
+    n_composite = int(target_indices.size * source_indices.size)
+    kernel = np.zeros((n_composite, n_composite), dtype=np.complex128)
+    if c_array.size == 0 or source_indices.size == 0 or target_indices.size == 0:
+        return kernel
+    for c_op in np.asarray(c_array, dtype=np.complex128):
+        block = np.asarray(c_op[np.ix_(target_indices, source_indices)], dtype=np.complex128)
+        vector = block.reshape(-1)
+        kernel += np.outer(vector, vector.conj())
+    return _symmetrize(kernel)
+
+
+def _full_recycling_decay_kernel_from_superoperator(
+    dissipator_superop: np.ndarray,
+    jump_rate_operator: np.ndarray,
+) -> np.ndarray:
+    jump_rate_operator = np.asarray(jump_rate_operator, dtype=np.complex128)
+    n_states = int(jump_rate_operator.shape[0])
+    identity = np.eye(n_states, dtype=np.complex128)
+    recycling_superop = np.asarray(dissipator_superop, dtype=np.complex128)
+    recycling_superop = recycling_superop + 0.5 * np.kron(identity, jump_rate_operator.T)
+    recycling_superop = recycling_superop + 0.5 * np.kron(jump_rate_operator, identity)
+    recycling_tensor = recycling_superop.reshape((n_states, n_states, n_states, n_states))
+    kernel_tensor = np.transpose(recycling_tensor, (0, 2, 1, 3))
+    return _symmetrize(kernel_tensor.reshape((n_states * n_states, n_states * n_states)))
+
+
+def _c_array_from_full_recycling_decay_kernel(
+    *,
+    target_indices: np.ndarray,
+    source_indices: np.ndarray,
+    kernel: np.ndarray,
+    total_dimension: int,
+    tol: float = 1e-12,
+) -> np.ndarray:
+    target_indices = np.asarray(target_indices, dtype=np.int64)
+    source_indices = np.asarray(source_indices, dtype=np.int64)
+    kernel_psd = _psd_project(kernel, tol=tol)
+    evals, evecs = np.linalg.eigh(kernel_psd)
+    jumps: list[np.ndarray] = []
+    target_count = int(target_indices.size)
+    source_count = int(source_indices.size)
+    for eval_value, evec in zip(np.real(evals).tolist(), evecs.T):
+        if eval_value <= tol:
+            continue
+        c_op = np.zeros((total_dimension, total_dimension), dtype=np.complex128)
+        block = math.sqrt(float(eval_value)) * np.asarray(evec, dtype=np.complex128).reshape(
+            (target_count, source_count)
+        )
+        c_op[np.ix_(target_indices, source_indices)] = block
+        jumps.append(c_op)
+    if not jumps:
+        return np.zeros((0, total_dimension, total_dimension), dtype=np.complex128)
+    return np.asarray(jumps, dtype=np.complex128)
+
+
 def _psd_project(matrix: np.ndarray, *, tol: float = 1e-12) -> np.ndarray:
     matrix = _symmetrize(np.asarray(matrix, dtype=np.complex128))
     evals, evecs = np.linalg.eigh(matrix)
@@ -2451,6 +2513,7 @@ class LindbladSafeCompactInterpolatedPatch:
     aligned_basis_vectors: np.ndarray
     bundle: OperatorBundle
     target_decay_kernels: tuple[np.ndarray, ...]
+    full_recycling_decay_kernel: np.ndarray
 
 
 @dataclass
@@ -2686,6 +2749,17 @@ class PreparedLindbladSafeCompactInterpolatedHamiltonianModel:
             kernels.append(_psd_project(interpolated))
         return tuple(kernels)
 
+    def _interpolate_full_recycling_decay_kernel(self, field_z: float) -> np.ndarray:
+        return _psd_project(
+            self._interpolate_matrix(
+                [
+                    np.asarray(patch.full_recycling_decay_kernel, dtype=np.complex128)
+                    for patch in self.patches
+                ],
+                field_z,
+            )
+        )
+
     def effective_bundle(
         self,
         electric_field: float | Sequence[float] | np.ndarray,
@@ -2771,10 +2845,16 @@ class PreparedLindbladSafeCompactInterpolatedHamiltonianModel:
         )
 
         target_decay_kernels = self._interpolate_decay_kernels(field_z)
-        c_array = _c_array_from_target_decay_kernels(
-            target_indices=self.target_indices,
-            excited_indices=self.excited_indices,
-            kernels=target_decay_kernels,
+        # Default Lindblad-safe dissipator path: interpolate the PSD kernel of the
+        # full collapse-operator matrix entries, then factor it back into collapse
+        # operators. The older per-target excited kernels are retained only for
+        # rate diagnostics because they do not encode all lower-manifold coherences.
+        full_recycling_decay_kernel = self._interpolate_full_recycling_decay_kernel(field_z)
+        full_indices = np.arange(n_total, dtype=np.int64)
+        c_array = _c_array_from_full_recycling_decay_kernel(
+            target_indices=full_indices,
+            source_indices=full_indices,
+            kernel=full_recycling_decay_kernel,
             total_dimension=n_total,
         )
 
@@ -3866,23 +3946,31 @@ def prepare_lindblad_safe_compact_interpolated_model(
     master_index = int(np.argmin(np.abs(np.asarray(base_model.field_points, dtype=np.float64) - float(base_model.master_field))))
     common_omega_reference = float(patch_transition_frequencies_arr[master_index])
     target_indices = np.concatenate([base_model.ground_indices, base_model.sink_indices]).astype(np.int64)
-    patches = tuple(
-        LindbladSafeCompactInterpolatedPatch(
-            electric_field=np.asarray(patch.electric_field, dtype=np.float64),
-            aligned_basis_vectors=np.asarray(patch.aligned_basis_vectors, dtype=np.complex128),
-            bundle=_shift_bundle_to_common_frequency_frame(
-                patch.bundle,
-                delta_omega=float(patch_transition_frequencies_arr[index] - common_omega_reference),
-                common_omega_reference=common_omega_reference,
-            ),
-            target_decay_kernels=_single_target_decay_kernels(
-                np.asarray(patch.bundle.c_array, dtype=np.complex128),
-                np.asarray(base_model.excited_indices, dtype=np.int64),
-                target_indices,
-            ),
+    lindblad_safe_patches: list[LindbladSafeCompactInterpolatedPatch] = []
+    for index, patch in enumerate(base_model.patches):
+        shifted_bundle = _shift_bundle_to_common_frequency_frame(
+            patch.bundle,
+            delta_omega=float(patch_transition_frequencies_arr[index] - common_omega_reference),
+            common_omega_reference=common_omega_reference,
         )
-        for index, patch in enumerate(base_model.patches)
-    )
+        lindblad_safe_patches.append(
+            LindbladSafeCompactInterpolatedPatch(
+                electric_field=np.asarray(patch.electric_field, dtype=np.float64),
+                aligned_basis_vectors=np.asarray(patch.aligned_basis_vectors, dtype=np.complex128),
+                bundle=shifted_bundle,
+                target_decay_kernels=_single_target_decay_kernels(
+                    np.asarray(patch.bundle.c_array, dtype=np.complex128),
+                    np.asarray(base_model.excited_indices, dtype=np.int64),
+                    target_indices,
+                ),
+                full_recycling_decay_kernel=_full_recycling_decay_kernel(
+                    np.asarray(patch.bundle.c_array, dtype=np.complex128),
+                    np.arange(int(patch.bundle.h_internal.shape[0]), dtype=np.int64),
+                    np.arange(int(patch.bundle.h_internal.shape[0]), dtype=np.int64),
+                ),
+            )
+        )
+    patches = tuple(lindblad_safe_patches)
     return PreparedLindbladSafeCompactInterpolatedHamiltonianModel(
         transition=base_model.transition,
         optical_polarization=base_model.optical_polarization,
