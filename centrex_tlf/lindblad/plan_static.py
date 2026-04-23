@@ -7,7 +7,11 @@ from typing import Any
 
 import numpy as np
 
-from .ir import lower_hamiltonian_upper_triangle, lower_parameter_graph
+from .ir import (
+    lower_expanded_sparse_rhs,
+    lower_hamiltonian_upper_triangle,
+    lower_parameter_graph,
+)
 from .parameters import LindbladParameters, adapt_lindblad_parameters
 from .state_layout import PackedHermitianLayout
 
@@ -25,6 +29,7 @@ class PreparedLindbladProblem:
     structured_jumps: list[dict[str, Any]]
     source_decay_rates: np.ndarray
     incoming_transfers_by_target: list[list[dict[str, Any]]]
+    expanded_rhs_plan: dict[str, Any] | None
     blas_config: dict[str, Any] | None
     backend: str
     rust_plan: Any | None = None
@@ -34,9 +39,9 @@ class PreparedLindbladProblem:
             "n_states": int(self.layout.n),
             "parameter_graph": self.parameter_graph,
             "hamiltonian_plan": self.hamiltonian_plan,
-            "structured_jumps": self.structured_jumps,
             "source_decay_rates": np.asarray(self.source_decay_rates, dtype=np.float64),
             "incoming_transfers_by_target": self.incoming_transfers_by_target,
+            "expanded_rhs_plan": self.expanded_rhs_plan,
             "dense_c_array": np.asarray(self.dense_c_array, dtype=np.complex128),
             "blas_config": self.blas_config,
         }
@@ -112,7 +117,7 @@ def prepare_lindblad_problem(
     obe_system: Any,
     parameters: Any,
     backend: str = "rust",
-    hamiltonian_representation: str = "auto",
+    hamiltonian_representation: str = "decomposed",
 ) -> PreparedLindbladProblem:
     params = adapt_lindblad_parameters(parameters)
     params.check_hamiltonian_symbols(obe_system.H_symbolic)
@@ -131,6 +136,11 @@ def prepare_lindblad_problem(
     structured_jumps, source_decay_rates, incoming_transfers_by_target = _lower_structured_jumps(
         dense_c_array
     )
+    expanded_rhs_plan = lower_expanded_sparse_rhs(
+        hamiltonian_plan,
+        source_decay_rates,
+        incoming_transfers_by_target,
+    )
     prepared = PreparedLindbladProblem(
         obe_system=obe_system,
         parameters=params,
@@ -141,6 +151,7 @@ def prepare_lindblad_problem(
         structured_jumps=structured_jumps,
         source_decay_rates=source_decay_rates,
         incoming_transfers_by_target=incoming_transfers_by_target,
+        expanded_rhs_plan=expanded_rhs_plan,
         blas_config=_locate_scipy_openblas() if backend == "rust" else None,
         backend=backend,
     )

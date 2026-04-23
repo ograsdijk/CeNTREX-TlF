@@ -39,6 +39,7 @@ Gamma = 2 * np.pi * 1.56e6
 t_span = (0.0, 10e-6)
 saveat = np.linspace(t_span[0], t_span[1], 201)
 n_runs = 5
+collect_solve_stats = True
 
 print("=" * 80)
 print(f"OBE Benchmark Comparison: R(0) F1'=3/2 F'=2")
@@ -60,16 +61,27 @@ for group in system.polarization_symbols:
     for s in group if isinstance(group, (list, tuple)) else [group]:
         params_rust[str(s)] = 1.0
 
-prepared_rust = prepare_lindblad_problem(system, params_rust, backend="rust")
+prepared_rust = prepare_lindblad_problem(
+    system,
+    params_rust,
+    backend="rust",
+    hamiltonian_representation="decomposed",
+)
 
 rust_configs = [
     ("dopri5", "structured"),
     ("dopri5", "structured_upper"),
+    ("dopri5", "expanded_sparse"),
+    ("dopri5_fast", "structured_upper"),
+    ("dopri5_fast", "expanded_sparse"),
+    ("tsit5_fast", "structured_upper"),
+    ("tsit5_fast", "expanded_sparse"),
     ("scipy", "structured"),
     ("scipy", "structured_upper"),
+    ("scipy", "expanded_sparse"),
     ("scipy_bdf", "structured"),
     ("scipy_bdf", "structured_upper"),
-    ("bdf", "structured_upper"),
+    ("scipy_bdf", "expanded_sparse"),
 ]
 
 rust_results = {}
@@ -89,9 +101,19 @@ for solver, exec_mode in rust_configs:
     ms = [t * 1000 for t in times_list]
     median_ms = np.median(ms)
     print(f"  {label:40s} {median_ms:8.1f} ms")
+    solver_stats = None
+    if collect_solve_stats and solver in {"dopri5", "dopri5_fast", "tsit5_fast"}:
+        profiled_result = solve_lindblad(
+            prepared_rust, rho0, t_span,
+            solver=solver, execution_mode=exec_mode,
+            saveat=saveat, dt=1e-10, reltol=1e-7, abstol=1e-9,
+            collect_stats=True,
+        )
+        solver_stats = profiled_result.solver_stats
     rust_results[label] = {
         "median_ms": median_ms,
         "pops_final": result.populations()[-1],
+        "solver_stats": solver_stats,
     }
 
 # ============================================================================
@@ -237,6 +259,23 @@ if ref_key in rust_results:
             continue
         diff = np.max(np.abs(data["pops_final"] - ref_pops))
         print(f"  {label:38s} {diff:.2e}")
+
+if any(data.get("solver_stats") for data in rust_results.values()):
+    print("\nRust solve diagnostics from one extra profiled run:")
+    print(
+        f"{'Config':40s} {'RHS calls':>10s} {'Acc':>8s} {'Rej':>8s} "
+        f"{'RHS ms':>10s} {'Non-RHS ms':>12s}"
+    )
+    print("-" * 94)
+    for label, data in rust_results.items():
+        stats = data.get("solver_stats")
+        if not stats:
+            continue
+        print(
+            f"  {label:38s} {stats['rhs_calls']:10d} {stats['accepted_steps']:8d} "
+            f"{stats['rejected_steps']:8d} {stats['rhs_seconds']*1000:10.1f} "
+            f"{stats['non_rhs_seconds']*1000:12.1f}"
+        )
 
 if julia_results:
     print(f"\n{'Julia Config':40s} {'Min (ms)':>12s}")

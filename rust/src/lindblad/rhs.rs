@@ -1,15 +1,18 @@
 use crate::lindblad::blas::commutator_her2k;
 use crate::lindblad::eval::RuntimeValue;
 use crate::lindblad::layout::UpperTriLayout;
-use crate::lindblad::plan::{HermitianSparsePattern, PreparedLindbladPlan};
+use crate::lindblad::plan::{ExpandedSparseRhsPlan, HermitianSparsePattern, PreparedLindbladPlan};
 use num_complex::Complex64;
 use std::time::Instant;
+
+const NO_PACKED_IMAG_INDEX: usize = usize::MAX;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ExecutionMode {
     ReferenceDense,
     StructuredBlas,
     StructuredUpper,
+    ExpandedSparse,
 }
 
 impl ExecutionMode {
@@ -18,8 +21,93 @@ impl ExecutionMode {
             "reference" => Ok(Self::ReferenceDense),
             "structured" => Ok(Self::StructuredBlas),
             "structured_upper" => Ok(Self::StructuredUpper),
+            "expanded_sparse" => Ok(Self::ExpandedSparse),
             _ => Err(format!("unsupported execution mode {:?}", value)),
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct PackedUpperIndex {
+    re: usize,
+    im: usize,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct PackedTermInput {
+    re: usize,
+    im: usize,
+    imag_sign: f64,
+}
+
+fn build_upper_to_packed_indices(n: usize, upper_layout: &UpperTriLayout) -> Vec<PackedUpperIndex> {
+    let mut indices = vec![
+        PackedUpperIndex {
+            re: 0,
+            im: NO_PACKED_IMAG_INDEX,
+        };
+        upper_layout.len()
+    ];
+    for i in 0..n {
+        indices[upper_layout.index_unchecked(i, i)] = PackedUpperIndex {
+            re: i,
+            im: NO_PACKED_IMAG_INDEX,
+        };
+    }
+    let mut cursor = n;
+    for i in 0..n {
+        for j in (i + 1)..n {
+            indices[upper_layout.index_unchecked(i, j)] = PackedUpperIndex {
+                re: cursor,
+                im: cursor + 1,
+            };
+            cursor += 2;
+        }
+    }
+    indices
+}
+
+fn build_expanded_packed_inputs(
+    plan: &PreparedLindbladPlan,
+    upper_to_packed: &[PackedUpperIndex],
+) -> Vec<PackedTermInput> {
+    let Some(rhs_plan) = plan.expanded_rhs_plan.as_ref() else {
+        return Vec::new();
+    };
+    rhs_plan
+        .terms
+        .iter()
+        .map(|term| {
+            let index = upper_to_packed[term.input];
+            if index.im == NO_PACKED_IMAG_INDEX {
+                PackedTermInput {
+                    re: index.re,
+                    im: index.re,
+                    imag_sign: 0.0,
+                }
+            } else {
+                PackedTermInput {
+                    re: index.re,
+                    im: index.im,
+                    imag_sign: if term.input_conj { -1.0 } else { 1.0 },
+                }
+            }
+        })
+        .collect()
+}
+
+#[inline(always)]
+fn write_packed_upper_parts(
+    packed: &mut [f64],
+    upper_to_packed: &[PackedUpperIndex],
+    upper_index: usize,
+    re: f64,
+    im: f64,
+) {
+    let index = upper_to_packed[upper_index];
+    packed[index.re] = re;
+    if index.im != NO_PACKED_IMAG_INDEX {
+        packed[index.im] = im;
     }
 }
 
@@ -152,6 +240,130 @@ fn add_commutator_sparse_upper(
     }
 }
 
+fn add_expanded_sparse_rhs(
+    rhs_plan: &ExpandedSparseRhsPlan,
+    term_values: &[Complex64],
+    rho_upper: &[Complex64],
+    out_upper: &mut [Complex64],
+) -> Result<(), String> {
+    if rhs_plan.output_ptrs.len() != out_upper.len() + 1 {
+        return Err(format!(
+            "expanded RHS output_ptrs length {} does not match output length {}",
+            rhs_plan.output_ptrs.len(),
+            out_upper.len()
+        ));
+    }
+    if rho_upper.len() != out_upper.len() {
+        return Err(format!(
+            "expanded RHS expected matching input/output upper lengths, got {} and {}",
+            rho_upper.len(),
+            out_upper.len()
+        ));
+    }
+    if term_values.len() != rhs_plan.terms.len() {
+        return Err(format!(
+            "expanded RHS expected {} cached term values, got {}",
+            rhs_plan.terms.len(),
+            term_values.len()
+        ));
+    }
+    for (output_index, out) in out_upper.iter_mut().enumerate() {
+        let mut acc = Complex64::ZERO;
+        for term_index in rhs_plan.output_ptrs[output_index]..rhs_plan.output_ptrs[output_index + 1]
+        {
+            let term = &rhs_plan.terms[term_index];
+            let mut value = rho_upper[term.input];
+            if term.input_conj {
+                value = value.conj();
+            }
+            acc += term_values[term_index] * value;
+        }
+        *out = acc;
+    }
+    Ok(())
+}
+
+fn add_expanded_sparse_rhs_packed(
+    rhs_plan: &ExpandedSparseRhsPlan,
+    term_values: &[Complex64],
+    upper_to_packed: &[PackedUpperIndex],
+    packed_inputs: &[PackedTermInput],
+    packed_state: &[f64],
+    out: &mut [f64],
+) -> Result<(), String> {
+    if rhs_plan.output_ptrs.len() != upper_to_packed.len() + 1 {
+        return Err(format!(
+            "expanded RHS output_ptrs length {} does not match packed upper length {}",
+            rhs_plan.output_ptrs.len(),
+            upper_to_packed.len()
+        ));
+    }
+    if packed_state.len() != out.len() {
+        return Err(format!(
+            "expanded RHS expected matching packed input/output lengths, got {} and {}",
+            packed_state.len(),
+            out.len()
+        ));
+    }
+    if term_values.len() != rhs_plan.terms.len() {
+        return Err(format!(
+            "expanded RHS expected {} cached term values, got {}",
+            rhs_plan.terms.len(),
+            term_values.len()
+        ));
+    }
+    if packed_inputs.len() != rhs_plan.terms.len() {
+        return Err(format!(
+            "expanded RHS expected {} packed term inputs, got {}",
+            rhs_plan.terms.len(),
+            packed_inputs.len()
+        ));
+    }
+    for (output_index, window) in rhs_plan.output_ptrs.windows(2).enumerate() {
+        let mut acc_re = 0.0_f64;
+        let mut acc_im = 0.0_f64;
+        for term_index in window[0]..window[1] {
+            let input = packed_inputs[term_index];
+            let coefficient = term_values[term_index];
+            let value_re = packed_state[input.re];
+            let value_im = if input.imag_sign == 0.0 {
+                0.0
+            } else {
+                input.imag_sign * packed_state[input.im]
+            };
+            acc_re += coefficient.re * value_re - coefficient.im * value_im;
+            acc_im += coefficient.re * value_im + coefficient.im * value_re;
+        }
+        write_packed_upper_parts(out, upper_to_packed, output_index, acc_re, acc_im);
+    }
+    Ok(())
+}
+
+fn fill_expanded_sparse_term_values(
+    rhs_plan: &ExpandedSparseRhsPlan,
+    coeff_values: &[Complex64],
+    out: &mut Vec<Complex64>,
+) -> Result<(), String> {
+    out.resize(rhs_plan.terms.len(), Complex64::ZERO);
+    for (idx, term) in rhs_plan.terms.iter().enumerate() {
+        let mut coefficient = Complex64::ONE;
+        if let Some(coeff_index) = term.coeff_index {
+            if coeff_index >= coeff_values.len() {
+                return Err(format!(
+                    "expanded RHS coefficient index {coeff_index} out of bounds for {} values",
+                    coeff_values.len()
+                ));
+            }
+            coefficient = coeff_values[coeff_index];
+            if term.coeff_conj {
+                coefficient = coefficient.conj();
+            }
+        }
+        out[idx] = term.factor * coefficient;
+    }
+    Ok(())
+}
+
 fn add_dense_dissipator(plan: &PreparedLindbladPlan, rho: &[Complex64], out: &mut [Complex64]) {
     let n = plan.n_states();
     let collapse_size = n * n;
@@ -258,12 +470,17 @@ pub struct RhsWorkspace {
     drho_upper: Vec<Complex64>,
     scratch: Vec<Complex64>,
     h_sparse_values: Vec<Complex64>,
+    expanded_coeff_values: Vec<Complex64>,
+    expanded_term_values: Vec<Complex64>,
     parameter_values: Vec<RuntimeValue>,
     hamiltonian_temps: Vec<RuntimeValue>,
     eval_stack: Vec<RuntimeValue>,
     scalar_stack: Vec<Complex64>,
+    parameter_overrides: Vec<(usize, RuntimeValue)>,
     split_input: Vec<Complex64>,
     split_output: Vec<Complex64>,
+    upper_to_packed: Vec<PackedUpperIndex>,
+    expanded_packed_inputs: Vec<PackedTermInput>,
     hamiltonian_valid: bool,
     h_sparse_valid: bool,
 }
@@ -285,6 +502,8 @@ impl RhsWorkspace {
         let n = plan.n_states();
         let matrix_len = n * n;
         let upper_layout = UpperTriLayout::new(n).expect("valid upper-triangle layout");
+        let upper_to_packed = build_upper_to_packed_indices(n, &upper_layout);
+        let expanded_packed_inputs = build_expanded_packed_inputs(plan, &upper_to_packed);
         Self {
             upper_layout: upper_layout.clone(),
             rho: vec![Complex64::ZERO; matrix_len],
@@ -295,15 +514,62 @@ impl RhsWorkspace {
             drho_upper: vec![Complex64::ZERO; upper_layout.len()],
             scratch: vec![Complex64::ZERO; matrix_len],
             h_sparse_values: vec![Complex64::ZERO; plan.hamiltonian_sparse_pattern.nnz],
+            expanded_coeff_values: Vec::with_capacity(plan.hamiltonian_plan.coefficients.len()),
+            expanded_term_values: Vec::with_capacity(
+                plan.expanded_rhs_plan
+                    .as_ref()
+                    .map(|rhs_plan| rhs_plan.terms.len())
+                    .unwrap_or(0),
+            ),
             parameter_values: Vec::with_capacity(plan.parameter_graph.slot_names.len()),
             hamiltonian_temps: Vec::with_capacity(plan.hamiltonian_plan.temps.len()),
             eval_stack: Vec::new(),
             scalar_stack: Vec::new(),
+            parameter_overrides: Vec::new(),
             split_input: vec![Complex64::ZERO; matrix_len],
             split_output: vec![Complex64::ZERO; matrix_len],
+            upper_to_packed,
+            expanded_packed_inputs,
             hamiltonian_valid: false,
             h_sparse_valid: false,
         }
+    }
+
+    pub fn set_scalar_parameter_overrides(
+        &mut self,
+        slot_indices: &[usize],
+        values: &[Complex64],
+    ) -> Result<(), String> {
+        if slot_indices.len() != values.len() {
+            return Err(format!(
+                "parameter override slot count {} does not match value count {}",
+                slot_indices.len(),
+                values.len()
+            ));
+        }
+        self.parameter_overrides.clear();
+        self.parameter_overrides.reserve(slot_indices.len());
+        for (&slot, &value) in slot_indices.iter().zip(values.iter()) {
+            self.parameter_overrides
+                .push((slot, RuntimeValue::Scalar(value)));
+        }
+        self.hamiltonian_valid = false;
+        self.h_sparse_valid = false;
+        Ok(())
+    }
+
+    fn evaluate_parameter_graph(
+        &mut self,
+        plan: &PreparedLindbladPlan,
+        t: f64,
+    ) -> Result<(), String> {
+        plan.parameter_graph.evaluate_with_overrides_into(
+            t,
+            self.parameter_overrides.as_slice(),
+            &mut self.parameter_values,
+            &mut self.eval_stack,
+            &mut self.scalar_stack,
+        )
     }
 }
 
@@ -346,16 +612,16 @@ fn rhs_from_workspace_rho(
     mut profile: Option<&mut RhsProfileStats>,
 ) -> Result<(), String> {
     let n = plan.n_states();
+    if mode == ExecutionMode::ExpandedSparse && plan.expanded_rhs_plan.is_none() {
+        return Err(
+            "execution_mode='expanded_sparse' requires a decomposed Hamiltonian plan".to_string(),
+        );
+    }
     let total_start = Instant::now();
     let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
     let parameter_start = Instant::now();
     if !can_skip {
-        plan.parameter_graph.evaluate_into(
-            t,
-            &mut workspace.parameter_values,
-            &mut workspace.eval_stack,
-            &mut workspace.scalar_stack,
-        )?;
+        workspace.evaluate_parameter_graph(plan, t)?;
     }
     if let Some(stats) = profile.as_mut() {
         stats.parameter_eval_seconds += parameter_start.elapsed().as_secs_f64();
@@ -403,6 +669,23 @@ fn rhs_from_workspace_rho(
                     workspace.hamiltonian_upper.as_mut_slice(),
                 )?;
             }
+            ExecutionMode::ExpandedSparse => {
+                plan.hamiltonian_plan
+                    .evaluate_decomposed_coefficients_into(
+                        workspace.parameter_values.as_slice(),
+                        t,
+                        &mut workspace.eval_stack,
+                        &mut workspace.scalar_stack,
+                        &mut workspace.expanded_coeff_values,
+                    )?;
+                fill_expanded_sparse_term_values(
+                    plan.expanded_rhs_plan
+                        .as_ref()
+                        .expect("expanded RHS plan checked above"),
+                    workspace.expanded_coeff_values.as_slice(),
+                    &mut workspace.expanded_term_values,
+                )?;
+            }
         }
         workspace.hamiltonian_valid = true;
         workspace.h_sparse_valid = false;
@@ -444,6 +727,19 @@ fn rhs_from_workspace_rho(
                 workspace.drho_upper.as_mut_slice(),
             );
         }
+        ExecutionMode::ExpandedSparse => {
+            workspace
+                .upper_layout
+                .clear(workspace.drho_upper.as_mut_slice())?;
+            add_expanded_sparse_rhs(
+                plan.expanded_rhs_plan
+                    .as_ref()
+                    .expect("expanded RHS plan checked above"),
+                workspace.expanded_term_values.as_slice(),
+                workspace.rho_upper.as_slice(),
+                workspace.drho_upper.as_mut_slice(),
+            )?;
+        }
     }
     if let Some(stats) = profile.as_mut() {
         stats.commutator_seconds += commutator_start.elapsed().as_secs_f64();
@@ -466,6 +762,7 @@ fn rhs_from_workspace_rho(
             workspace.rho_upper.as_slice(),
             workspace.drho_upper.as_mut_slice(),
         ),
+        ExecutionMode::ExpandedSparse => {}
     }
     if let Some(stats) = profile.as_mut() {
         stats.calls += 1;
@@ -503,7 +800,7 @@ pub fn rhs_matrix_into_with_profile(
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
             workspace.rho.copy_from_slice(rho);
         }
-        ExecutionMode::StructuredUpper => {
+        ExecutionMode::StructuredUpper | ExecutionMode::ExpandedSparse => {
             workspace
                 .upper_layout
                 .pack_from_dense(rho, workspace.rho_upper.as_mut_slice())?;
@@ -515,7 +812,7 @@ pub fn rhs_matrix_into_with_profile(
             mirror_upper_to_lower(workspace.drho.as_mut_slice(), n);
             out.copy_from_slice(workspace.drho.as_slice());
         }
-        ExecutionMode::StructuredUpper => {
+        ExecutionMode::StructuredUpper | ExecutionMode::ExpandedSparse => {
             workspace
                 .upper_layout
                 .expand_to_dense(workspace.drho_upper.as_slice(), out)?;
@@ -663,6 +960,91 @@ pub fn build_packed_jacobian_sparse(
     Ok((rows, cols, values))
 }
 
+fn rhs_packed_expanded_sparse_into_with_profile(
+    plan: &PreparedLindbladPlan,
+    packed_state: &[f64],
+    t: f64,
+    workspace: &mut RhsWorkspace,
+    out: &mut [f64],
+    mut profile: Option<&mut RhsProfileStats>,
+) -> Result<(), String> {
+    let rhs_plan = plan.expanded_rhs_plan.as_ref().ok_or_else(|| {
+        "execution_mode='expanded_sparse' requires a decomposed Hamiltonian plan".to_string()
+    })?;
+    if packed_state.len() != plan.layout.packed_len() {
+        return Err(format!(
+            "expected packed vector length {}, got {}",
+            plan.layout.packed_len(),
+            packed_state.len()
+        ));
+    }
+    if out.len() != plan.layout.packed_len() {
+        return Err(format!(
+            "expected packed output length {}, got {}",
+            plan.layout.packed_len(),
+            out.len()
+        ));
+    }
+
+    let total_start = Instant::now();
+    let unpack_start = Instant::now();
+    if let Some(stats) = profile.as_mut() {
+        stats.unpack_seconds += unpack_start.elapsed().as_secs_f64();
+    }
+
+    let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
+    let parameter_start = Instant::now();
+    if !can_skip {
+        workspace.evaluate_parameter_graph(plan, t)?;
+    }
+    if let Some(stats) = profile.as_mut() {
+        stats.parameter_eval_seconds += parameter_start.elapsed().as_secs_f64();
+    }
+
+    let hamiltonian_start = Instant::now();
+    if !can_skip {
+        plan.hamiltonian_plan
+            .evaluate_decomposed_coefficients_into(
+                workspace.parameter_values.as_slice(),
+                t,
+                &mut workspace.eval_stack,
+                &mut workspace.scalar_stack,
+                &mut workspace.expanded_coeff_values,
+            )?;
+        fill_expanded_sparse_term_values(
+            rhs_plan,
+            workspace.expanded_coeff_values.as_slice(),
+            &mut workspace.expanded_term_values,
+        )?;
+        workspace.hamiltonian_valid = true;
+        workspace.h_sparse_valid = false;
+    }
+    if let Some(stats) = profile.as_mut() {
+        stats.hamiltonian_fill_seconds += hamiltonian_start.elapsed().as_secs_f64();
+    }
+
+    let commutator_start = Instant::now();
+    add_expanded_sparse_rhs_packed(
+        rhs_plan,
+        workspace.expanded_term_values.as_slice(),
+        workspace.upper_to_packed.as_slice(),
+        workspace.expanded_packed_inputs.as_slice(),
+        packed_state,
+        out,
+    )?;
+    if let Some(stats) = profile.as_mut() {
+        stats.commutator_seconds += commutator_start.elapsed().as_secs_f64();
+    }
+
+    let dissipator_start = Instant::now();
+    if let Some(stats) = profile.as_mut() {
+        stats.calls += 1;
+        stats.dissipator_seconds += dissipator_start.elapsed().as_secs_f64();
+        stats.total_seconds += total_start.elapsed().as_secs_f64();
+    }
+    Ok(())
+}
+
 pub fn rhs_packed_into_with_profile(
     plan: &PreparedLindbladPlan,
     packed_state: &[f64],
@@ -672,13 +1054,23 @@ pub fn rhs_packed_into_with_profile(
     out: &mut [f64],
     mut profile: Option<&mut RhsProfileStats>,
 ) -> Result<(), String> {
+    if mode == ExecutionMode::ExpandedSparse {
+        return rhs_packed_expanded_sparse_into_with_profile(
+            plan,
+            packed_state,
+            t,
+            workspace,
+            out,
+            profile,
+        );
+    }
     let unpack_start = Instant::now();
     match mode {
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
             plan.layout
                 .unpack_into(packed_state, workspace.rho.as_mut_slice())?;
         }
-        ExecutionMode::StructuredUpper => {
+        ExecutionMode::StructuredUpper | ExecutionMode::ExpandedSparse => {
             workspace
                 .upper_layout
                 .unpack_packed_state(packed_state, workspace.rho_upper.as_mut_slice())?;
@@ -693,7 +1085,7 @@ pub fn rhs_packed_into_with_profile(
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
             plan.layout.pack_into(workspace.drho.as_slice(), out)?;
         }
-        ExecutionMode::StructuredUpper => {
+        ExecutionMode::StructuredUpper | ExecutionMode::ExpandedSparse => {
             workspace
                 .upper_layout
                 .pack_packed_state(workspace.drho_upper.as_slice(), out)?;

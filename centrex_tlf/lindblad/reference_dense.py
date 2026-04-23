@@ -31,24 +31,6 @@ def apply_dense_dissipator_reference(c_array: np.ndarray, rho: np.ndarray) -> np
     return result
 
 
-def apply_structured_dissipator_reference_legacy(
-    structured_jumps: list[dict[str, Any]],
-    source_decay_rates: np.ndarray,
-    rho: np.ndarray,
-) -> np.ndarray:
-    result = np.zeros_like(rho, dtype=np.complex128)
-    for jump in structured_jumps:
-        result[jump["target"], jump["target"]] += jump["rate"] * rho[
-            jump["source"], jump["source"]
-        ]
-    for source, rate in enumerate(source_decay_rates):
-        if rate == 0.0:
-            continue
-        result[source, :] -= 0.5 * rate * rho[source, :]
-        result[:, source] -= 0.5 * rate * rho[:, source]
-    return result
-
-
 def apply_structured_dissipator_reference(
     structured_jumps: list[dict[str, Any]],
     source_decay_rates: np.ndarray,

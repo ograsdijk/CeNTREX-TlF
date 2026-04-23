@@ -6,12 +6,12 @@ import scipy.sparse
 import sympy as smp
 
 from centrex_tlf.lindblad.ir import evaluate_parameter_graph_py, fill_hamiltonian_py
+from centrex_tlf.lindblad.batch import grid_scan, solve_lindblad_batch
 from centrex_tlf.lindblad.parameters import LindbladParameters, adapt_lindblad_parameters
 from centrex_tlf.lindblad.plan_static import prepare_lindblad_problem
 from centrex_tlf.lindblad.reference_dense import (
     apply_dense_dissipator_reference,
     apply_structured_dissipator_reference,
-    apply_structured_dissipator_reference_legacy,
     reference_rhs,
     structured_rhs,
 )
@@ -164,17 +164,11 @@ def test_structured_dissipator_matches_dense_reference() -> None:
     prepared = prepare_lindblad_problem(system, {"Ω": 0.8, "δ": 0.0}, backend="python")
     rho = np.array([[0.6, 0.1 - 0.2j], [0.1 + 0.2j, 0.4]], dtype=np.complex128)
     dense = apply_dense_dissipator_reference(prepared.dense_c_array, rho)
-    legacy = apply_structured_dissipator_reference_legacy(
-        prepared.structured_jumps,
-        prepared.source_decay_rates,
-        rho,
-    )
     structured = apply_structured_dissipator_reference(
         prepared.structured_jumps,
         prepared.source_decay_rates,
         rho,
     )
-    np.testing.assert_allclose(legacy, dense)
     np.testing.assert_allclose(structured, dense)
 
 
@@ -251,6 +245,597 @@ def test_rust_matrix_rhs_evaluator_matches_packed_rhs() -> None:
     rhs_matrix = np.asarray(evaluator.rhs_matrix_py(rho.reshape(-1), 0.31), dtype=np.complex128).reshape(2, 2)
     np.testing.assert_allclose(rhs_packed_upper, rhs_packed, atol=1e-11, rtol=1e-11)
     np.testing.assert_allclose(prepared.layout.pack(rhs_matrix), rhs_packed, atol=1e-11, rtol=1e-11)
+
+
+@pytest.mark.parametrize(("time_dependent", "time"), [(False, 0.0), (True, 0.41)])
+def test_expanded_sparse_rhs_matches_structured_upper(
+    time_dependent: bool,
+    time: float,
+) -> None:
+    system = _make_two_level_system()
+    if time_dependent:
+        parameters: dict[str, object] = {
+            "omega0": 1.0,
+            "modulation_depth": 0.5,
+            "modulation_frequency": 1.9,
+            str(system.coupling_symbols[1]): -0.1,
+            str(system.coupling_symbols[0]): (
+                "omega0*phase_modulation(t, modulation_depth, modulation_frequency)"
+            ),
+        }
+    else:
+        parameters = {
+            str(system.coupling_symbols[0]): 0.9,
+            str(system.coupling_symbols[1]): 0.2,
+        }
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="python",
+        hamiltonian_representation="decomposed",
+    )
+    assert prepared.expanded_rhs_plan is not None
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    packed = prepared.layout.pack(
+        np.array([[0.8, 0.05 + 0.04j], [0.05 - 0.04j, 0.2]], dtype=np.complex128)
+    )
+    rhs_upper = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, time, "structured_upper"),
+        dtype=np.float64,
+    )
+    rhs_expanded = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, time, "expanded_sparse"),
+        dtype=np.float64,
+    )
+    np.testing.assert_allclose(rhs_expanded, rhs_upper, atol=1e-11, rtol=1e-11)
+
+
+def test_expanded_sparse_matrix_evaluator_matches_packed_rhs() -> None:
+    system = _make_two_level_system()
+    parameters = {
+        "omega0": 1.0,
+        "modulation_depth": 0.25,
+        "modulation_frequency": 1.7,
+        str(system.coupling_symbols[1]): 0.05,
+        str(system.coupling_symbols[0]): (
+            "omega0*phase_modulation(t, modulation_depth, modulation_frequency)"
+        ),
+    }
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="python",
+        hamiltonian_representation="decomposed",
+    )
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    evaluator = rust.create_lindblad_rhs_evaluator_py(rust_plan, "expanded_sparse")
+    rho = np.array([[0.7, 0.1 + 0.05j], [0.1 - 0.05j, 0.3]], dtype=np.complex128)
+    packed = prepared.layout.pack(rho)
+    rhs_packed = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, 0.31, "expanded_sparse"),
+        dtype=np.float64,
+    )
+    rhs_matrix = np.asarray(
+        evaluator.rhs_matrix_py(rho.reshape(-1), 0.31),
+        dtype=np.complex128,
+    ).reshape(2, 2)
+    np.testing.assert_allclose(prepared.layout.pack(rhs_matrix), rhs_packed, atol=1e-11, rtol=1e-11)
+
+
+def test_expanded_sparse_dopri5_solver_matches_structured_upper() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    saveat = np.linspace(0.0, 0.5, 11)
+    parameters = {
+        "omega0": 0.75,
+        "modulation_depth": 0.4,
+        "modulation_frequency": 2.5,
+        str(system.coupling_symbols[1]): 0.1,
+        str(system.coupling_symbols[0]): (
+            "omega0*phase_modulation(t, modulation_depth, modulation_frequency)"
+        ),
+    }
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="rust",
+        hamiltonian_representation="decomposed",
+    )
+    upper_result = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        solver="dopri5",
+        execution_mode="structured_upper",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+    expanded_result = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+    np.testing.assert_allclose(expanded_result.t, upper_result.t, atol=1e-12, rtol=0.0)
+    np.testing.assert_allclose(
+        expanded_result.packed_y,
+        upper_result.packed_y,
+        atol=1e-10,
+        rtol=1e-8,
+    )
+
+
+def test_rust_dopri5_solver_stats_are_reported() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    result = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5",
+        execution_mode="structured_upper",
+        saveat=np.linspace(0.0, 0.5, 5),
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        collect_stats=True,
+    )
+    assert result.solver_stats is not None
+    stats = result.solver_stats
+    assert stats["solver"] == "dopri5"
+    assert stats["rhs_calls"] > 0
+    assert stats["function_evaluations"] >= stats["rhs_calls"]
+    assert stats["accepted_steps"] > 0
+    assert stats["rejected_steps"] >= 0
+    assert stats["saved_points"] == result.t.size
+    assert stats["rhs_seconds"] > 0.0
+    assert stats["total_seconds"] >= stats["rhs_seconds"]
+
+
+@pytest.mark.parametrize(
+    "saveat",
+    [
+        np.linspace(0.0, 0.5, 9),
+        np.array([0.0, 0.03, 0.11, 0.2, 0.37, 0.5], dtype=np.float64),
+    ],
+)
+@pytest.mark.parametrize("execution_mode", ["structured_upper", "expanded_sparse"])
+def test_rust_dopri5_fast_matches_dopri5(saveat: np.ndarray, execution_mode: str) -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    reference = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5",
+        execution_mode=execution_mode,
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+    fast = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5_fast",
+        execution_mode=execution_mode,
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        collect_stats=True,
+    )
+    np.testing.assert_allclose(fast.t, reference.t, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(fast.packed_y, reference.packed_y, atol=5e-10, rtol=5e-8)
+    assert fast.solver_stats is not None
+    assert fast.solver_stats["solver"] == "dopri5_fast"
+    assert fast.solver_stats["rhs_calls"] > 0
+
+
+def test_rust_dopri5_fast_population_outputs_match_full() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    saveat = np.linspace(0.0, 0.5, 7)
+    full = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5_fast",
+        execution_mode="expanded_sparse",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+    populations = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5_fast",
+        execution_mode="expanded_sparse",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        output="populations",
+        collect_stats=True,
+    )
+    np.testing.assert_allclose(populations.t, full.t, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(populations.values, full.populations(), atol=1e-12, rtol=1e-10)
+    assert populations.solver_stats is not None
+
+    final = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5_fast",
+        execution_mode="expanded_sparse",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        output="populations",
+        output_when="final",
+        dense_output=False,
+    )
+    np.testing.assert_allclose(final.t, [0.5], atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(final.values, full.populations()[-1], atol=1e-12, rtol=1e-10)
+
+
+def test_rust_dopri5_fast_selected_outputs_match_full() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    saveat = np.array([0.0, 0.03, 0.11, 0.2, 0.37, 0.5], dtype=np.float64)
+    full = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5_fast",
+        execution_mode="structured_upper",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+    selected_indices = [(0, 0), (0, 1), (1, 0)]
+    selected = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5_fast",
+        execution_mode="structured_upper",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        output="selected",
+        output_indices=selected_indices,
+    )
+    matrices = full.density_matrices()
+    expected = np.array([[matrix[i, j] for i, j in selected_indices] for matrix in matrices])
+    np.testing.assert_allclose(selected.t, full.t, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(selected.values, expected, atol=1e-12, rtol=1e-10)
+
+    final = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5_fast",
+        execution_mode="structured_upper",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        output="selected",
+        output_indices=selected_indices,
+        output_when="final",
+        dense_output=False,
+    )
+    np.testing.assert_allclose(final.values, expected[-1], atol=1e-12, rtol=1e-10)
+
+
+def test_rust_dopri5_fast_dense_output_false_rejects_interior_saveat() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    with pytest.raises(ValueError, match="dense_output=False"):
+        solve_lindblad(
+            system,
+            rho0,
+            (0.0, 0.5),
+            parameters=parameters,
+            backend="rust",
+            solver="dopri5_fast",
+            execution_mode="expanded_sparse",
+            saveat=np.linspace(0.0, 0.5, 7),
+            dt=1e-3,
+            reltol=1e-8,
+            abstol=1e-10,
+            dense_output=False,
+        )
+
+
+@pytest.mark.parametrize(
+    "saveat",
+    [
+        np.linspace(0.0, 0.5, 9),
+        np.array([0.0, 0.03, 0.11, 0.2, 0.37, 0.5], dtype=np.float64),
+    ],
+)
+@pytest.mark.parametrize("execution_mode", ["structured_upper", "expanded_sparse"])
+def test_rust_tsit5_fast_matches_dopri5(saveat: np.ndarray, execution_mode: str) -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    reference = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5",
+        execution_mode=execution_mode,
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+    fast = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="tsit5_fast",
+        execution_mode=execution_mode,
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        collect_stats=True,
+    )
+    np.testing.assert_allclose(fast.t, reference.t, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(fast.packed_y, reference.packed_y, atol=5e-10, rtol=5e-8)
+    assert fast.solver_stats is not None
+    assert fast.solver_stats["solver"] == "tsit5_fast"
+    assert fast.solver_stats["rhs_calls"] > 0
+
+
+def test_rust_tsit5_fast_reduced_outputs_match_full() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    saveat = np.array([0.0, 0.03, 0.11, 0.2, 0.37, 0.5], dtype=np.float64)
+    full = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="tsit5_fast",
+        execution_mode="expanded_sparse",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+    populations = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="tsit5_fast",
+        execution_mode="expanded_sparse",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        output="populations",
+    )
+    np.testing.assert_allclose(populations.t, full.t, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(populations.values, full.populations(), atol=1e-12, rtol=1e-10)
+
+    final = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="tsit5_fast",
+        execution_mode="expanded_sparse",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        output="selected",
+        output_indices=[(0, 0), (0, 1), (1, 0)],
+        output_when="final",
+        dense_output=False,
+    )
+    expected = np.array([full.density_matrices()[-1][0, 0], full.density_matrices()[-1][0, 1], full.density_matrices()[-1][1, 0]])
+    np.testing.assert_allclose(final.values, expected, atol=1e-12, rtol=1e-10)
+
+
+def test_rust_batch_initial_conditions_match_repeated_solves() -> None:
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    rho0_a = _ground_state_density()
+    rho0_b = np.array([[0.25, 0.0], [0.0, 0.75]], dtype=np.complex128)
+    batch = solve_lindblad_batch(
+        prepared,
+        np.stack([rho0_a, rho0_b]),
+        (0.0, 0.5),
+        solver="dopri5_fast",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+        collect_stats=True,
+    )
+    expected = []
+    for rho0 in (rho0_a, rho0_b):
+        result = solve_lindblad(
+            prepared,
+            rho0,
+            (0.0, 0.5),
+            solver="dopri5_fast",
+            execution_mode="expanded_sparse",
+            output="populations",
+            output_when="final",
+            dense_output=False,
+            dt=1e-3,
+            reltol=1e-8,
+            abstol=1e-10,
+        )
+        expected.append(result.values)
+    np.testing.assert_allclose(batch.values, np.asarray(expected), atol=1e-12, rtol=1e-10)
+    assert batch.solver_stats is not None
+    assert batch.solver_stats["solver"] == "dopri5_fast_batch"
+
+    parallel = solve_lindblad_batch(
+        prepared,
+        np.stack([rho0_a, rho0_b]),
+        (0.0, 0.5),
+        solver="dopri5_fast",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=True,
+        threads=2,
+    )
+    np.testing.assert_allclose(parallel.values, batch.values, atol=1e-12, rtol=1e-10)
+
+
+def test_rust_batch_selected_saveat_matches_repeated_solves() -> None:
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    rho0_a = _ground_state_density()
+    rho0_b = np.array([[0.5, 0.1j], [-0.1j, 0.5]], dtype=np.complex128)
+    saveat = np.linspace(0.0, 0.5, 6)
+    selected_indices = [(0, 0), (0, 1), (1, 0)]
+    batch = solve_lindblad_batch(
+        prepared,
+        np.stack([rho0_a, rho0_b]),
+        (0.0, 0.5),
+        solver="tsit5_fast",
+        execution_mode="expanded_sparse",
+        output="selected",
+        output_indices=selected_indices,
+        output_when="saveat",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    expected = []
+    for rho0 in (rho0_a, rho0_b):
+        result = solve_lindblad(
+            prepared,
+            rho0,
+            (0.0, 0.5),
+            solver="tsit5_fast",
+            execution_mode="expanded_sparse",
+            output="selected",
+            output_indices=selected_indices,
+            saveat=saveat,
+            dt=1e-3,
+            reltol=1e-8,
+            abstol=1e-10,
+        )
+        expected.append(result.values)
+    np.testing.assert_allclose(batch.t, saveat, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(batch.values, np.asarray(expected), atol=1e-12, rtol=1e-10)
+
+
+def test_rust_batch_parameter_grid_matches_repeated_solves() -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(system, {omega: 0.6, delta: 0.0}, backend="rust")
+    rho0 = _ground_state_density()
+    scan = {
+        omega: np.array([0.4, 0.7]),
+        delta: np.array([-0.1, 0.2]),
+    }
+    batch = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        solver="dopri5_fast",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    expected = []
+    for omega_value in scan[omega]:
+        for delta_value in scan[delta]:
+            result = solve_lindblad(
+                system,
+                rho0,
+                (0.0, 0.5),
+                parameters={omega: omega_value, delta: delta_value},
+                backend="rust",
+                solver="dopri5_fast",
+                execution_mode="expanded_sparse",
+                output="populations",
+                output_when="final",
+                dense_output=False,
+                dt=1e-3,
+                reltol=1e-8,
+                abstol=1e-10,
+            )
+            expected.append(result.values)
+    np.testing.assert_allclose(batch.values, np.asarray(expected), atol=1e-12, rtol=1e-10)
+    assert batch.metadata["scan_kind"] == "grid"
+    assert batch.metadata["grid_shape"] == (2, 2)
 
 
 def test_rust_rhs_evaluator_profile_summary_tracks_calls() -> None:

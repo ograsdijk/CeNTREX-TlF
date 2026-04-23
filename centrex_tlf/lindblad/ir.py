@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import IntEnum
 import cmath
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import sympy as smp
 from sympy.core.relational import Relational
 
@@ -17,6 +19,7 @@ __all__ = [
     "InstructionOp",
     "evaluate_parameter_graph_py",
     "fill_hamiltonian_py",
+    "lower_expanded_sparse_rhs",
     "lower_hamiltonian_upper_triangle",
     "lower_parameter_graph",
 ]
@@ -392,6 +395,175 @@ def lower_hamiltonian_upper_triangle(
     if decomposed_cost < entrywise_cost:
         return decomposed_plan
     return entrywise_plan
+
+
+def lower_expanded_sparse_rhs(
+    hamiltonian_plan: dict[str, Any],
+    source_decay_rates: npt.ArrayLike | np.ndarray,
+    incoming_transfers_by_target: list[list[dict[str, Any]]],
+) -> dict[str, Any] | None:
+    """Lower the upper-triangle Lindblad RHS into a compiler-free sparse program."""
+    if hamiltonian_plan.get("kind", "entrywise") != "decomposed":
+        return None
+
+    n = int(hamiltonian_plan["n"])
+    upper_offsets: list[int] = []
+    offset = 0
+    for row in range(n):
+        upper_offsets.append(offset)
+        offset += n - row
+    upper_len = offset
+
+    def upper_index(i: int, j: int) -> int:
+        if i > j:
+            raise ValueError(f"expected upper-triangle index with i <= j, got {(i, j)}")
+        return upper_offsets[i] + (j - i)
+
+    def rho_ref(i: int, j: int) -> tuple[int, bool]:
+        if i <= j:
+            return upper_index(i, j), False
+        return upper_index(j, i), True
+
+    # Each full H entry is represented as (other_index, coefficient_index,
+    # coefficient_conjugated, numeric_factor).
+    h_rows: list[list[tuple[int, int, bool, complex]]] = [[] for _ in range(n)]
+    h_cols: list[list[tuple[int, int, bool, complex]]] = [[] for _ in range(n)]
+
+    def add_full_h_entry(
+        row: int,
+        col: int,
+        coefficient_index: int,
+        coefficient_conj: bool,
+        factor: complex,
+    ) -> None:
+        if factor == 0:
+            return
+        h_rows[row].append((col, coefficient_index, coefficient_conj, factor))
+        h_cols[col].append((row, coefficient_index, coefficient_conj, factor))
+
+    def add_upper_h_entry(row: int, col: int, coefficient_index: int, factor: complex) -> None:
+        add_full_h_entry(row, col, coefficient_index, False, factor)
+        if row != col:
+            add_full_h_entry(
+                col,
+                row,
+                coefficient_index,
+                coefficient_index >= 0,
+                np.conjugate(factor),
+            )
+
+    static_matrix = np.asarray(hamiltonian_plan["static_matrix"], dtype=np.complex128)
+    for i in range(n):
+        for j in range(i, n):
+            value = complex(static_matrix[i, j])
+            if value != 0:
+                add_upper_h_entry(i, j, -1, value)
+
+    for coefficient_index, coefficient in enumerate(hamiltonian_plan["coefficients"]):
+        for term in coefficient["basis_terms"]:
+            value = complex(float(term["re"]), float(term["im"]))
+            if value != 0:
+                add_upper_h_entry(
+                    int(term["i"]),
+                    int(term["j"]),
+                    coefficient_index,
+                    value,
+                )
+
+    source_decay = np.asarray(source_decay_rates, dtype=np.float64)
+    terms_by_output: list[dict[tuple[int, int, bool, bool], complex]] = [
+        defaultdict(complex) for _ in range(upper_len)
+    ]
+
+    def add_rhs_term(
+        output_i: int,
+        output_j: int,
+        input_i: int,
+        input_j: int,
+        coefficient_index: int,
+        coefficient_conj: bool,
+        factor: complex,
+    ) -> None:
+        if factor == 0:
+            return
+        output = upper_index(output_i, output_j)
+        input_index, input_conj = rho_ref(input_i, input_j)
+        key = (input_index, coefficient_index, coefficient_conj, input_conj)
+        terms_by_output[output][key] += factor
+
+    for i in range(n):
+        for j in range(i, n):
+            for k, coefficient_index, coefficient_conj, h_factor in h_rows[i]:
+                add_rhs_term(
+                    i,
+                    j,
+                    k,
+                    j,
+                    coefficient_index,
+                    coefficient_conj,
+                    -1j * h_factor,
+                )
+            for k, coefficient_index, coefficient_conj, h_factor in h_cols[j]:
+                add_rhs_term(
+                    i,
+                    j,
+                    i,
+                    k,
+                    coefficient_index,
+                    coefficient_conj,
+                    1j * h_factor,
+                )
+
+            if i == j:
+                if source_decay[i] != 0.0:
+                    add_rhs_term(i, j, i, i, -1, False, -float(source_decay[i]))
+                for transfer in incoming_transfers_by_target[i]:
+                    rate = float(transfer["rate"])
+                    if rate != 0.0:
+                        add_rhs_term(i, j, int(transfer["source"]), int(transfer["source"]), -1, False, rate)
+            else:
+                rate = 0.5 * float(source_decay[i] + source_decay[j])
+                if rate != 0.0:
+                    add_rhs_term(i, j, i, j, -1, False, -rate)
+
+    output_ptrs: list[int] = [0]
+    input_indices: list[int] = []
+    coeff_indices: list[int] = []
+    coeff_conj: list[bool] = []
+    input_conj: list[bool] = []
+    factors_re: list[float] = []
+    factors_im: list[float] = []
+    for output_terms in terms_by_output:
+        for key, factor in sorted(output_terms.items()):
+            if abs(factor) <= 1e-15:
+                continue
+            input_index, coefficient_index, coefficient_is_conj, input_is_conj = key
+            input_indices.append(input_index)
+            coeff_indices.append(coefficient_index)
+            coeff_conj.append(coefficient_is_conj)
+            input_conj.append(input_is_conj)
+            factors_re.append(float(factor.real))
+            factors_im.append(float(factor.imag))
+        output_ptrs.append(len(input_indices))
+
+    hamiltonian_term_count = sum(len(row) for row in h_rows)
+    return {
+        "kind": "expanded_sparse",
+        "n": n,
+        "output_ptrs": output_ptrs,
+        "input_indices": input_indices,
+        "coeff_indices": coeff_indices,
+        "coeff_conj": coeff_conj,
+        "input_conj": input_conj,
+        "factors_re": factors_re,
+        "factors_im": factors_im,
+        "diagnostics": {
+            "upper_len": upper_len,
+            "term_count": len(input_indices),
+            "hamiltonian_full_term_count": hamiltonian_term_count,
+            "coefficient_count": len(hamiltonian_plan["coefficients"]),
+        },
+    }
 
 
 def _lower_hamiltonian_upper_triangle_entrywise(

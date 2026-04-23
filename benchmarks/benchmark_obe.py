@@ -89,7 +89,12 @@ def run_benchmarks():
 
     print("\nPreparing Lindblad problem (rust)...")
     t0 = time.perf_counter()
-    prepared_rust = prepare_lindblad_problem(system, parameters, backend="rust")
+    prepared_rust = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="rust",
+        hamiltonian_representation="decomposed",
+    )
     prep_time = time.perf_counter() - t0
     print(f"  Preparation time: {prep_time:.3f}s")
 
@@ -100,16 +105,24 @@ def run_benchmarks():
     print(f"  Preparation time: {prep_time_py:.3f}s")
 
     n_runs = 5
+    collect_solve_stats = True
     configs = [
         ("dopri5", "structured", "rust", prepared_rust),
         ("dopri5", "structured_upper", "rust", prepared_rust),
+        ("dopri5", "expanded_sparse", "rust", prepared_rust),
+        ("dopri5_fast", "structured_upper", "rust", prepared_rust),
+        ("dopri5_fast", "expanded_sparse", "rust", prepared_rust),
+        ("tsit5_fast", "structured_upper", "rust", prepared_rust),
+        ("tsit5_fast", "expanded_sparse", "rust", prepared_rust),
         ("dopri5", "reference", "rust", prepared_rust),
         ("scipy", "structured", "rust", prepared_rust),
-        ("bdf", "structured_upper", "rust", prepared_rust),
+        ("scipy", "expanded_sparse", "rust", prepared_rust),
         ("scipy_bdf", "structured", "rust", prepared_rust),
         ("scipy_bdf", "structured_upper", "rust", prepared_rust),
+        ("scipy_bdf", "expanded_sparse", "rust", prepared_rust),
         ("scipy_radau", "structured", "rust", prepared_rust),
         ("scipy_radau", "structured_upper", "rust", prepared_rust),
+        ("scipy_radau", "expanded_sparse", "rust", prepared_rust),
         ("explicit", "structured", "python", prepared_python),
     ]
 
@@ -140,10 +153,30 @@ def run_benchmarks():
             min_ms = min(ms)
             max_ms = max(ms)
             print(f"{solver:<16} {exec_mode:<20} {backend:<8} {median_ms:>12.2f} {min_ms:>10.2f} {max_ms:>10.2f}")
+            solver_stats = None
+            if collect_solve_stats and backend == "rust" and solver in {
+                "dopri5",
+                "dopri5_fast",
+                "tsit5_fast",
+            }:
+                profiled = solve_lindblad(
+                    prepared,
+                    rho0,
+                    t_span,
+                    solver=solver,
+                    execution_mode=exec_mode,
+                    saveat=saveat,
+                    dt=1e-10,
+                    reltol=1e-7,
+                    abstol=1e-9,
+                    collect_stats=True,
+                )
+                solver_stats = profiled.solver_stats
             results[label] = {
                 "times_ms": ms,
                 "median_ms": median_ms,
                 "populations_final": result.populations()[-1],
+                "solver_stats": solver_stats,
             }
         except Exception as e:
             print(f"{solver:<16} {exec_mode:<20} {backend:<8} {'ERROR':>12}   {str(e)[:30]}")
@@ -165,6 +198,23 @@ def run_benchmarks():
                 continue
             diff = np.max(np.abs(data["populations_final"] - ref_pops))
             print(f"  {label}: {diff:.2e}")
+
+    if any(data.get("solver_stats") for data in results.values()):
+        print("\nRust solve diagnostics from one extra profiled run:")
+        print(
+            f"{'Config':40s} {'RHS calls':>10s} {'Acc':>8s} {'Rej':>8s} "
+            f"{'RHS ms':>10s} {'Non-RHS ms':>12s}"
+        )
+        print("-" * 94)
+        for label, data in results.items():
+            stats = data.get("solver_stats")
+            if not stats:
+                continue
+            print(
+                f"  {label:38s} {stats['rhs_calls']:10d} {stats['accepted_steps']:8d} "
+                f"{stats['rejected_steps']:8d} {stats['rhs_seconds']*1000:10.1f} "
+                f"{stats['non_rhs_seconds']*1000:12.1f}"
+            )
 
     print("\n" + "=" * 70)
     print("Benchmark complete.")

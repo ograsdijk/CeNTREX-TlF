@@ -31,8 +31,28 @@ impl ParameterGraph {
         eval_stack: &mut Vec<RuntimeValue>,
         scalar_stack: &mut Vec<Complex64>,
     ) -> Result<(), String> {
+        self.evaluate_with_overrides_into(t, &[], slots, eval_stack, scalar_stack)
+    }
+
+    pub fn evaluate_with_overrides_into(
+        &self,
+        t: f64,
+        overrides: &[(usize, RuntimeValue)],
+        slots: &mut Vec<RuntimeValue>,
+        eval_stack: &mut Vec<RuntimeValue>,
+        scalar_stack: &mut Vec<Complex64>,
+    ) -> Result<(), String> {
         slots.clear();
         slots.extend(self.base_values.iter().cloned());
+        for (slot, value) in overrides {
+            if *slot >= self.base_values.len() {
+                return Err(format!(
+                    "parameter override slot {} is not a base parameter slot",
+                    slot
+                ));
+            }
+            slots[*slot] = value.clone();
+        }
         slots.resize(self.slot_names.len(), RuntimeValue::Scalar(Complex64::ZERO));
         for compound in &self.compounds {
             slots[compound.slot] = if compound.expression.scalar_only {
@@ -117,6 +137,42 @@ pub struct HamiltonianPlan {
 }
 
 impl HamiltonianPlan {
+    pub fn evaluate_decomposed_coefficients_into(
+        &self,
+        parameter_values: &[RuntimeValue],
+        t: f64,
+        eval_stack: &mut Vec<RuntimeValue>,
+        scalar_stack: &mut Vec<Complex64>,
+        out: &mut Vec<Complex64>,
+    ) -> Result<(), String> {
+        if self.kind != HamiltonianKind::Decomposed {
+            return Err("expanded sparse RHS requires a decomposed Hamiltonian plan".to_string());
+        }
+        out.clear();
+        out.reserve(self.coefficients.len());
+        for coefficient in &self.coefficients {
+            let value = if coefficient.expression.scalar_only {
+                eval_scalar_expression_into(
+                    &coefficient.expression,
+                    parameter_values,
+                    t,
+                    &[],
+                    scalar_stack,
+                )?
+            } else {
+                scalar_value(eval_expression_into(
+                    &coefficient.expression,
+                    parameter_values,
+                    t,
+                    &[],
+                    eval_stack,
+                )?)?
+            };
+            out.push(value);
+        }
+        Ok(())
+    }
+
     pub fn fill_into(
         &self,
         parameter_values: &[RuntimeValue],
@@ -483,16 +539,24 @@ impl HermitianSparsePattern {
 }
 
 #[derive(Clone, Debug)]
-pub struct StructuredJump {
-    pub target: usize,
+pub struct IncomingTransfer {
     pub source: usize,
     pub rate: f64,
 }
 
 #[derive(Clone, Debug)]
-pub struct IncomingTransfer {
-    pub source: usize,
-    pub rate: f64,
+pub struct ExpandedSparseTerm {
+    pub input: usize,
+    pub coeff_index: Option<usize>,
+    pub factor: Complex64,
+    pub coeff_conj: bool,
+    pub input_conj: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExpandedSparseRhsPlan {
+    pub output_ptrs: Vec<usize>,
+    pub terms: Vec<ExpandedSparseTerm>,
 }
 
 #[pyclass(module = "centrex_tlf.centrex_tlf_rust")]
@@ -504,9 +568,9 @@ pub struct PreparedLindbladPlan {
     pub dense_c_array: Vec<Complex64>,
     pub dense_cdagger_c: Vec<Complex64>,
     pub n_collapse: usize,
-    pub structured_jumps: Vec<StructuredJump>,
     pub source_decay_rates: Vec<f64>,
     pub incoming_transfers_by_target: Vec<Vec<IncomingTransfer>>,
+    pub expanded_rhs_plan: Option<ExpandedSparseRhsPlan>,
     pub blas_config: Option<BlasConfig>,
     pub hamiltonian_sparse_pattern: HermitianSparsePattern,
     pub is_time_dependent: bool,
@@ -883,6 +947,92 @@ fn parse_blas_config(obj: &Bound<'_, PyAny>) -> PyResult<BlasConfig> {
     })
 }
 
+fn parse_expanded_sparse_rhs_plan(
+    obj: &Bound<'_, PyAny>,
+    n_states: usize,
+    coefficient_count: usize,
+) -> PyResult<ExpandedSparseRhsPlan> {
+    let dict: &Bound<'_, PyDict> = obj.cast()?;
+    let kind: String = required_item(dict, "kind")?.extract()?;
+    if kind != "expanded_sparse" {
+        return Err(PyErr::new::<PyValueError, _>(format!(
+            "unknown expanded RHS plan kind: {kind}"
+        )));
+    }
+    let n: usize = required_item(dict, "n")?.extract()?;
+    if n != n_states {
+        return Err(PyErr::new::<PyValueError, _>(format!(
+            "expanded RHS dimension {n} does not match n_states {n_states}"
+        )));
+    }
+    let upper_len = n * (n + 1) / 2;
+    let output_ptrs: Vec<usize> = required_item(dict, "output_ptrs")?.extract()?;
+    let input_indices: Vec<usize> = required_item(dict, "input_indices")?.extract()?;
+    let coeff_indices: Vec<i64> = required_item(dict, "coeff_indices")?.extract()?;
+    let coeff_conj: Vec<bool> = required_item(dict, "coeff_conj")?.extract()?;
+    let input_conj: Vec<bool> = required_item(dict, "input_conj")?.extract()?;
+    let factors_re: Vec<f64> = required_item(dict, "factors_re")?.extract()?;
+    let factors_im: Vec<f64> = required_item(dict, "factors_im")?.extract()?;
+    let term_count = input_indices.len();
+    if output_ptrs.len() != upper_len + 1 {
+        return Err(PyErr::new::<PyValueError, _>(format!(
+            "expanded RHS output_ptrs must have length {}, got {}",
+            upper_len + 1,
+            output_ptrs.len()
+        )));
+    }
+    if output_ptrs.first().copied() != Some(0) || output_ptrs.last().copied() != Some(term_count) {
+        return Err(PyErr::new::<PyValueError, _>(
+            "expanded RHS output_ptrs must start at 0 and end at term count",
+        ));
+    }
+    if output_ptrs.windows(2).any(|pair| pair[0] > pair[1]) {
+        return Err(PyErr::new::<PyValueError, _>(
+            "expanded RHS output_ptrs must be monotonic",
+        ));
+    }
+    if coeff_indices.len() != term_count
+        || coeff_conj.len() != term_count
+        || input_conj.len() != term_count
+        || factors_re.len() != term_count
+        || factors_im.len() != term_count
+    {
+        return Err(PyErr::new::<PyValueError, _>(
+            "expanded RHS term arrays must have matching lengths",
+        ));
+    }
+
+    let mut terms = Vec::with_capacity(term_count);
+    for idx in 0..term_count {
+        let input = input_indices[idx];
+        if input >= upper_len {
+            return Err(PyErr::new::<PyValueError, _>(format!(
+                "expanded RHS input index {input} out of bounds for upper length {upper_len}"
+            )));
+        }
+        let coeff_index = if coeff_indices[idx] < 0 {
+            None
+        } else {
+            let coeff_index = coeff_indices[idx] as usize;
+            if coeff_index >= coefficient_count {
+                return Err(PyErr::new::<PyValueError, _>(format!(
+                    "expanded RHS coefficient index {coeff_index} out of bounds for {coefficient_count} coefficients"
+                )));
+            }
+            Some(coeff_index)
+        };
+        terms.push(ExpandedSparseTerm {
+            input,
+            coeff_index,
+            factor: Complex64::new(factors_re[idx], factors_im[idx]),
+            coeff_conj: coeff_conj[idx],
+            input_conj: input_conj[idx],
+        });
+    }
+
+    Ok(ExpandedSparseRhsPlan { output_ptrs, terms })
+}
+
 pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbladPlan> {
     let dict: &Bound<'_, PyDict> = payload.cast()?;
     let n_states: usize = required_item(dict, "n_states")?.extract()?;
@@ -930,18 +1080,6 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
         }
     }
 
-    let structured_jumps_any = required_item(dict, "structured_jumps")?;
-    let structured_jumps_list: &Bound<'_, PyList> = structured_jumps_any.cast()?;
-    let mut structured_jumps = Vec::with_capacity(structured_jumps_list.len());
-    for jump in structured_jumps_list.iter() {
-        let jump_dict: &Bound<'_, PyDict> = jump.cast()?;
-        structured_jumps.push(StructuredJump {
-            target: required_item(jump_dict, "target")?.extract()?,
-            source: required_item(jump_dict, "source")?.extract()?,
-            rate: required_item(jump_dict, "rate")?.extract()?,
-        });
-    }
-
     let incoming_by_target_any = required_item(dict, "incoming_transfers_by_target")?;
     let incoming_by_target_list: &Bound<'_, PyList> = incoming_by_target_any.cast()?;
     let mut incoming_transfers_by_target = Vec::with_capacity(incoming_by_target_list.len());
@@ -957,6 +1095,15 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
         }
         incoming_transfers_by_target.push(transfers);
     }
+
+    let expanded_rhs_plan = match dict.get_item("expanded_rhs_plan")? {
+        Some(value) if !value.is_none() => Some(parse_expanded_sparse_rhs_plan(
+            &value,
+            n_states,
+            hamiltonian_plan.coefficients.len(),
+        )?),
+        _ => None,
+    };
 
     let blas_config = match dict.get_item("blas_config")? {
         Some(value) if !value.is_none() => Some(parse_blas_config(&value)?),
@@ -998,9 +1145,9 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
         dense_c_array: dense_values,
         dense_cdagger_c,
         n_collapse: n_collapse_count,
-        structured_jumps,
         source_decay_rates,
         incoming_transfers_by_target,
+        expanded_rhs_plan,
         blas_config,
         hamiltonian_sparse_pattern,
         is_time_dependent,
