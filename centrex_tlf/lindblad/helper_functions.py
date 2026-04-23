@@ -9,6 +9,7 @@ __all__ = [
     "HELPER_FUNCTION_NAMES",
     "HELPER_FUNCTION_IDS",
     "HELPER_FUNCTIONS",
+    "gaussian_1d",
     "gaussian_2d",
     "gaussian_2d_rotated",
     "phase_modulation",
@@ -24,6 +25,7 @@ __all__ = [
     "gaussian_beam_rabi",
     "alternating_sign",
     "linear_interp",
+    "pchip_interp",
 ]
 
 
@@ -42,6 +44,8 @@ class HelperFunctionId(IntEnum):
     VARIABLE_ON_OFF_DUTY = 12
     ALTERNATING_SIGN = 13
     LINEAR_INTERP = 14
+    GAUSSIAN_1D = 15
+    PCHIP_INTERP = 16
 
 
 def gaussian_2d(
@@ -210,7 +214,22 @@ def linear_interp(x: float, grid: Iterable[float], values: Iterable[float]) -> f
     return y_values[-1]
 
 
+def gaussian_1d(x: float, center: float, sigma: float) -> float:
+    dx = x - center
+    return math.exp(-(dx * dx) / (2.0 * sigma * sigma))
+
+
+def pchip_interp(x: float, grid: Iterable[float], values: Iterable[float]) -> float:
+    from scipy.interpolate import PchipInterpolator
+
+    grid_arr = [float(g) for g in grid]
+    values_arr = [float(v) for v in values]
+    interp = PchipInterpolator(grid_arr, values_arr, extrapolate=True)
+    return float(interp(x))
+
+
 HELPER_FUNCTIONS: Mapping[str, Callable[..., complex | float]] = {
+    "gaussian_1d": gaussian_1d,
     "gaussian_2d": gaussian_2d,
     "gaussian_2d_rotated": gaussian_2d_rotated,
     "phase_modulation": phase_modulation,
@@ -226,9 +245,11 @@ HELPER_FUNCTIONS: Mapping[str, Callable[..., complex | float]] = {
     "variable_on_off_duty_invT": variable_on_off_duty_invT,
     "alternating_sign": alternating_sign,
     "linear_interp": linear_interp,
+    "pchip_interp": pchip_interp,
 }
 
 HELPER_FUNCTION_IDS: Mapping[str, HelperFunctionId] = {
+    "gaussian_1d": HelperFunctionId.GAUSSIAN_1D,
     "gaussian_2d": HelperFunctionId.GAUSSIAN_2D,
     "gaussian_2d_rotated": HelperFunctionId.GAUSSIAN_2D_ROTATED,
     "phase_modulation": HelperFunctionId.PHASE_MODULATION,
@@ -244,6 +265,7 @@ HELPER_FUNCTION_IDS: Mapping[str, HelperFunctionId] = {
     "variable_on_off_duty_invT": HelperFunctionId.VARIABLE_ON_OFF_DUTY,
     "alternating_sign": HelperFunctionId.ALTERNATING_SIGN,
     "linear_interp": HelperFunctionId.LINEAR_INTERP,
+    "pchip_interp": HelperFunctionId.PCHIP_INTERP,
 }
 
 HELPER_FUNCTION_NAMES: Mapping[int, str] = {

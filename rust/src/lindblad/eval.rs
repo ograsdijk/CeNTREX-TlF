@@ -270,6 +270,74 @@ fn rabi_from_intensity(intensity: f64, coupling: f64, dipole_moment: f64) -> f64
     electric_field * coupling * dipole_moment / hbar
 }
 
+fn gaussian_1d(x: f64, center: f64, sigma: f64) -> f64 {
+    let dx = x - center;
+    (-dx * dx / (2.0 * sigma * sigma)).exp()
+}
+
+fn pchip_interp(x: f64, grid: &[Complex64], values: &[Complex64]) -> Result<f64, String> {
+    if grid.len() != values.len() {
+        return Err("pchip_interp grid and values must have the same length".to_string());
+    }
+    let n = grid.len();
+    if n < 2 {
+        if n == 1 {
+            return as_real(&RuntimeValue::Scalar(values[0]));
+        }
+        return Err("pchip_interp grid must contain at least one point".to_string());
+    }
+
+    let g: Vec<f64> = grid.iter().map(|c| c.re).collect();
+    let v: Vec<f64> = values.iter().map(|c| c.re).collect();
+
+    if x <= g[0] {
+        return Ok(v[0]);
+    }
+    if x >= g[n - 1] {
+        return Ok(v[n - 1]);
+    }
+
+    let mut h = vec![0.0; n - 1];
+    let mut delta = vec![0.0; n - 1];
+    for i in 0..n - 1 {
+        h[i] = g[i + 1] - g[i];
+        if h[i] <= 0.0 {
+            return Err("pchip_interp grid must be strictly increasing".to_string());
+        }
+        delta[i] = (v[i + 1] - v[i]) / h[i];
+    }
+
+    let mut d = vec![0.0; n];
+    d[0] = delta[0];
+    d[n - 1] = delta[n - 2];
+    for i in 1..n - 1 {
+        if delta[i - 1].signum() != delta[i].signum() || delta[i - 1] == 0.0 || delta[i] == 0.0 {
+            d[i] = 0.0;
+        } else {
+            let w1 = 2.0 * h[i] + h[i - 1];
+            let w2 = h[i] + 2.0 * h[i - 1];
+            d[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i]);
+        }
+    }
+
+    let mut idx = 0;
+    for i in 0..n - 1 {
+        if x < g[i + 1] || i == n - 2 {
+            idx = i;
+            break;
+        }
+    }
+
+    let t = (x - g[idx]) / h[idx];
+    let t2 = t * t;
+    let t3 = t2 * t;
+    let h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
+    let h10 = t3 - 2.0 * t2 + t;
+    let h01 = -2.0 * t3 + 3.0 * t2;
+    let h11 = t3 - t2;
+    Ok(h00 * v[idx] + h10 * h[idx] * d[idx] + h01 * v[idx + 1] + h11 * h[idx] * d[idx + 1])
+}
+
 fn helper_args_to_tuple(arg: &RuntimeValue) -> Result<&[Complex64], String> {
     match arg {
         RuntimeValue::Tuple(values) => Ok(values.as_slice()),
@@ -346,6 +414,14 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
         }
         14 => Ok(RuntimeValue::Scalar(Complex64::new(
             linear_interp(
+                as_real(&args[0])?,
+                helper_args_to_tuple(&args[1])?,
+                helper_args_to_tuple(&args[2])?,
+            )?,
+            0.0,
+        ))),
+        16 => Ok(RuntimeValue::Scalar(Complex64::new(
+            pchip_interp(
                 as_real(&args[0])?,
                 helper_args_to_tuple(&args[1])?,
                 helper_args_to_tuple(&args[2])?,
@@ -589,9 +665,17 @@ fn apply_helper_scalar(function_id: i64, args: &[Complex64]) -> Result<Complex64
             ),
             0.0,
         ),
-        8 | 10 | 14 => {
+        8 | 10 | 14 | 16 => {
             return Err("tuple-valued helper used in scalar evaluator".to_string());
         }
+        15 => Complex64::new(
+            gaussian_1d(
+                scalar_arg(args, 0),
+                scalar_arg(args, 1),
+                scalar_arg(args, 2),
+            ),
+            0.0,
+        ),
         9 => Complex64::new(
             rabi_from_intensity(
                 scalar_arg(args, 0),

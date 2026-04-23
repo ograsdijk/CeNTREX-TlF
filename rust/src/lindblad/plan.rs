@@ -711,7 +711,7 @@ fn parse_expression(obj: &Bound<'_, PyAny>) -> PyResult<CompiledExpression> {
     })
 }
 
-fn parse_parameter_graph(obj: &Bound<'_, PyAny>) -> PyResult<ParameterGraph> {
+pub fn parse_parameter_graph(obj: &Bound<'_, PyAny>) -> PyResult<ParameterGraph> {
     let dict: &Bound<'_, PyDict> = obj.cast()?;
     let slot_names: Vec<String> = required_item(dict, "slot_names")?.extract()?;
 

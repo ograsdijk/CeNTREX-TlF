@@ -25,6 +25,7 @@ __all__ = [
     "sine",
     "square_wave_profile",
     "tabulated",
+    "pchip_tabulated",
 ]
 
 
@@ -300,6 +301,12 @@ def tabulated(x: ExpressionLike, grid: Parameter, values: Parameter) -> RuntimeE
     if not isinstance(grid, Parameter) or not isinstance(values, Parameter):
         raise TypeError("tabulated requires grid and values to be registered tuple Parameters")
     return _call_function("linear_interp", x, grid, values)
+
+
+def pchip_tabulated(x: ExpressionLike, grid: Parameter, values: Parameter) -> RuntimeExpression:
+    if not isinstance(grid, Parameter) or not isinstance(values, Parameter):
+        raise TypeError("pchip_tabulated requires grid and values to be registered tuple Parameters")
+    return _call_function("pchip_interp", x, grid, values)
 
 
 class LindbladParameters:

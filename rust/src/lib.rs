@@ -7,6 +7,7 @@ use pyo3::PyResult;
 mod b_coupled;
 mod constants;
 mod coupling;
+mod effective_lindblad;
 mod generate_hamiltonian;
 mod lindblad;
 mod quantum_operators;
@@ -297,5 +298,6 @@ fn centrex_tlf_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_transform_matrix_py, m)?)?;
     m.add_function(wrap_pyfunction!(generate_coupling_matrix_py, m)?)?;
     lindblad::register_python_api(m)?;
+    effective_lindblad::register_python_api(m)?;
     Ok(())
 }
