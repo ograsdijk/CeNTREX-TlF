@@ -54,15 +54,9 @@ def prepare_effective_lindblad_rust_plan(
     l_opt_list = []
     l_det_list = []
 
-    excited_indices = np.asarray(model.excited_indices, dtype=np.int64)
-    rwa_shift = model.common_omega_reference
-
     for field_z in model.field_points.tolist():
         bundle = model.effective_bundle(float(field_z))
-        h_internal_rwa = np.array(bundle.h_internal, dtype=np.complex128).copy()
-        for idx in excited_indices:
-            h_internal_rwa[idx, idx] += rwa_shift
-        L_int = _hamiltonian_superoperator(h_internal_rwa)
+        L_int = _hamiltonian_superoperator(bundle.h_internal)
         L_opt = _hamiltonian_superoperator(bundle.h_opt)
         L_det = _hamiltonian_superoperator(bundle.h_det)
         L_diss = bundle.dissipator_superoperator()

@@ -479,9 +479,6 @@ def generate_OBE_system_transitions(
         Xconstants=X_constants,
         Bconstants=B_constants,
         nuclear_spins=nuclear_spins,
-        # transform=transform,
-        # H_func_X=H_func_X,
-        # H_func_B=H_func_B,
     )
 
     if H_reduced.QN_basis is None:

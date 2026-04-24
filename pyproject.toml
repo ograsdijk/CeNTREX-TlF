@@ -23,8 +23,10 @@ Repository = "https://github.com/ograsdijk/CeNTREX-TlF"
 [project.optional-dependencies]
 dev = [
     "pytest>=7.1.2",
+    "pytest-cov>=4.0",
     "mypy>=0.961",
     "ruff",
+    "pre-commit>=3.0",
 ]
 
 [build-system]
@@ -64,6 +66,19 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["centrex_tlf"]
+
+[tool.coverage.run]
+source = ["centrex_tlf"]
+omit = ["centrex_tlf/utils/plotting.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
 
 [tool.mypy]
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import sys
+import warnings
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import (
@@ -302,10 +303,6 @@ class CoupledBasisState(BasisState):
         # ev = self.electronic_state.value if self.electronic_state is not None else 0
         # v = self.v if self.v is not None else -1
         # basis_val = self.basis.value if self.basis is not None else 0
-        # # Use string representation to avoid tuple hash collisions
-        # # Format ensures each value is clearly separated and distinguishable
-        # hash_string = f"{self.J}|{self.F1}|{self.F}|{self.mF}|{self.I1}|{self.I2}|{P}|{self.Omega}|{ev}|{v}|{basis_val}"
-        # return hash(hash_string)
         return self._hash
 
     def __repr__(self) -> str:
@@ -444,7 +441,10 @@ class CoupledBasisState(BasisState):
         try:
             uncoupled_state = uncoupled_state.normalize()
         except ValueError:
-            pass
+            warnings.warn(
+                f"transform_to_uncoupled produced zero-norm state for {self}",
+                stacklevel=2,
+            )
         return uncoupled_state
 
     def transform_to_omega_basis(self) -> CoupledState:
@@ -769,13 +769,6 @@ class UncoupledBasisState(BasisState):
         return self * a
 
     def __hash__(self) -> int:
-        # ev = self.electronic_state.value if self.electronic_state is not None else 0
-        # v = self.v if self.v is not None else -1
-        # basis_val = self.basis.value if self.basis is not None else 0
-        # # Use string representation to avoid tuple hash collisions
-        # # Format ensures each value is clearly separated and distinguishable
-        # hash_string = f"{self.J}|{self.mJ}|{self.I1}|{self.m1}|{self.I2}|{self.m2}|{self.P}|{self.Omega}|{ev}|{v}|{basis_val}"
-        # return hash(hash_string)
         return self._hash
 
     def __repr__(self) -> str:
