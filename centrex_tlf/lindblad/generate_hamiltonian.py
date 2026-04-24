@@ -1,4 +1,5 @@
 import copy
+from collections import defaultdict
 from typing import Any, List, Literal, Optional, Sequence, Tuple, Union, overload
 
 import numpy as np
@@ -11,6 +12,17 @@ from centrex_tlf import states
 from .utils import has_off_diagonal_elements, strip_float_ones
 from .utils_compact import compact_symbolic_hamiltonian_indices
 
+
+def _build_manifold_indices(
+    QN: List[states.CoupledState],
+) -> List[List[int]]:
+    groups: dict[tuple, list[int]] = defaultdict(list)
+    for i, qn in enumerate(QN):
+        largest = qn.largest
+        key = (largest.electronic_state, int(largest.J))
+        groups[key].append(i)
+    return list(groups.values())
+
 __all__ = [
     "symbolic_hamiltonian_to_rotating_frame",
     "generate_rwa_symbolic_hamiltonian",
@@ -22,6 +34,7 @@ __all__ = [
 
 def generate_unitary_transformation_matrix(
     hamiltonian: smp.MutableDenseMatrix,
+    manifold_indices: Optional[List[List[int]]] = None,
 ) -> smp.MutableDenseMatrix:
     """
     Generate the unitary transformation matrix to move to the rotating frame.
@@ -29,10 +42,21 @@ def generate_unitary_transformation_matrix(
     in the given Hamiltonian. It identifies coupled states, solves the equations
     to determine the frequency differences between states, and constructs the
     transformation matrix to transition to the rotating frame.
+
+    When manifold_indices is provided, states within each manifold group share
+    the same rotation frequency (taken from whichever member was directly
+    coupled). This ensures all states in a (electronic_state, J) manifold rotate
+    together, removing GHz-scale absolute energies while preserving hyperfine
+    splittings within the manifold.
+
     Args:
         hamiltonian (smp.MutableDenseMatrix): The Hamiltonian matrix
             representing the system, where off-diagonal elements correspond to
             couplings between states.
+        manifold_indices (list of list of int, optional): Groups of state indices
+            that should share the same rotation frequency. Typically grouped by
+            (electronic_state, J). If None, only directly coupled states are
+            rotated (original behavior).
     Returns:
         smp.MutableDenseMatrix: The unitary transformation matrix
             for transitioning to the rotating frame.
@@ -64,6 +88,17 @@ def generate_unitary_transformation_matrix(
     for free_param in free_params:
         for key, val in sol.items():
             sol[key] = val.subs(free_param, 0)
+
+    # propagate rotation frequencies within manifolds
+    if manifold_indices is not None:
+        for group in manifold_indices:
+            group_freq = smp.Integer(0)
+            for idx in group:
+                if A[idx] in sol and sol[A[idx]] != 0:
+                    group_freq = sol[A[idx]]
+                    break
+            for idx in group:
+                sol[A[idx]] = group_freq
 
     # generate unitary transformation matrix
     T = smp.eye(n_states, n_states)
@@ -98,7 +133,8 @@ def symbolic_hamiltonian_to_rotating_frame(
     # generate t symbol for non-rotating frame
     t = smp.Symbol("t", real=True)
 
-    T = generate_unitary_transformation_matrix(hamiltonian)
+    manifold_indices = _build_manifold_indices(QN)
+    T = generate_unitary_transformation_matrix(hamiltonian, manifold_indices=manifold_indices)
 
     # use unitary matrix to transform to rotating frame
     transformed = T.adjoint() @ hamiltonian @ T - 1j * T.adjoint() @ smp.diff(T, t)

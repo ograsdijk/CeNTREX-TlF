@@ -34,6 +34,13 @@ const E5: f64 = -17253.0 / 339200.0;
 const E6: f64 = 22.0 / 525.0;
 const E7: f64 = -1.0 / 40.0;
 
+const D1: f64 = -12715105075.0 / 11282082432.0;
+const D3: f64 = 87487479700.0 / 32700410799.0;
+const D4: f64 = -10690763975.0 / 1880347072.0;
+const D5: f64 = 701980252875.0 / 199316789632.0;
+const D6: f64 = -1453857185.0 / 822651844.0;
+const D7: f64 = 69997945.0 / 29380423.0;
+
 pub struct EffectiveSolverOptions {
     pub abstol: f64,
     pub reltol: f64,
@@ -54,17 +61,17 @@ pub fn solve_effective_lindblad_dopri5(
     if y0.len() != dim {
         return Err(format!("expected state length {dim}, got {}", y0.len()));
     }
-    if t1 <= t0 {
-        if t1 == t0 {
-            let mut times = Vec::new();
-            let mut states = Vec::new();
-            if options.save_start {
-                times.push(t0);
-                states.extend_from_slice(y0);
-            }
-            return Ok((times, states));
-        }
+    if t1 < t0 {
         return Err("only forward integration supported".to_string());
+    }
+    if t1 == t0 {
+        let mut times = Vec::new();
+        let mut states = Vec::new();
+        if options.save_start {
+            times.push(t0);
+            states.extend_from_slice(y0);
+        }
+        return Ok((times, states));
     }
 
     let mut workspace = EffectiveLindbladWorkspace::new(plan);
@@ -79,6 +86,12 @@ pub fn solve_effective_lindblad_dopri5(
     let mut k6 = vec![0.0; dim];
     let mut k7 = vec![0.0; dim];
     let mut y_tmp = vec![0.0; dim];
+
+    let mut rcont0 = vec![0.0; dim];
+    let mut rcont1 = vec![0.0; dim];
+    let mut rcont2 = vec![0.0; dim];
+    let mut rcont3 = vec![0.0; dim];
+    let mut rcont4 = vec![0.0; dim];
 
     let save_plan: Option<Vec<f64>> = if let Some(saveat) = &options.saveat {
         let mut plan_times: Vec<f64> = Vec::new();
@@ -110,14 +123,15 @@ pub fn solve_effective_lindblad_dopri5(
     let safety = 0.9_f64;
     let beta = 0.04_f64;
     let alpha = 0.2 - beta * 0.75;
-    let facc1: f64 = 1.0 / 0.2;
-    let facc2: f64 = 1.0 / 10.0;
+    let facc1: f64 = 5.0;
+    let facc2: f64 = 0.1;
     let h_max = t1 - t0;
 
     rhs_effective_lindblad(plan, &y, t, &mut workspace, &mut k1)?;
 
     let mut save_idx = 0;
     let mut step_count = 0u64;
+    let mut reject = false;
 
     while t < t1 {
         if t + 1.01 * h > t1 {
@@ -171,11 +185,31 @@ pub fn solve_effective_lindblad_dopri5(
         let fac11 = err.powf(alpha);
         let fac = fac11 * fac_old.powf(-beta);
         let fac = facc2.max(facc1.min(fac / safety));
-        let h_new = h / fac;
+        let mut h_new = h / fac;
 
         if err <= 1.0 {
             fac_old = err.max(1.0e-4);
+            let x_old = t;
             t += h;
+
+            if h_new.abs() > h_max {
+                h_new = h_max;
+            }
+            if reject {
+                h_new = h_new.abs().min(h.abs());
+            }
+            reject = false;
+
+            for i in 0..dim {
+                let ydiff = y_next[i] - y[i];
+                let bspl = k1[i] * h - ydiff;
+                rcont0[i] = y[i];
+                rcont1[i] = ydiff;
+                rcont2[i] = bspl;
+                rcont3[i] = -k7[i] * h + ydiff - bspl;
+                rcont4[i] = h
+                    * (D1 * k1[i] + D3 * k3[i] + D4 * k4[i] + D5 * k5[i] + D6 * k6[i] + D7 * k7[i]);
+            }
 
             if let Some(ref plan_times) = save_plan {
                 while save_idx < plan_times.len() && plan_times[save_idx] <= t + 1e-14 {
@@ -184,16 +218,14 @@ pub fn solve_effective_lindblad_dopri5(
                         times.push(t);
                         states.extend_from_slice(&y_next);
                     } else {
-                        let theta = (t_save - (t - h)) / h;
+                        let theta = (t_save - x_old) / h;
+                        let theta1 = 1.0 - theta;
                         for i in 0..dim {
-                            y_tmp[i] = y[i]
-                                + theta
-                                    * h
-                                    * (A71 * k1[i]
-                                        + A73 * k3[i]
-                                        + A74 * k4[i]
-                                        + A75 * k5[i]
-                                        + A76 * k6[i]);
+                            y_tmp[i] = rcont0[i]
+                                + (rcont1[i]
+                                    + (rcont2[i] + (rcont3[i] + rcont4[i] * theta1) * theta)
+                                        * theta1)
+                                    * theta;
                         }
                         times.push(t_save);
                         states.extend_from_slice(&y_tmp);
@@ -207,8 +239,10 @@ pub fn solve_effective_lindblad_dopri5(
 
             y.copy_from_slice(&y_next);
             k1.copy_from_slice(&k7);
-            h = h_new.min(h_max);
+            h = h_new;
         } else {
+            h_new = h / facc1.min(fac11 / safety);
+            reject = true;
             h = h_new;
         }
 

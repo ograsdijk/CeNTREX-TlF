@@ -42,14 +42,19 @@ t_eval = np.linspace(t_span[0], t_span[1], 201)
 
 print("\n=== Python scipy static solve ===")
 t0 = time.perf_counter()
-sol_py = solve_static_lindblad_safe_compact_interpolated_model(
-    model,
-    electric_field=static_Ez,
-    rho0=rho0,
+from scipy.integrate import solve_ivp
+from centrex_tlf.effective_hamiltonian._superoperators import _hamiltonian_superoperator
+
+bundle_py = model.effective_bundle(static_Ez)
+L_py = bundle_py.liouvillian_superoperator(rabi_rate=rabi, detuning=detuning)
+sol_py = solve_ivp(
+    lambda _t, y: L_py @ y,
     t_span=t_span,
-    rabi_rate=rabi,
-    detuning=detuning,
+    y0=rho0.reshape(-1),
     t_eval=t_eval,
+    method="RK45",
+    rtol=1e-8,
+    atol=1e-10,
 )
 py_time = time.perf_counter() - t0
 print(f"  Time: {py_time*1000:.1f} ms")
@@ -79,8 +84,8 @@ try:
         rho0,
         (0.0, 1e-6),
         saveat=np.array([1e-6]),
-        reltol=1e-6,
-        abstol=1e-8,
+        reltol=1e-8,
+        abstol=1e-10,
         dt=1e-10,
     )
     short_time = time.perf_counter() - t0
@@ -88,15 +93,15 @@ try:
     print(f"  Short solve trace: {result.populations()[-1].sum():.6f}")
     print(f"  Short solve pops: {result.populations()[-1]}")
 
-    print("  Solving (full)...")
+    print("  Solving (full, no saveat)...")
     t0 = time.perf_counter()
     result = solve_effective_lindblad(
         rust_plan,
         rho0,
         t_span,
-        saveat=t_eval,
-        reltol=1e-6,
-        abstol=1e-8,
+        saveat=None,
+        reltol=1e-8,
+        abstol=1e-10,
         dt=1e-10,
     )
     rust_time = time.perf_counter() - t0
@@ -105,9 +110,28 @@ try:
     pops_rust = result.populations()
     print(f"  Trace at end: {pops_rust[-1].sum():.6f}")
 
-    max_pop_diff = np.max(np.abs(pops_rust - pops_py))
-    print(f"\n  Max population difference vs scipy: {max_pop_diff:.2e}")
+    # Compare final populations only (no saveat interpolation involved)
+    pops_rust_final = result.populations()[-1]
+    pops_py_final = pops_py[-1]
+    max_pop_diff = np.max(np.abs(pops_rust_final - pops_py_final))
+    print(f"\n  Final population difference vs scipy: {max_pop_diff:.2e}")
     print(f"  Speedup: {py_time/rust_time:.1f}x")
+    print(f"  Rust steps: {len(result.t)}")
+
+    # ultra-tight reference
+    sol_ref = solve_ivp(
+        lambda _t, y: L_py @ y,
+        t_span=t_span,
+        y0=rho0.reshape(-1),
+        t_eval=None,
+        method="RK45",
+        rtol=1e-12,
+        atol=1e-14,
+    )
+    rho_ref_final = sol_ref.y[:, -1].reshape(model.n_effective_states, model.n_effective_states)
+    pops_ref_final = np.real(np.diag(rho_ref_final))
+    print(f"\n  scipy rtol=1e-8 final vs rtol=1e-12: {np.max(np.abs(pops_py_final - pops_ref_final)):.2e}")
+    print(f"  Rust final vs rtol=1e-12: {np.max(np.abs(pops_rust_final - pops_ref_final)):.2e}")
 
 except Exception as e:
     print(f"  FAILED: {e}")
