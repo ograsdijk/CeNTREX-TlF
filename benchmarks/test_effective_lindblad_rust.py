@@ -81,8 +81,8 @@ try:
         rho0,
         (0.0, 1e-6),
         saveat=np.array([1e-6]),
-        reltol=1e-4,
-        abstol=1e-6,
+        reltol=1e-6,
+        abstol=1e-8,
         dt=1e-10,
     )
     short_time = time.perf_counter() - t0
@@ -97,8 +97,8 @@ try:
         rho0,
         t_span,
         saveat=t_eval,
-        reltol=1e-4,
-        abstol=1e-6,
+        reltol=1e-6,
+        abstol=1e-8,
         dt=1e-10,
     )
     rust_time = time.perf_counter() - t0

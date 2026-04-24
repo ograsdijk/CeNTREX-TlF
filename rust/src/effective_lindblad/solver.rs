@@ -124,10 +124,7 @@ pub fn solve_effective_lindblad_dopri5(
             h = t1 - t;
         }
         if h < 1e-100 {
-            return Err(format!(
-                "step size underflow: h={h:.6e}, step={step_count}, abstol={:.6e}, reltol={:.6e}",
-                options.abstol, options.reltol
-            ));
+            return Err("step size underflow".to_string());
         }
 
         for i in 0..dim {
@@ -176,12 +173,6 @@ pub fn solve_effective_lindblad_dopri5(
         let fac = facc2.max(facc1.min(fac / safety));
         let h_new = h / fac;
 
-        if step_count < 3 {
-            let dy_norm: f64 = k1.iter().map(|x| x * x).sum::<f64>().sqrt();
-            let y_norm: f64 = y.iter().map(|x| x * x).sum::<f64>().sqrt();
-            let yn_norm: f64 = y_next.iter().map(|x| x * x).sum::<f64>().sqrt();
-            eprintln!("DOPRI5 step {step_count}: t={t:.6e} h={h:.6e} err={err:.6e} dy_norm={dy_norm:.6e} y_norm={y_norm:.6e} yn_norm={yn_norm:.6e}");
-        }
         if err <= 1.0 {
             fac_old = err.max(1.0e-4);
             t += h;
