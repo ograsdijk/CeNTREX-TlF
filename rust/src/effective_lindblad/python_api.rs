@@ -1,8 +1,9 @@
 use crate::effective_lindblad::plan::{parse_effective_lindblad_plan, EffectiveLindbladPlan};
 use crate::effective_lindblad::rhs::{rhs_effective_lindblad, EffectiveLindbladWorkspace};
-use crate::effective_lindblad::solver::{solve_effective_lindblad_dopri5, EffectiveSolverOptions};
+use crate::effective_lindblad::solver::{solve_effective_lindblad, EffectiveSolverOptions};
 use crate::lindblad::eval::RuntimeValue;
 use crate::lindblad::plan::parse_parameter_graph;
+use crate::ode::output::OdeOutputValues;
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -55,8 +56,9 @@ pub fn solve_effective_lindblad_py<'py>(
             .map_err(PyValueError::new_err)?,
         save_start,
         maxiters,
+        solver: "dopri5".to_string(),
     };
-    let (times, states) = solve_effective_lindblad_dopri5(
+    let result = solve_effective_lindblad(
         &plan,
         y0.as_slice().map_err(PyValueError::new_err)?,
         t0,
@@ -64,7 +66,11 @@ pub fn solve_effective_lindblad_py<'py>(
         &options,
     )
     .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, times);
+    let times_array = PyArray1::from_vec(py, result.times);
+    let states = match result.values {
+        OdeOutputValues::Full(v) => v,
+        _ => return Err(PyValueError::new_err("unexpected output type")),
+    };
     let n_rows = if plan.real_dim == 0 {
         0
     } else {

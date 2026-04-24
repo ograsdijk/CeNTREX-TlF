@@ -185,9 +185,11 @@ def solve_lindblad_batch(
 
     saveat_values = _normalize_saveat(saveat, t_span_tuple, save_start)
 
-    from ..centrex_tlf_rust import solve_lindblad_batch_py
+    from ..centrex_tlf_rust import solve_lindblad_batch_ode_py
 
-    times, flat_values, width, time_count, solver_stats = solve_lindblad_batch_py(
+    solver_name = "dopri5" if solver == "dopri5_fast" else "tsit5"
+
+    times, flat_values, width, time_count, solver_stats = solve_lindblad_batch_ode_py(
         prepared.rust_plan,
         packed_batch,
         t_span_tuple[0],
@@ -199,12 +201,10 @@ def solve_lindblad_batch(
         bool(save_start),
         int(maxiters),
         execution_mode,
-        solver,
+        solver_name,
         output,
         None if output_indices is None else list(output_indices),
         output_when,
-        bool(dense_output),
-        bool(collect_stats),
         slot_indices or None,
         parameter_values,
         bool(parallel),
@@ -337,10 +337,12 @@ def grid_scan(
     trajectory_count = int(np.prod(axis_lengths, dtype=np.int64))
     flat_axes = np.ascontiguousarray(np.concatenate(axes), dtype=np.complex128)
 
-    from ..centrex_tlf_rust import solve_lindblad_grid_batch_py
+    from ..centrex_tlf_rust import solve_lindblad_grid_ode_py
 
-    times, flat_values, width, time_count, rust_trajectory_count, solver_stats = (
-        solve_lindblad_grid_batch_py(
+    solver_name = "dopri5" if solver == "dopri5_fast" else "tsit5"
+
+    times, flat_values, width, time_count, solver_stats = (
+        solve_lindblad_grid_ode_py(
             prepared.rust_plan,
             np.ascontiguousarray(packed, dtype=np.float64),
             t_span_tuple[0],
@@ -355,20 +357,14 @@ def grid_scan(
             save_start,
             maxiters,
             execution_mode,
-            solver,
+            solver_name,
             output,
             None if output_indices is None else list(output_indices),
             output_when,
-            dense_output,
-            collect_stats,
             parallel,
             threads,
         )
     )
-    if rust_trajectory_count != trajectory_count:
-        raise RuntimeError(
-            f"Rust grid trajectory count {rust_trajectory_count} did not match {trajectory_count}"
-        )
     dtype = np.float64 if output == "populations" else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
     if output_when == "final":

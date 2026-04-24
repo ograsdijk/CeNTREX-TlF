@@ -10,6 +10,7 @@ mod coupling;
 mod effective_lindblad;
 mod generate_hamiltonian;
 mod lindblad;
+pub mod ode;
 mod quantum_operators;
 mod states;
 pub mod wigner;

@@ -12,4 +12,3 @@ pyo3   = { version = "0.27", features = ["extension-module", "num-complex"] }
 numpy  = "0.27"
 num-complex = "0.4"
 rayon = "1.8"
-ode_solvers = "0.6.1"

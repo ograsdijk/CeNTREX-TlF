@@ -1,22 +1,13 @@
+use crate::lindblad::ode_impl::LindbladRhs;
 use crate::lindblad::plan::{parse_plan_payload, PreparedLindbladPlan};
 use crate::lindblad::rhs::{
     build_packed_jacobian_sparse, build_split_jacobian_sparse, rhs_matrix_into,
     rhs_matrix_into_with_profile, rhs_packed, rhs_packed_into_with_profile,
     rhs_split_into_with_profile, ExecutionMode, RhsProfileStats, RhsWorkspace,
 };
-use crate::lindblad::solver_batch::{
-    solve_lindblad_batch, solve_lindblad_grid_batch, BatchFastSolver, BatchOutputValues,
-};
-use crate::lindblad::solver_dopri5_fast::{
-    solve_dopri5_fast, solve_dopri5_fast_output, solve_dopri5_fast_with_stats,
-};
-use crate::lindblad::solver_fast_common::{
-    FastOutputKind, FastOutputOptions, FastOutputValues, FastOutputWhen,
-};
-use crate::lindblad::solver_ode::{solve_dopri5, solve_dopri5_with_stats, OdeSolverOptions};
-use crate::lindblad::solver_stats::SolveStats;
-use crate::lindblad::solver_tsit5_fast::{
-    solve_tsit5_fast, solve_tsit5_fast_output, solve_tsit5_fast_with_stats,
+use crate::ode::batch::{solve_single, OdeSolver};
+use crate::ode::output::{
+    FullOutput, OdeOutputValues, PopulationsOutput, SelectedExtraction, SelectedOutput,
 };
 use num_complex::Complex64;
 use numpy::{
@@ -26,77 +17,6 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyDictMethods};
 use std::cell::{Cell, RefCell};
-
-fn solve_stats_to_dict<'py>(py: Python<'py>, stats: &SolveStats) -> PyResult<Py<PyDict>> {
-    let summary = PyDict::new(py);
-    summary.set_item("solver", stats.solver.as_str())?;
-    summary.set_item("rhs_calls", stats.rhs_calls)?;
-    summary.set_item("jacobian_calls", stats.jacobian_calls)?;
-    summary.set_item("function_evaluations", stats.function_evaluations)?;
-    summary.set_item("accepted_steps", stats.accepted_steps)?;
-    summary.set_item("rejected_steps", stats.rejected_steps)?;
-    summary.set_item("internal_steps", stats.internal_steps)?;
-    summary.set_item("saved_points", stats.saved_points)?;
-    summary.set_item("setup_seconds", stats.setup_seconds)?;
-    summary.set_item("integration_seconds", stats.integration_seconds)?;
-    summary.set_item("interpolation_seconds", stats.interpolation_seconds)?;
-    summary.set_item("total_seconds", stats.total_seconds)?;
-    summary.set_item("rhs_seconds", stats.rhs_seconds)?;
-    summary.set_item("jacobian_seconds", stats.jacobian_seconds)?;
-    summary.set_item("non_rhs_seconds", stats.non_rhs_seconds())?;
-    summary.set_item("average_rhs_seconds", stats.average_rhs_seconds())?;
-    summary.set_item("average_jacobian_seconds", stats.average_jacobian_seconds())?;
-    Ok(summary.unbind())
-}
-
-fn parse_fast_output_options(
-    output: &str,
-    output_indices: Option<Vec<(usize, usize)>>,
-    output_when: &str,
-    dense_output: bool,
-) -> PyResult<FastOutputOptions> {
-    let kind =
-        match output {
-            "full" => {
-                if output_indices.is_some() {
-                    return Err(PyValueError::new_err(
-                        "output_indices is only valid with output='selected'",
-                    ));
-                }
-                FastOutputKind::Full
-            }
-            "populations" => {
-                if output_indices.is_some() {
-                    return Err(PyValueError::new_err(
-                        "output_indices is only valid with output='selected'",
-                    ));
-                }
-                FastOutputKind::Populations
-            }
-            "selected" => FastOutputKind::Selected(output_indices.ok_or_else(|| {
-                PyValueError::new_err("output='selected' requires output_indices")
-            })?),
-            _ => {
-                return Err(PyValueError::new_err(
-                    "output must be 'full', 'populations', or 'selected'",
-                ))
-            }
-        };
-    let when = match output_when {
-        "saveat" => FastOutputWhen::Saveat,
-        "final" => FastOutputWhen::Final,
-        _ => {
-            return Err(PyValueError::new_err(
-                "output_when must be 'saveat' or 'final'",
-            ))
-        }
-    };
-    Ok(FastOutputOptions {
-        kind,
-        when,
-        dense_output,
-    })
-}
 
 #[pyclass(module = "centrex_tlf.centrex_tlf_rust", unsendable)]
 pub struct LindbladRhsEvaluator {
@@ -379,32 +299,116 @@ pub fn evaluate_lindblad_hamiltonian_py<'py>(
     let array = PyArray1::from_vec(py, matrix);
     array.reshape((plan.n_states(), plan.n_states()))
 }
+fn packed_upper_idx(n: usize, i: usize, j: usize) -> usize {
+    let mut off = 0usize;
+    for row in 0..i {
+        off += n - row - 1;
+    }
+    n + 2 * (off + (j - i - 1))
+}
 
-#[pyfunction(signature = (
-    plan,
-    packed_rho0_batch,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "expanded_sparse",
-    solver = "dopri5_fast",
-    output = "populations",
-    output_indices = None,
-    output_when = "final",
-    dense_output = false,
-    collect_stats = false,
-    parameter_slot_indices = None,
-    parameter_batch = None,
-    parallel = true,
-    threads = None
-))]
+fn build_extractions(n: usize, indices: &[(usize, usize)]) -> Vec<SelectedExtraction> {
+    indices
+        .iter()
+        .map(|&(i, j)| {
+            if i == j {
+                SelectedExtraction::Real(i)
+            } else if i < j {
+                let r = packed_upper_idx(n, i, j);
+                SelectedExtraction::ComplexPair {
+                    real_idx: r,
+                    imag_idx: r + 1,
+                }
+            } else {
+                let r = packed_upper_idx(n, j, i);
+                SelectedExtraction::ComplexPairConj {
+                    real_idx: r,
+                    imag_idx: r + 1,
+                }
+            }
+        })
+        .collect()
+}
+
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat"))]
+pub fn solve_lindblad_ode_py<'py>(
+    py: Python<'py>,
+    plan: PyRef<'py, PreparedLindbladPlan>,
+    packed_rho0: PyReadonlyArray1<'py, f64>,
+    t0: f64,
+    t1: f64,
+    abstol: f64,
+    reltol: f64,
+    dt: f64,
+    saveat: Option<PyReadonlyArray1<'py, f64>>,
+    save_start: bool,
+    maxiters: usize,
+    mode: &str,
+    solver: &str,
+    output: &str,
+    output_indices: Option<Vec<(usize, usize)>>,
+    output_when: &str,
+) -> PyResult<(Bound<'py, PyArray1<f64>>, Py<PyAny>, usize, Py<PyDict>)> {
+    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
+    let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
+    let n = plan.layout.n;
+    let dim = plan.layout.packed_len();
+    let saveat_vec = saveat
+        .map(|a| a.as_slice().map(|s| s.to_vec()))
+        .transpose()
+        .map_err(PyValueError::new_err)?;
+    let capacity = saveat_vec.as_ref().map_or(maxiters + 1, |s| s.len() + 1);
+    let y0 = packed_rho0.as_slice().map_err(PyValueError::new_err)?;
+    let options = crate::ode::OdeOptions {
+        abstol,
+        reltol,
+        dt,
+        maxiters,
+        save_start,
+        saveat: saveat_vec,
+    };
+    let mut rhs = LindbladRhs::new(&plan, execution_mode);
+    let result = match output {
+        "populations" => {
+            let mut out = PopulationsOutput::new((0..n).collect(), capacity);
+            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
+                .map_err(PyValueError::new_err)?;
+            (out.finish(), s)
+        }
+        "selected" => {
+            let idx = output_indices.as_deref().ok_or_else(|| {
+                PyValueError::new_err("output='selected' requires output_indices")
+            })?;
+            let mut out = SelectedOutput::new(build_extractions(n, idx), capacity);
+            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
+                .map_err(PyValueError::new_err)?;
+            (out.finish(), s)
+        }
+        _ => {
+            let mut out = FullOutput::new(dim, capacity);
+            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
+                .map_err(PyValueError::new_err)?;
+            (out.finish(), s)
+        }
+    };
+    let (r, stats) = result;
+    let times_array = PyArray1::from_vec(py, r.times);
+    let values: Py<PyAny> = match r.values {
+        OdeOutputValues::Full(v) => PyArray1::from_vec(py, v).into_any().unbind(),
+        OdeOutputValues::Real(v) => PyArray1::from_vec(py, v).into_any().unbind(),
+        OdeOutputValues::Complex(v) => PyArray1::from_vec(py, v).into_any().unbind(),
+    };
+    let d = PyDict::new(py);
+    d.set_item("solver", solver)?;
+    d.set_item("accepted_steps", stats.accepted_steps)?;
+    d.set_item("rejected_steps", stats.rejected_steps)?;
+    d.set_item("rhs_calls", stats.rhs_calls)?;
+    Ok((times_array, values, r.width, d.unbind()))
+}
+
+#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None))]
 #[allow(clippy::too_many_arguments)]
-pub fn solve_lindblad_batch_py<'py>(
+pub fn solve_lindblad_batch_ode_py<'py>(
     py: Python<'py>,
     plan: PyRef<'py, PreparedLindbladPlan>,
     packed_rho0_batch: PyReadonlyArray2<'py, f64>,
@@ -421,8 +425,6 @@ pub fn solve_lindblad_batch_py<'py>(
     output: &str,
     output_indices: Option<Vec<(usize, usize)>>,
     output_when: &str,
-    dense_output: bool,
-    collect_stats: bool,
     parameter_slot_indices: Option<Vec<usize>>,
     parameter_batch: Option<PyReadonlyArray2<'py, Complex64>>,
     parallel: bool,
@@ -434,15 +436,9 @@ pub fn solve_lindblad_batch_py<'py>(
     usize,
     Py<PyDict>,
 )> {
+    use crate::lindblad::ode_batch::solve_batch_ode;
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let solver = BatchFastSolver::from_str(solver).map_err(PyValueError::new_err)?;
-    let output_options =
-        parse_fast_output_options(output, output_indices, output_when, dense_output)?;
-    if matches!(output_options.kind, FastOutputKind::Full) {
-        return Err(PyValueError::new_err(
-            "solve_lindblad_batch does not support output='full' yet",
-        ));
-    }
+    let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
     let rho0_shape = packed_rho0_batch.shape();
     if rho0_shape.len() != 2 {
         return Err(PyValueError::new_err("packed_rho0_batch must be 2D"));
@@ -450,114 +446,85 @@ pub fn solve_lindblad_batch_py<'py>(
     let trajectory_count = rho0_shape[0];
     if rho0_shape[1] != plan.layout.packed_len() {
         return Err(PyValueError::new_err(format!(
-            "packed_rho0_batch second dimension must be {}, got {}",
-            plan.layout.packed_len(),
-            rho0_shape[1]
+            "rho0 dim mismatch: {} vs {}",
+            rho0_shape[1],
+            plan.layout.packed_len()
         )));
     }
     let y0_batch = packed_rho0_batch
         .as_slice()
         .map_err(PyValueError::new_err)?
         .to_vec();
-    let saveat_values = saveat
-        .map(|values| values.as_slice().map(|slice| slice.to_vec()))
+    let mut saveat_vec = saveat
+        .map(|a| a.as_slice().map(|s| s.to_vec()))
         .transpose()
         .map_err(PyValueError::new_err)?;
-    let parameter_slot_indices = parameter_slot_indices.unwrap_or_default();
-    let parameter_values = match parameter_batch {
-        Some(values) => {
-            let shape = values.shape();
-            if shape.len() != 2 {
-                return Err(PyValueError::new_err("parameter_batch must be 2D"));
+    if output_when == "final" {
+        saveat_vec = Some(vec![t1]);
+    }
+    let slot_indices = parameter_slot_indices.unwrap_or_default();
+    let param_values = match parameter_batch {
+        Some(v) => {
+            let s = v.shape();
+            if s[0] != trajectory_count || s[1] != slot_indices.len() {
+                return Err(PyValueError::new_err("parameter_batch shape mismatch"));
             }
-            if shape[0] != trajectory_count {
-                return Err(PyValueError::new_err(format!(
-                    "parameter_batch first dimension must be trajectory count {}, got {}",
-                    trajectory_count, shape[0]
-                )));
-            }
-            if shape[1] != parameter_slot_indices.len() {
-                return Err(PyValueError::new_err(format!(
-                    "parameter_batch second dimension must match parameter_slot_indices length {}, got {}",
-                    parameter_slot_indices.len(),
-                    shape[1]
-                )));
-            }
-            Some(values.as_slice().map_err(PyValueError::new_err)?.to_vec())
+            Some(v.as_slice().map_err(PyValueError::new_err)?.to_vec())
         }
         None => None,
     };
     let plan_owned = plan.clone();
-    let options = OdeSolverOptions {
+    let options = crate::ode::OdeOptions {
         abstol,
         reltol,
         dt,
-        saveat: saveat_values,
-        save_start,
         maxiters,
-        mode: execution_mode,
+        save_start: output_when != "final" && save_start,
+        saveat: saveat_vec,
     };
-
     let result = py
         .detach(move || {
-            solve_lindblad_batch(
+            solve_batch_ode(
                 &plan_owned,
-                solver,
-                y0_batch.as_slice(),
+                ode_solver,
+                &y0_batch,
                 trajectory_count,
                 t0,
                 t1,
                 &options,
-                &output_options,
-                collect_stats,
-                parameter_slot_indices.as_slice(),
-                parameter_values.as_deref(),
+                execution_mode,
+                output,
+                output_indices.as_deref(),
+                &slot_indices,
+                param_values.as_deref(),
                 parallel,
                 threads,
             )
         })
         .map_err(PyValueError::new_err)?;
-
     let times = PyArray1::from_vec(py, result.times);
     let values: Py<PyAny> = match result.values {
-        BatchOutputValues::Real(values) => PyArray1::from_vec(py, values).into_any().unbind(),
-        BatchOutputValues::Complex(values) => PyArray1::from_vec(py, values).into_any().unbind(),
+        crate::ode::output::OdeOutputValues::Real(v) => {
+            PyArray1::from_vec(py, v).into_any().unbind()
+        }
+        crate::ode::output::OdeOutputValues::Complex(v) => {
+            PyArray1::from_vec(py, v).into_any().unbind()
+        }
+        crate::ode::output::OdeOutputValues::Full(v) => {
+            PyArray1::from_vec(py, v).into_any().unbind()
+        }
     };
-    Ok((
-        times,
-        values,
-        result.width,
-        result.time_count,
-        solve_stats_to_dict(py, &result.stats)?,
-    ))
+    let d = PyDict::new(py);
+    d.set_item("solver", solver)?;
+    d.set_item("accepted_steps", result.stats.accepted_steps)?;
+    d.set_item("rejected_steps", result.stats.rejected_steps)?;
+    d.set_item("rhs_calls", result.stats.rhs_calls)?;
+    Ok((times, values, result.width, result.time_count, d.unbind()))
 }
 
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    parameter_slot_indices,
-    parameter_axes,
-    parameter_axis_lengths,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "expanded_sparse",
-    solver = "dopri5_fast",
-    output = "populations",
-    output_indices = None,
-    output_when = "final",
-    dense_output = false,
-    collect_stats = false,
-    parallel = true,
-    threads = None
-))]
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", parallel = true, threads = None))]
 #[allow(clippy::too_many_arguments)]
-pub fn solve_lindblad_grid_batch_py<'py>(
+pub fn solve_lindblad_grid_ode_py<'py>(
     py: Python<'py>,
     plan: PyRef<'py, PreparedLindbladPlan>,
     packed_rho0: PyReadonlyArray1<'py, f64>,
@@ -577,8 +544,6 @@ pub fn solve_lindblad_grid_batch_py<'py>(
     output: &str,
     output_indices: Option<Vec<(usize, usize)>>,
     output_when: &str,
-    dense_output: bool,
-    collect_stats: bool,
     parallel: bool,
     threads: Option<usize>,
 ) -> PyResult<(
@@ -586,614 +551,78 @@ pub fn solve_lindblad_grid_batch_py<'py>(
     Py<PyAny>,
     usize,
     usize,
-    usize,
     Py<PyDict>,
 )> {
+    use crate::lindblad::ode_batch::{grid_trajectory_count, solve_grid_ode};
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let solver = BatchFastSolver::from_str(solver).map_err(PyValueError::new_err)?;
-    let output_options =
-        parse_fast_output_options(output, output_indices, output_when, dense_output)?;
-    if matches!(output_options.kind, FastOutputKind::Full) {
-        return Err(PyValueError::new_err(
-            "solve_lindblad_batch does not support output='full' yet",
-        ));
-    }
+    let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
     let y0 = packed_rho0
         .as_slice()
         .map_err(PyValueError::new_err)?
         .to_vec();
-    if y0.len() != plan.layout.packed_len() {
-        return Err(PyValueError::new_err(format!(
-            "packed_rho0 length must be {}, got {}",
-            plan.layout.packed_len(),
-            y0.len()
-        )));
-    }
-    if parameter_slot_indices.len() != parameter_axis_lengths.len() {
-        return Err(PyValueError::new_err(format!(
-            "parameter_slot_indices length {} does not match parameter_axis_lengths length {}",
-            parameter_slot_indices.len(),
-            parameter_axis_lengths.len()
-        )));
-    }
-    let trajectory_count = parameter_axis_lengths
-        .iter()
-        .try_fold(1usize, |acc, length| {
-            if *length == 0 {
-                None
-            } else {
-                acc.checked_mul(*length)
-            }
-        })
-        .ok_or_else(|| PyValueError::new_err("parameter grid axes must be non-empty and finite"))?;
     let axes = parameter_axes
         .as_slice()
         .map_err(PyValueError::new_err)?
         .to_vec();
-    let saveat_values = saveat
-        .map(|values| values.as_slice().map(|slice| slice.to_vec()))
+    let mut saveat_vec = saveat
+        .map(|a| a.as_slice().map(|s| s.to_vec()))
         .transpose()
         .map_err(PyValueError::new_err)?;
+    if output_when == "final" {
+        saveat_vec = Some(vec![t1]);
+    }
+    let mut axis_offsets = Vec::with_capacity(parameter_axis_lengths.len());
+    let mut off = 0usize;
+    for &len in &parameter_axis_lengths {
+        axis_offsets.push(off);
+        off += len;
+    }
     let plan_owned = plan.clone();
-    let options = OdeSolverOptions {
+    let options = crate::ode::OdeOptions {
         abstol,
         reltol,
         dt,
-        saveat: saveat_values,
-        save_start,
         maxiters,
-        mode: execution_mode,
+        save_start: output_when != "final" && save_start,
+        saveat: saveat_vec,
     };
-
     let result = py
         .detach(move || {
-            solve_lindblad_grid_batch(
+            solve_grid_ode(
                 &plan_owned,
-                solver,
-                y0.as_slice(),
+                ode_solver,
+                &y0,
                 t0,
                 t1,
                 &options,
-                &output_options,
-                collect_stats,
-                parameter_slot_indices.as_slice(),
-                axes.as_slice(),
-                parameter_axis_lengths.as_slice(),
+                execution_mode,
+                output,
+                output_indices.as_deref(),
+                &parameter_slot_indices,
+                &axes,
+                &axis_offsets,
+                &parameter_axis_lengths,
                 parallel,
                 threads,
             )
         })
         .map_err(PyValueError::new_err)?;
-
     let times = PyArray1::from_vec(py, result.times);
     let values: Py<PyAny> = match result.values {
-        BatchOutputValues::Real(values) => PyArray1::from_vec(py, values).into_any().unbind(),
-        BatchOutputValues::Complex(values) => PyArray1::from_vec(py, values).into_any().unbind(),
+        crate::ode::output::OdeOutputValues::Real(v) => {
+            PyArray1::from_vec(py, v).into_any().unbind()
+        }
+        crate::ode::output::OdeOutputValues::Complex(v) => {
+            PyArray1::from_vec(py, v).into_any().unbind()
+        }
+        crate::ode::output::OdeOutputValues::Full(v) => {
+            PyArray1::from_vec(py, v).into_any().unbind()
+        }
     };
-    Ok((
-        times,
-        values,
-        result.width,
-        result.time_count,
-        trajectory_count,
-        solve_stats_to_dict(py, &result.stats)?,
-    ))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "structured"
-))]
-pub fn solve_lindblad_dopri5_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    maxiters: usize,
-    mode: &str,
-) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let options = OdeSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat
-            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
-            .transpose()
-            .map_err(PyValueError::new_err)?,
-        save_start,
-        maxiters,
-        mode: execution_mode,
-    };
-    let (times, states) = solve_dopri5(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, times);
-    let n_rows = if plan.layout.packed_len() == 0 {
-        0
-    } else {
-        states.len() / plan.layout.packed_len()
-    };
-    let states_array =
-        PyArray1::from_vec(py, states).reshape((n_rows, plan.layout.packed_len()))?;
-    Ok((times_array, states_array))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "structured"
-))]
-pub fn solve_lindblad_dopri5_profile_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    maxiters: usize,
-    mode: &str,
-) -> PyResult<(
-    Bound<'py, PyArray1<f64>>,
-    Bound<'py, PyArray2<f64>>,
-    Py<PyDict>,
-)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let options = OdeSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat
-            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
-            .transpose()
-            .map_err(PyValueError::new_err)?,
-        save_start,
-        maxiters,
-        mode: execution_mode,
-    };
-    let (times, states, stats) = solve_dopri5_with_stats(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, times);
-    let n_rows = if plan.layout.packed_len() == 0 {
-        0
-    } else {
-        states.len() / plan.layout.packed_len()
-    };
-    let states_array =
-        PyArray1::from_vec(py, states).reshape((n_rows, plan.layout.packed_len()))?;
-    Ok((times_array, states_array, solve_stats_to_dict(py, &stats)?))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "structured"
-))]
-pub fn solve_lindblad_dopri5_fast_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    maxiters: usize,
-    mode: &str,
-) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let options = OdeSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat
-            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
-            .transpose()
-            .map_err(PyValueError::new_err)?,
-        save_start,
-        maxiters,
-        mode: execution_mode,
-    };
-    let (times, states) = solve_dopri5_fast(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, times);
-    let n_rows = if plan.layout.packed_len() == 0 {
-        0
-    } else {
-        states.len() / plan.layout.packed_len()
-    };
-    let states_array =
-        PyArray1::from_vec(py, states).reshape((n_rows, plan.layout.packed_len()))?;
-    Ok((times_array, states_array))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "structured"
-))]
-pub fn solve_lindblad_dopri5_fast_profile_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    maxiters: usize,
-    mode: &str,
-) -> PyResult<(
-    Bound<'py, PyArray1<f64>>,
-    Bound<'py, PyArray2<f64>>,
-    Py<PyDict>,
-)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let options = OdeSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat
-            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
-            .transpose()
-            .map_err(PyValueError::new_err)?,
-        save_start,
-        maxiters,
-        mode: execution_mode,
-    };
-    let (times, states, stats) = solve_dopri5_fast_with_stats(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, times);
-    let n_rows = if plan.layout.packed_len() == 0 {
-        0
-    } else {
-        states.len() / plan.layout.packed_len()
-    };
-    let states_array =
-        PyArray1::from_vec(py, states).reshape((n_rows, plan.layout.packed_len()))?;
-    Ok((times_array, states_array, solve_stats_to_dict(py, &stats)?))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "structured",
-    output = "full",
-    output_indices = None,
-    output_when = "saveat",
-    dense_output = true,
-    collect_stats = false
-))]
-pub fn solve_lindblad_dopri5_fast_output_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    maxiters: usize,
-    mode: &str,
-    output: &str,
-    output_indices: Option<Vec<(usize, usize)>>,
-    output_when: &str,
-    dense_output: bool,
-    collect_stats: bool,
-) -> PyResult<(Bound<'py, PyArray1<f64>>, Py<PyAny>, usize, Py<PyDict>)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let output_options =
-        parse_fast_output_options(output, output_indices, output_when, dense_output)?;
-    let options = OdeSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat
-            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
-            .transpose()
-            .map_err(PyValueError::new_err)?,
-        save_start,
-        maxiters,
-        mode: execution_mode,
-    };
-    let result = solve_dopri5_fast_output(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-        &output_options,
-        collect_stats,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, result.times);
-    let values: Py<PyAny> = match result.values {
-        FastOutputValues::Full(values) => PyArray1::from_vec(py, values).into_any().unbind(),
-        FastOutputValues::Real(values) => PyArray1::from_vec(py, values).into_any().unbind(),
-        FastOutputValues::Complex(values) => PyArray1::from_vec(py, values).into_any().unbind(),
-    };
-    Ok((
-        times_array,
-        values,
-        result.width,
-        solve_stats_to_dict(py, &result.stats)?,
-    ))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "structured"
-))]
-pub fn solve_lindblad_tsit5_fast_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    maxiters: usize,
-    mode: &str,
-) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let options = OdeSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat
-            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
-            .transpose()
-            .map_err(PyValueError::new_err)?,
-        save_start,
-        maxiters,
-        mode: execution_mode,
-    };
-    let (times, states) = solve_tsit5_fast(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, times);
-    let n_rows = if plan.layout.packed_len() == 0 {
-        0
-    } else {
-        states.len() / plan.layout.packed_len()
-    };
-    let states_array =
-        PyArray1::from_vec(py, states).reshape((n_rows, plan.layout.packed_len()))?;
-    Ok((times_array, states_array))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "structured"
-))]
-pub fn solve_lindblad_tsit5_fast_profile_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    maxiters: usize,
-    mode: &str,
-) -> PyResult<(
-    Bound<'py, PyArray1<f64>>,
-    Bound<'py, PyArray2<f64>>,
-    Py<PyDict>,
-)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let options = OdeSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat
-            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
-            .transpose()
-            .map_err(PyValueError::new_err)?,
-        save_start,
-        maxiters,
-        mode: execution_mode,
-    };
-    let (times, states, stats) = solve_tsit5_fast_with_stats(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, times);
-    let n_rows = if plan.layout.packed_len() == 0 {
-        0
-    } else {
-        states.len() / plan.layout.packed_len()
-    };
-    let states_array =
-        PyArray1::from_vec(py, states).reshape((n_rows, plan.layout.packed_len()))?;
-    Ok((times_array, states_array, solve_stats_to_dict(py, &stats)?))
-}
-
-#[pyfunction(signature = (
-    plan,
-    packed_rho0,
-    t0,
-    t1,
-    abstol,
-    reltol,
-    dt,
-    saveat = None,
-    save_start = true,
-    maxiters = 100000,
-    mode = "structured",
-    output = "full",
-    output_indices = None,
-    output_when = "saveat",
-    dense_output = true,
-    collect_stats = false
-))]
-pub fn solve_lindblad_tsit5_fast_output_py<'py>(
-    py: Python<'py>,
-    plan: PyRef<'py, PreparedLindbladPlan>,
-    packed_rho0: PyReadonlyArray1<'py, f64>,
-    t0: f64,
-    t1: f64,
-    abstol: f64,
-    reltol: f64,
-    dt: f64,
-    saveat: Option<PyReadonlyArray1<'py, f64>>,
-    save_start: bool,
-    maxiters: usize,
-    mode: &str,
-    output: &str,
-    output_indices: Option<Vec<(usize, usize)>>,
-    output_when: &str,
-    dense_output: bool,
-    collect_stats: bool,
-) -> PyResult<(Bound<'py, PyArray1<f64>>, Py<PyAny>, usize, Py<PyDict>)> {
-    let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
-    let output_options =
-        parse_fast_output_options(output, output_indices, output_when, dense_output)?;
-    let options = OdeSolverOptions {
-        abstol,
-        reltol,
-        dt,
-        saveat: saveat
-            .map(|values| values.as_slice().map(|slice| slice.to_vec()))
-            .transpose()
-            .map_err(PyValueError::new_err)?,
-        save_start,
-        maxiters,
-        mode: execution_mode,
-    };
-    let result = solve_tsit5_fast_output(
-        &plan,
-        packed_rho0.as_slice().map_err(PyValueError::new_err)?,
-        t0,
-        t1,
-        &options,
-        &output_options,
-        collect_stats,
-    )
-    .map_err(PyValueError::new_err)?;
-    let times_array = PyArray1::from_vec(py, result.times);
-    let values: Py<PyAny> = match result.values {
-        FastOutputValues::Full(values) => PyArray1::from_vec(py, values).into_any().unbind(),
-        FastOutputValues::Real(values) => PyArray1::from_vec(py, values).into_any().unbind(),
-        FastOutputValues::Complex(values) => PyArray1::from_vec(py, values).into_any().unbind(),
-    };
-    Ok((
-        times_array,
-        values,
-        result.width,
-        solve_stats_to_dict(py, &result.stats)?,
-    ))
+    let d = PyDict::new(py);
+    d.set_item("solver", solver)?;
+    d.set_item("accepted_steps", result.stats.accepted_steps)?;
+    d.set_item("rejected_steps", result.stats.rejected_steps)?;
+    d.set_item("rhs_calls", result.stats.rhs_calls)?;
+    Ok((times, values, result.width, result.time_count, d.unbind()))
 }

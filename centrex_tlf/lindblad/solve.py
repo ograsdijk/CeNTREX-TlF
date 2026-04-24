@@ -317,11 +317,17 @@ def _solve_rust_fast(
     output_when: str,
     dense_output: bool,
 ) -> LindbladResult | LindbladObservableResult:
-    from .. import centrex_tlf_rust as rust
+    from ..centrex_tlf_rust import solve_lindblad_ode_py
 
-    prefix = "dopri5_fast" if solver == "dopri5_fast" else "tsit5_fast"
-    use_output_api = output != "full" or output_when != "saveat" or not dense_output
-    common_args = (
+    solver_name = "tsit5" if solver == "tsit5_fast" else "dopri5"
+
+    effective_saveat = saveat
+    effective_save_start = save_start
+    if output_when == "final":
+        effective_saveat = np.array([t_span[1]], dtype=np.float64)
+        effective_save_start = False
+
+    times, values, width, solver_stats = solve_lindblad_ode_py(
         prepared.rust_plan,
         packed_rho0,
         t_span[0],
@@ -329,55 +335,37 @@ def _solve_rust_fast(
         float(abstol),
         float(reltol),
         float(dt),
-        None if saveat is None else np.asarray(saveat, dtype=np.float64),
-        bool(save_start),
+        None if effective_saveat is None else np.asarray(effective_saveat, dtype=np.float64),
+        bool(effective_save_start),
         int(maxiters),
         execution_mode,
+        solver_name,
+        output,
+        None if output_indices is None else list(output_indices),
+        "saveat",
     )
-    if use_output_api:
-        func = getattr(rust, f"solve_lindblad_{prefix}_output_py")
-        times, values, width, solver_stats = func(
-            *common_args,
-            output,
-            None if output_indices is None else list(output_indices),
-            output_when,
-            bool(dense_output),
-            bool(collect_stats),
-        )
-        times_array = np.asarray(times, dtype=np.float64)
-        if output == "full":
-            return LindbladResult(
-                t=times_array,
-                packed_y=np.asarray(values, dtype=np.float64).reshape((times_array.size, int(width))),
-                layout=prepared.layout,
-                solver_stats=dict(solver_stats) if collect_stats else None,
-            )
-        values_array = np.asarray(
-            values,
-            dtype=np.float64 if output == "populations" else np.complex128,
-        )
-        if output_when == "saveat":
-            values_array = values_array.reshape((times_array.size, int(width)))
-        return LindbladObservableResult(
-            t=times_array,
-            values=values_array,
-            output=output,
-            output_indices=None if output_indices is None else list(output_indices),
-            solver_stats=dict(solver_stats) if collect_stats else None,
-        )
 
-    if collect_stats:
-        func = getattr(rust, f"solve_lindblad_{prefix}_profile_py")
-        times, packed_states, solver_stats = func(*common_args)
-    else:
-        func = getattr(rust, f"solve_lindblad_{prefix}_py")
-        times, packed_states = func(*common_args)
-        solver_stats = None
-    return LindbladResult(
-        t=np.asarray(times, dtype=np.float64),
-        packed_y=np.asarray(packed_states, dtype=np.float64),
-        layout=prepared.layout,
-        solver_stats=dict(solver_stats) if solver_stats is not None else None,
+    times_array = np.asarray(times, dtype=np.float64)
+    stats_dict = dict(solver_stats) if collect_stats else None
+    if output == "full":
+        return LindbladResult(
+            t=times_array,
+            packed_y=np.asarray(values, dtype=np.float64).reshape((times_array.size, int(width))),
+            layout=prepared.layout,
+            solver_stats=stats_dict,
+        )
+    values_array = np.asarray(
+        values,
+        dtype=np.float64 if output == "populations" else np.complex128,
+    )
+    if times_array.size > 0 and width > 0:
+        values_array = values_array.reshape((times_array.size, int(width)))
+    return LindbladObservableResult(
+        t=times_array,
+        values=values_array,
+        output=output,
+        output_indices=None if output_indices is None else list(output_indices),
+        solver_stats=stats_dict,
     )
 
 
@@ -431,10 +419,12 @@ def solve_lindblad(
     if (output != "full" or output_when != "saveat" or not dense_output) and solver not in {
         "dopri5_fast",
         "tsit5_fast",
+        "dopri5",
+        "explicit",
     }:
         raise NotImplementedError(
             "reduced output, final-only output, and dense_output control are currently only "
-            "supported with solver='dopri5_fast' or solver='tsit5_fast'"
+            "supported with Rust solvers"
         )
     if output == "selected" and output_indices is None:
         raise ValueError("output='selected' requires output_indices")
@@ -486,7 +476,7 @@ def solve_lindblad(
             jacobian=jacobian,
             jacobian_format=chosen_format,
         )
-    if backend == "rust" and solver in {"dopri5_fast", "tsit5_fast"} and prepared.rust_plan is not None:
+    if backend == "rust" and solver in {"dopri5_fast", "tsit5_fast", "dopri5", "explicit"} and prepared.rust_plan is not None:
         return _solve_rust_fast(
             prepared,
             packed_rho0,
@@ -506,44 +496,23 @@ def solve_lindblad(
             dense_output=dense_output,
         )
     if backend == "rust" and prepared.rust_plan is not None:
-        if collect_stats:
-            from ..centrex_tlf_rust import solve_lindblad_dopri5_profile_py
-
-            times, packed_states, solver_stats = solve_lindblad_dopri5_profile_py(
-                prepared.rust_plan,
-                packed_rho0,
-                t_span_tuple[0],
-                t_span_tuple[1],
-                float(abstol),
-                float(reltol),
-                float(dt),
-                None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
-                bool(save_start),
-                int(maxiters),
-                execution_mode,
-            )
-        else:
-            from ..centrex_tlf_rust import solve_lindblad_dopri5_py
-
-            times, packed_states = solve_lindblad_dopri5_py(
-                prepared.rust_plan,
-                packed_rho0,
-                t_span_tuple[0],
-                t_span_tuple[1],
-                float(abstol),
-                float(reltol),
-                float(dt),
-                None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
-                bool(save_start),
-                int(maxiters),
-                execution_mode,
-            )
-            solver_stats = None
-        return LindbladResult(
-            t=np.asarray(times, dtype=np.float64),
-            packed_y=np.asarray(packed_states, dtype=np.float64),
-            layout=prepared.layout,
-            solver_stats=dict(solver_stats) if solver_stats is not None else None,
+        return _solve_rust_fast(
+            prepared,
+            packed_rho0,
+            t_span_tuple,
+            solver="dopri5_fast",
+            execution_mode=execution_mode,
+            abstol=abstol,
+            reltol=reltol,
+            dt=dt,
+            saveat=saveat_values,
+            save_start=save_start,
+            maxiters=maxiters,
+            collect_stats=collect_stats,
+            output=output,
+            output_indices=output_indices,
+            output_when=output_when,
+            dense_output=dense_output,
         )
     if backend == "python" and solver != "explicit":
         raise NotImplementedError("the python backend only supports solver='explicit'")
