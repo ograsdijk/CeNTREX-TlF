@@ -16,9 +16,7 @@ from centrex_tlf.effective_hamiltonian.rust_plan import (
 )
 from centrex_tlf.lindblad.parameters import LindbladParameters, Parameter
 
-transition = transitions.OpticalTransition(
-    transitions.OpticalTransitionType.R, 0, 1/2, 1
-)
+transition = transitions.Q1_F1_1o2_F0
 polarization = couplings.polarization_Z
 
 print("Preparing model...")
