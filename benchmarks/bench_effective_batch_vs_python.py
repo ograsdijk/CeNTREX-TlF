@@ -7,7 +7,7 @@ from scipy.interpolate import PchipInterpolator
 from centrex_tlf import transitions, couplings
 from centrex_tlf.effective_hamiltonian import (
     prepare_lindblad_safe_compact_interpolated_model,
-    solve_lindblad_safe_compact_interpolated_model,
+    solve_effective_fixed_basis,
     default_effective_density_matrix,
     parameter_scan,
 )
@@ -52,7 +52,7 @@ for v in velocities:
     def rf(t, _v=v):
         z = z0_val + _v * t
         return omega0_val * np.exp(-(z - z_laser_val)**2 / (2 * w0_val**2))
-    sol = solve_lindblad_safe_compact_interpolated_model(
+    sol = solve_effective_fixed_basis(
         model, electric_field=ef, rabi_rate=rf, detuning=0.0,
         rho0=rho0, t_span=t_span,
     )

@@ -6,6 +6,7 @@ import sympy as smp
 from centrex_tlf import transitions, couplings
 from centrex_tlf.effective_hamiltonian import (
     prepare_lindblad_safe_compact_interpolated_model,
+    solve_effective_fixed_basis,
     default_effective_density_matrix,
 )
 from centrex_tlf.effective_hamiltonian.rust_plan import (
@@ -83,7 +84,7 @@ print(f"  Trace: {result_sparse.populations()[-1].sum():.6f}")
 
 # For comparison, also time the Python scipy solver
 from scipy.interpolate import PchipInterpolator
-from centrex_tlf.effective_hamiltonian import solve_lindblad_safe_compact_interpolated_model
+from centrex_tlf.effective_hamiltonian import solve_effective_fixed_basis
 
 ez_interp = PchipInterpolator(z_grid, ez, extrapolate=True)
 def ef(t_val):
@@ -95,7 +96,7 @@ def rf(t_val):
 py_times = []
 for _ in range(3):
     t0 = time.perf_counter()
-    sol_py = solve_lindblad_safe_compact_interpolated_model(
+    sol_py = solve_effective_fixed_basis(
         model, electric_field=ef, rabi_rate=rf, detuning=0.0,
         rho0=rho0, t_span=t_span, t_eval=saveat,
     )

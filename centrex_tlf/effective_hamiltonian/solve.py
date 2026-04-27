@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -13,6 +13,65 @@ from centrex_tlf.effective_hamiltonian.models import (
     PreparedInstantaneousInterpolatedEffectiveHamiltonianModel,
 )
 from centrex_tlf.effective_hamiltonian.initial_state import default_effective_density_matrix
+
+
+ParameterLike = float | complex | Callable | Any
+
+
+def _resolve_parameter(value: ParameterLike, variable: str = "t") -> float | complex | Callable:
+    from centrex_tlf.lindblad.parameters import RuntimeExpression
+    if isinstance(value, RuntimeExpression):
+        return value.compile_callable(variable)
+    return value
+
+
+def _extract_parameters_from_lindblad(
+    parameters: Any,
+) -> tuple[Callable | float, Callable | float | complex, Callable | float]:
+    from centrex_tlf.lindblad.parameters import LindbladParameters, RuntimeExpression
+    import sympy as smp
+
+    if not isinstance(parameters, LindbladParameters):
+        raise TypeError(f"parameters must be a LindbladParameters, got {type(parameters)}")
+
+    field_names = {"Ez", "field_coordinate", "E_field", "electric_field"}
+    rabi_names = {"\u03a90", "Omega0", "rabi_rate", "Omega", "\u03a9"}
+    detuning_names = {"\u03b40", "delta0", "detuning", "delta", "\u03b4"}
+
+    def _find_value(names):
+        for name in names:
+            if name in parameters._compound_expressions:
+                expr = parameters._compound_expressions[name]
+                all_params = {}
+                for pname, param in parameters._parameters_by_name.items():
+                    all_params[pname] = param
+                rt = RuntimeExpression(expr, all_params)
+                return _resolve_parameter(rt)
+            if name in parameters.base_parameters:
+                val = parameters.base_parameters[name]
+                if isinstance(val, tuple):
+                    continue
+                return float(val) if isinstance(val, (int, float)) else complex(val)
+        return None
+
+    ef = _find_value(field_names)
+    rf = _find_value(rabi_names)
+    det = _find_value(detuning_names)
+
+    if ef is None:
+        raise ValueError(
+            f"LindbladParameters must contain an electric field parameter "
+            f"(one of {field_names})"
+        )
+    if rf is None:
+        raise ValueError(
+            f"LindbladParameters must contain a Rabi rate parameter "
+            f"(one of {rabi_names})"
+        )
+    if det is None:
+        det = 0.0
+
+    return ef, rf, det
 
 
 def solve_density_matrix_model(
@@ -77,18 +136,29 @@ def solve_static_density_matrix_bundle(
     )
 
 
-def solve_lindblad_safe_compact_interpolated_model(
+def solve_effective_fixed_basis(
     model: PreparedLindbladSafeCompactInterpolatedHamiltonianModel,
     *,
-    electric_field: float | Sequence[float] | np.ndarray | Callable[[float], float | Sequence[float] | np.ndarray],
-    magnetic_field: float | Sequence[float] | np.ndarray | Callable[[float], float | Sequence[float] | np.ndarray] | None = None,
+    parameters: Any | None = None,
+    electric_field: ParameterLike | None = None,
+    magnetic_field: ParameterLike | None = None,
     rho0: np.ndarray | None = None,
     t_span: tuple[float, float] = (0.0, 50e-6),
-    rabi_rate: float | complex | Callable[[float], float | complex] = 2.0 * np.pi * 1e6,
-    detuning: float | Callable[[float], float] = 0.0,
+    rabi_rate: ParameterLike = 2.0 * np.pi * 1e6,
+    detuning: ParameterLike = 0.0,
     t_eval: np.ndarray | None = None,
     method: str = "RK45",
 ):
+    if parameters is not None:
+        electric_field, rabi_rate, detuning = _extract_parameters_from_lindblad(parameters)
+    elif electric_field is None:
+        raise ValueError("either 'parameters' or 'electric_field' must be provided")
+    else:
+        electric_field = _resolve_parameter(electric_field)
+        rabi_rate = _resolve_parameter(rabi_rate)
+        detuning = _resolve_parameter(detuning)
+    if magnetic_field is not None:
+        magnetic_field = _resolve_parameter(magnetic_field)
     if rho0 is None:
         rho0 = default_effective_density_matrix(model)
     rho0 = np.asarray(rho0, dtype=np.complex128)
@@ -179,7 +249,7 @@ def solve_lindblad_safe_compact_interpolated_model(
     )
 
 
-def solve_static_lindblad_safe_compact_interpolated_model(
+def solve_effective_fixed_basis_static(
     model: PreparedLindbladSafeCompactInterpolatedHamiltonianModel,
     *,
     electric_field: float | Sequence[float] | np.ndarray,
@@ -204,19 +274,39 @@ def solve_static_lindblad_safe_compact_interpolated_model(
     )
 
 
-def solve_instantaneous_interpolated_model(
+def solve_effective_instantaneous(
     model: PreparedInstantaneousInterpolatedEffectiveHamiltonianModel,
     *,
-    electric_field: float | Sequence[float] | np.ndarray | Callable[[float], float | Sequence[float] | np.ndarray],
-    electric_field_derivative: float | Sequence[float] | np.ndarray | Callable[[float], float | Sequence[float] | np.ndarray],
-    magnetic_field: float | Sequence[float] | np.ndarray | Callable[[float], float | Sequence[float] | np.ndarray] | None = None,
+    parameters: Any | None = None,
+    electric_field: ParameterLike | None = None,
+    electric_field_derivative: ParameterLike | None = None,
+    magnetic_field: ParameterLike | None = None,
     rho0: np.ndarray | None = None,
     t_span: tuple[float, float] = (0.0, 50e-6),
-    rabi_rate: float | complex | Callable[[float], float | complex] = 2.0 * np.pi * 1e6,
-    detuning: float | Callable[[float], float] = 0.0,
+    rabi_rate: ParameterLike = 2.0 * np.pi * 1e6,
+    detuning: ParameterLike = 0.0,
     t_eval: np.ndarray | None = None,
     method: str = "RK45",
 ):
+    if parameters is not None:
+        electric_field, rabi_rate, detuning = _extract_parameters_from_lindblad(parameters)
+        if electric_field_derivative is None:
+            raise ValueError(
+                "electric_field_derivative must be provided for the instantaneous solver "
+                "(it cannot be extracted from LindbladParameters)"
+            )
+        electric_field_derivative = _resolve_parameter(electric_field_derivative)
+    elif electric_field is None:
+        raise ValueError("either 'parameters' or 'electric_field' must be provided")
+    else:
+        electric_field = _resolve_parameter(electric_field)
+        if electric_field_derivative is None:
+            raise ValueError("electric_field_derivative must be provided")
+        electric_field_derivative = _resolve_parameter(electric_field_derivative)
+        rabi_rate = _resolve_parameter(rabi_rate)
+        detuning = _resolve_parameter(detuning)
+    if magnetic_field is not None:
+        magnetic_field = _resolve_parameter(magnetic_field)
     if rho0 is None:
         rho0 = default_effective_density_matrix(model)
 
@@ -240,7 +330,7 @@ def solve_instantaneous_interpolated_model(
     )
 
 
-def solve_static_instantaneous_interpolated_model(
+def solve_effective_instantaneous_static(
     model: PreparedInstantaneousInterpolatedEffectiveHamiltonianModel,
     *,
     electric_field: float | Sequence[float] | np.ndarray,
@@ -263,3 +353,4 @@ def solve_static_instantaneous_interpolated_model(
         t_eval=t_eval,
         method=method,
     )
+

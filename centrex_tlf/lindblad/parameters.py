@@ -311,6 +311,55 @@ class RuntimeExpression:
         )
         return np.asarray(func(np.asarray(values)), dtype=np.float64)
 
+    def compile_callable(self, variable: str = "t", **overrides: float | complex) -> "Callable[[float], float]":
+        """Compile the expression to a fast callable function of one variable.
+
+        Uses ``sympy.lambdify`` with helper function modules. The returned
+        function is as fast as a hand-written lambda — no sympy overhead per call.
+
+        Example::
+
+            z = linear(Time(), offset=-0.01, slope=Parameter("v", 200.0))
+            z_func = z.compile_callable("t")
+            z_func(25e-6)  # fast, no sympy
+        """
+        import numpy as np
+        from centrex_tlf.lindblad.helper_functions import HELPER_FUNCTIONS
+
+        sym_by_name: dict[str, smp.Symbol] = {
+            s.name: s for s in self.expr.free_symbols
+        }
+        var_sym = sym_by_name.get(variable)
+        if var_sym is None:
+            var_sym = smp.Symbol(variable)
+
+        subs: list[tuple[smp.Symbol, Any]] = []
+        remaining_overrides = dict(overrides)
+        for name, param in self.parameters.items():
+            if name == variable:
+                continue
+            sym = sym_by_name.get(name)
+            if sym is None:
+                continue
+            if isinstance(param.default, tuple):
+                subs.append((sym, smp.Tuple(*param.default)))
+            elif name in remaining_overrides:
+                subs.append((sym, remaining_overrides.pop(name)))
+            else:
+                subs.append((sym, param.default))
+        for key, val in remaining_overrides.items():
+            if key == variable:
+                continue
+            sym = sym_by_name.get(key)
+            if sym is not None:
+                subs.append((sym, val))
+        expr = self.expr.subs(subs)
+        return smp.lambdify(
+            var_sym,
+            expr,
+            modules=[HELPER_FUNCTIONS, "numpy"],
+        )
+
     def __repr__(self) -> str:
         scalar_params = {
             name: param.default

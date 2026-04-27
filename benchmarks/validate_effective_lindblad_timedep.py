@@ -16,7 +16,7 @@ from scipy.interpolate import PchipInterpolator
 from centrex_tlf import transitions, couplings
 from centrex_tlf.effective_hamiltonian import (
     prepare_lindblad_safe_compact_interpolated_model,
-    solve_lindblad_safe_compact_interpolated_model,
+    solve_effective_fixed_basis,
     default_effective_density_matrix,
 )
 from centrex_tlf.effective_hamiltonian.rust_plan import (

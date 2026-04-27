@@ -7,7 +7,7 @@ import sympy as smp
 from centrex_tlf import transitions, couplings
 from centrex_tlf.effective_hamiltonian import (
     prepare_lindblad_safe_compact_interpolated_model,
-    solve_static_lindblad_safe_compact_interpolated_model,
+    solve_effective_fixed_basis_static,
     default_effective_density_matrix,
 )
 from centrex_tlf.effective_hamiltonian.rust_plan import (
