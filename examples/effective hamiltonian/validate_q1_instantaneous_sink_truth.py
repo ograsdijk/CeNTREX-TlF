@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
-import pathlib
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -11,6 +9,13 @@ from typing import Any
 
 import numpy as np
 from scipy.integrate import solve_ivp
+
+from centrex_tlf import transitions, couplings
+from centrex_tlf.effective_hamiltonian import (
+    prepare_lindblad_safe_compact_interpolated_model,
+    prepare_instantaneous_interpolated_effective_model,
+)
+from centrex_tlf.effective_hamiltonian._superoperators import _hamiltonian_superoperator
 
 
 PATCH_POINTS_VCM = [0.0, 5.0, 7.0, 7.5, 8.0, 10.0, 20.0, 30.0, 40.0, 50.0]
@@ -37,15 +42,7 @@ def candidate_grid(name: str) -> np.ndarray:
     raise ValueError(f"unknown candidate grid {name!r}")
 
 
-def load_runtime_module():
-    runtime_path = pathlib.Path(__file__).resolve().with_name("effective_hamiltonian_runtime.py")
-    spec = importlib.util.spec_from_file_location("effective_hamiltonian_runtime", runtime_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load {runtime_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+
 
 
 def relative_error(value: float, reference: float) -> float:
@@ -86,27 +83,25 @@ def interpolate_scalar(grid: np.ndarray, values: np.ndarray, value: float) -> fl
     return float(values[lower] + weight * (values[upper] - values[lower]))
 
 
-def build_candidate_model(ehr, field_points_vcm: Sequence[float] | np.ndarray = PATCH_POINTS_VCM):
-    return ehr.prepare_lindblad_safe_compact_interpolated_model(
-        field_points=np.asarray(field_points_vcm, dtype=np.float64),
-        transition=ehr.transitions.Q1_F1_1o2_F0,
-        optical_polarization=ehr.couplings.polarization_Z,
+def build_candidate_model(field_points_vcm: Sequence[float] | np.ndarray = PATCH_POINTS_VCM):
+    return prepare_lindblad_safe_compact_interpolated_model(
+        transition=transitions.Q1_F1_1o2_F0,
+        optical_polarization=couplings.polarization_Z,
         magnetic_field=B_FIELD,
         master_field=MASTER_FIELD_VCM,
     )
 
 
-def build_instantaneous_model(ehr, reference_fields_vcm: np.ndarray):
-    return ehr.prepare_instantaneous_interpolated_effective_model(
-        field_points=np.asarray(reference_fields_vcm, dtype=np.float64),
-        transition=ehr.transitions.Q1_F1_1o2_F0,
-        optical_polarization=ehr.couplings.polarization_Z,
+def build_instantaneous_model(reference_fields_vcm: np.ndarray):
+    return prepare_instantaneous_interpolated_effective_model(
+        transition=transitions.Q1_F1_1o2_F0,
+        optical_polarization=couplings.polarization_Z,
         magnetic_field=B_FIELD,
         master_field=MASTER_FIELD_VCM,
     )
 
 
-def precompute_candidate(ehr, model) -> dict[str, Any]:
+def precompute_candidate(model) -> dict[str, Any]:
     fields = np.asarray(model.field_points, dtype=np.float64)
     bundles = tuple(
         model.effective_bundle((0.0, 0.0, float(field)), model.reference_magnetic_field)
@@ -128,23 +123,23 @@ def precompute_candidate(ehr, model) -> dict[str, Any]:
     }
 
 
-def precompute_instantaneous_reference(ehr, model) -> dict[str, Any]:
+def precompute_instantaneous_reference(model) -> dict[str, Any]:
     fields = np.asarray(model.field_points, dtype=np.float64)
     bundles = tuple(patch.bundle for patch in model.patches)
     h_internal_superops = tuple(
-        ehr._hamiltonian_superoperator(np.asarray(bundle.h_internal, dtype=np.complex128))
+        _hamiltonian_superoperator(np.asarray(bundle.h_internal, dtype=np.complex128))
         for bundle in bundles
     )
     h_opt_superops = tuple(
-        ehr._hamiltonian_superoperator(np.asarray(bundle.h_opt, dtype=np.complex128))
+        _hamiltonian_superoperator(np.asarray(bundle.h_opt, dtype=np.complex128))
         for bundle in bundles
     )
     h_det_superops = tuple(
-        ehr._hamiltonian_superoperator(np.asarray(bundle.h_det, dtype=np.complex128))
+        _hamiltonian_superoperator(np.asarray(bundle.h_det, dtype=np.complex128))
         for bundle in bundles
     )
     gauge_superops = tuple(
-        ehr._hamiltonian_superoperator(-np.asarray(patch.gauge_connection, dtype=np.complex128))
+        _hamiltonian_superoperator(-np.asarray(patch.gauge_connection, dtype=np.complex128))
         for patch in model.patches
     )
     dissipator_superops = tuple(
@@ -494,12 +489,12 @@ def main() -> None:
     if args.reference_points < 3:
         raise ValueError("--reference-points must be at least 3")
 
-    ehr = load_runtime_module()
+
     reference_fields_vcm = np.linspace(0.0, 50.0, int(args.reference_points))
 
     start = time.perf_counter()
-    reference_model = build_instantaneous_model(ehr, reference_fields_vcm)
-    reference_data = precompute_instantaneous_reference(ehr, reference_model)
+    reference_model = build_instantaneous_model(reference_fields_vcm)
+    reference_data = precompute_instantaneous_reference(reference_model)
     reference_setup_s = time.perf_counter() - start
     rho0_reference = make_initial_state(reference_data)
     solved_reference_cases = {
@@ -511,8 +506,8 @@ def main() -> None:
     for grid_name in args.candidate_grids:
         fields = candidate_grid(grid_name)
         start = time.perf_counter()
-        candidate_model = build_candidate_model(ehr, fields)
-        candidate_data = precompute_candidate(ehr, candidate_model)
+        candidate_model = build_candidate_model(fields)
+        candidate_data = precompute_candidate(candidate_model)
         candidate_setup_s = time.perf_counter() - start
         candidate_outputs.append(
             {
