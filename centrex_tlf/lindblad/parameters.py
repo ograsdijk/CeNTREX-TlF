@@ -206,6 +206,122 @@ class RuntimeExpression:
     def __rpow__(self, other: ExpressionLike) -> RuntimeExpression:
         return _to_runtime_expression(other) ** self
 
+    def evaluate(self, **overrides: float | complex) -> float | complex:
+        """Evaluate the expression using parameter defaults, with optional overrides.
+
+        Parameters that are tuples (grid/values) are skipped in substitution
+        and handled by lambdify via the helper function modules.
+
+        Example::
+
+            t = Time()
+            v = Parameter("v", 200.0)
+            z = linear(t, offset=-0.01, slope=v)
+            z.evaluate(t=25e-6)            # uses default v=200
+            z.evaluate(t=25e-6, v=300.0)   # override velocity
+        """
+        from centrex_tlf.lindblad.helper_functions import HELPER_FUNCTIONS
+
+        sym_by_name: dict[str, smp.Symbol] = {
+            s.name: s for s in self.expr.free_symbols
+        }
+        subs: list[tuple[smp.Symbol, Any]] = []
+        remaining_overrides = dict(overrides)
+        for name, param in self.parameters.items():
+            sym = sym_by_name.get(name)
+            if sym is None:
+                continue
+            if isinstance(param.default, tuple):
+                subs.append((sym, smp.Tuple(*param.default)))
+            elif name in remaining_overrides:
+                subs.append((sym, remaining_overrides.pop(name)))
+            else:
+                subs.append((sym, param.default))
+        for key, val in remaining_overrides.items():
+            sym = sym_by_name.get(key)
+            if sym is not None:
+                subs.append((sym, val))
+        expr = self.expr.subs(subs)
+        free = expr.free_symbols
+        if not free:
+            func = smp.lambdify(
+                [smp.Symbol("_dummy")],
+                expr,
+                modules=[HELPER_FUNCTIONS, "numpy"],
+            )
+            return float(func(0))
+        try:
+            return complex(expr)
+        except (TypeError, ValueError):
+            return expr
+
+    def evaluate_array(
+        self,
+        variable: str,
+        values: "np.ndarray",
+        **overrides: float | complex,
+    ) -> "np.ndarray":
+        """Evaluate the expression over an array of values for one variable.
+
+        Uses ``sympy.lambdify`` with helper function modules so that
+        ``pchip_interp``, ``gaussian_1d``, ``linear_interp``, etc. are
+        resolved at evaluation time.
+
+        Example::
+
+            Omega = gaussian(z, center=z_laser, sigma=w0, amplitude=omega0)
+            t_array = np.linspace(0, 100e-6, 1000)
+            Omega_vs_t = Omega.evaluate_array("t", t_array)
+        """
+        import numpy as np
+        from centrex_tlf.lindblad.helper_functions import HELPER_FUNCTIONS
+
+        sym_by_name: dict[str, smp.Symbol] = {
+            s.name: s for s in self.expr.free_symbols
+        }
+        var_sym = sym_by_name.get(variable)
+        if var_sym is None:
+            var_sym = smp.Symbol(variable)
+
+        subs: list[tuple[smp.Symbol, Any]] = []
+        remaining_overrides = dict(overrides)
+        for name, param in self.parameters.items():
+            if name == variable:
+                continue
+            sym = sym_by_name.get(name)
+            if sym is None:
+                continue
+            if isinstance(param.default, tuple):
+                subs.append((sym, smp.Tuple(*param.default)))
+            elif name in remaining_overrides:
+                subs.append((sym, remaining_overrides.pop(name)))
+            else:
+                subs.append((sym, param.default))
+        for key, val in remaining_overrides.items():
+            if key == variable:
+                continue
+            sym = sym_by_name.get(key)
+            if sym is not None:
+                subs.append((sym, val))
+        expr = self.expr.subs(subs)
+        func = smp.lambdify(
+            var_sym,
+            expr,
+            modules=[HELPER_FUNCTIONS, "numpy"],
+        )
+        return np.asarray(func(np.asarray(values)), dtype=np.float64)
+
+    def __repr__(self) -> str:
+        scalar_params = {
+            name: param.default
+            for name, param in self.parameters.items()
+            if not isinstance(param.default, tuple)
+        }
+        if scalar_params:
+            params_str = ", ".join(f"{k}={v}" for k, v in scalar_params.items())
+            return f"RuntimeExpression({self.expr}, {{{params_str}}})"
+        return f"RuntimeExpression({self.expr})"
+
 
 ExpressionLike = RuntimeExpression | Parameter | smp.Expr | RuntimeScalar
 
