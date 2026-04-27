@@ -347,12 +347,51 @@ def lower_parameter_graph(parameters: Any) -> dict[str, Any]:
         )
         if compiled.output_is_tuple:
             tuple_value_names.add(str(name))
+    pchip_tables = _extract_pchip_tables(parameters)
+
     return {
         "slot_names": parameters.slot_names,
         "n_base": len(base_values),
         "base_values": base_values,
         "compounds": compounds,
+        "pchip_tables": pchip_tables,
     }
+
+
+def _extract_pchip_tables(parameters: Any) -> list[dict[str, Any]]:
+    import numpy as np
+
+    tables: list[dict[str, Any]] = []
+    base_items = list(parameters.base_parameters.items())
+    seen_pairs: set[tuple[int, int]] = set()
+    for ci, (cname, cval) in enumerate(base_items):
+        if not isinstance(cval, tuple) or len(cval) < 2:
+            continue
+        try:
+            grid = [float(np.real(v)) for v in cval]
+        except (TypeError, ValueError):
+            continue
+        if not all(grid[i] < grid[i + 1] for i in range(len(grid) - 1)):
+            continue
+        for vi, (vname, vval) in enumerate(base_items):
+            if vi == ci or not isinstance(vval, tuple):
+                continue
+            if len(vval) != len(cval):
+                continue
+            pair = (ci, vi)
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+            try:
+                values = [float(np.real(v)) for v in vval]
+            except (TypeError, ValueError):
+                continue
+            import numpy as _np
+            tables.append({
+                "grid": _np.array(grid, dtype=_np.float64),
+                "values": _np.array(values, dtype=_np.float64),
+            })
+    return tables
 
 
 def lower_hamiltonian_upper_triangle(

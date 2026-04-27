@@ -219,13 +219,17 @@ def gaussian_1d(x: float, center: float, sigma: float) -> float:
     return math.exp(-(dx * dx) / (2.0 * sigma * sigma))
 
 
-def pchip_interp(x: float, grid: Iterable[float], values: Iterable[float]) -> float:
+def pchip_interp(x, grid: Iterable[float], values: Iterable[float]):
     from scipy.interpolate import PchipInterpolator
+    import numpy as np
 
     grid_arr = [float(g) for g in grid]
     values_arr = [float(v) for v in values]
     interp = PchipInterpolator(grid_arr, values_arr, extrapolate=True)
-    return float(interp(x))
+    result = interp(x)
+    if np.ndim(result) == 0:
+        return float(result)
+    return result
 
 
 HELPER_FUNCTIONS: Mapping[str, Callable[..., complex | float]] = {

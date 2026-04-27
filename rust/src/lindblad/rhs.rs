@@ -481,6 +481,7 @@ pub struct RhsWorkspace {
     split_output: Vec<Complex64>,
     upper_to_packed: Vec<PackedUpperIndex>,
     expanded_packed_inputs: Vec<PackedTermInput>,
+    pchip_hints: Vec<usize>,
     hamiltonian_valid: bool,
     h_sparse_valid: bool,
 }
@@ -530,6 +531,7 @@ impl RhsWorkspace {
             split_output: vec![Complex64::ZERO; matrix_len],
             upper_to_packed,
             expanded_packed_inputs,
+            pchip_hints: vec![0; plan.parameter_graph.pchip_tables.len()],
             hamiltonian_valid: false,
             h_sparse_valid: false,
         }
@@ -569,6 +571,7 @@ impl RhsWorkspace {
             &mut self.parameter_values,
             &mut self.eval_stack,
             &mut self.scalar_stack,
+            &mut self.pchip_hints,
         )
     }
 }

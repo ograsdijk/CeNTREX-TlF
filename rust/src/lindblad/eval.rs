@@ -8,6 +8,7 @@ pub enum RuntimeValue {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u8)]
 pub enum InstructionOp {
     Const = 1,
     Slot = 2,
@@ -483,6 +484,18 @@ pub fn eval_expression_into(
     temps: &[RuntimeValue],
     stack: &mut Vec<RuntimeValue>,
 ) -> Result<RuntimeValue, String> {
+    eval_expression_into_with_pchip(expression, slots, t, temps, stack, &[], &mut [])
+}
+
+pub fn eval_expression_into_with_pchip(
+    expression: &CompiledExpression,
+    slots: &[RuntimeValue],
+    t: f64,
+    temps: &[RuntimeValue],
+    stack: &mut Vec<RuntimeValue>,
+    pchip_tables: &[crate::lindblad::plan::PchipTable],
+    pchip_hints: &mut [usize],
+) -> Result<RuntimeValue, String> {
     stack.clear();
     for instruction in &expression.instructions {
         match instruction.op {
@@ -569,7 +582,41 @@ pub fn eval_expression_into(
                     .len()
                     .checked_sub(argc)
                     .ok_or_else(|| "stack underflow on HELPER_FUNC".to_string())?;
-                let result = apply_helper(instruction.function, &stack[start..])?;
+                let result = if instruction.function == 16 && !pchip_tables.is_empty() {
+                    let x = as_real(&stack[start])?;
+                    let grid = helper_args_to_tuple(&stack[start + 1])?;
+                    let _values = helper_args_to_tuple(&stack[start + 2])?;
+                    let mut found = None;
+                    for (ti, table) in pchip_tables.iter().enumerate() {
+                        if table.grid.len() == grid.len() {
+                            let matches = table
+                                .grid
+                                .iter()
+                                .zip(grid.iter())
+                                .all(|(a, b)| (*a - b.re).abs() < 1e-15);
+                            if matches {
+                                found = Some(ti);
+                                break;
+                            }
+                        }
+                    }
+                    if let Some(ti) = found {
+                        let mut fallback_hint = 0usize;
+                        let hint = if ti < pchip_hints.len() {
+                            &mut pchip_hints[ti]
+                        } else {
+                            &mut fallback_hint
+                        };
+                        RuntimeValue::Scalar(Complex64::new(
+                            pchip_tables[ti].evaluate(x, hint),
+                            0.0,
+                        ))
+                    } else {
+                        apply_helper(instruction.function, &stack[start..])?
+                    }
+                } else {
+                    apply_helper(instruction.function, &stack[start..])?
+                };
                 stack.truncate(start);
                 stack.push(result);
             }
@@ -854,4 +901,47 @@ pub fn eval_scalar_expression_into(
 
 pub fn scalar_value(value: RuntimeValue) -> Result<Complex64, String> {
     as_scalar(&value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn instruction_op_values_match_python() {
+        assert_eq!(InstructionOp::Const as u8, 1);
+        assert_eq!(InstructionOp::Slot as u8, 2);
+        assert_eq!(InstructionOp::Temp as u8, 3);
+        assert_eq!(InstructionOp::Time as u8, 4);
+        assert_eq!(InstructionOp::Add as u8, 5);
+        assert_eq!(InstructionOp::Sub as u8, 6);
+        assert_eq!(InstructionOp::Mul as u8, 7);
+        assert_eq!(InstructionOp::Div as u8, 8);
+        assert_eq!(InstructionOp::Pow as u8, 9);
+        assert_eq!(InstructionOp::Neg as u8, 10);
+        assert_eq!(InstructionOp::Conj as u8, 11);
+        assert_eq!(InstructionOp::BuiltinFunc as u8, 12);
+        assert_eq!(InstructionOp::HelperFunc as u8, 13);
+        assert_eq!(InstructionOp::Gt as u8, 14);
+        assert_eq!(InstructionOp::Ge as u8, 15);
+        assert_eq!(InstructionOp::Lt as u8, 16);
+        assert_eq!(InstructionOp::Le as u8, 17);
+        assert_eq!(InstructionOp::Eq as u8, 18);
+        assert_eq!(InstructionOp::Ne as u8, 19);
+    }
+
+    #[test]
+    fn instruction_op_roundtrip() {
+        for i in 1..=19i64 {
+            let op = InstructionOp::from_i64(i).unwrap();
+            assert_eq!(op as u8, i as u8);
+        }
+    }
+
+    #[test]
+    fn instruction_op_unknown_value() {
+        assert!(InstructionOp::from_i64(0).is_err());
+        assert!(InstructionOp::from_i64(20).is_err());
+        assert!(InstructionOp::from_i64(-1).is_err());
+    }
 }

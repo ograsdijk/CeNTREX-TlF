@@ -21,6 +21,98 @@ pub struct ParameterGraph {
     pub slot_names: Vec<String>,
     pub base_values: Vec<RuntimeValue>,
     pub compounds: Vec<CompoundExpression>,
+    pub pchip_tables: Vec<PchipTable>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PchipTable {
+    pub grid: Vec<f64>,
+    pub coefficients: Vec<[f64; 4]>,
+}
+
+impl PchipTable {
+    pub fn from_grid_values(grid: &[f64], values: &[f64]) -> Result<Self, String> {
+        let n = grid.len();
+        if n != values.len() {
+            return Err("pchip grid and values must have the same length".to_string());
+        }
+        if n < 2 {
+            return Ok(Self {
+                grid: grid.to_vec(),
+                coefficients: Vec::new(),
+            });
+        }
+        let mut h = vec![0.0; n - 1];
+        let mut delta = vec![0.0; n - 1];
+        for i in 0..n - 1 {
+            h[i] = grid[i + 1] - grid[i];
+            if h[i] <= 0.0 {
+                return Err("pchip grid must be strictly increasing".to_string());
+            }
+            delta[i] = (values[i + 1] - values[i]) / h[i];
+        }
+        let mut d = vec![0.0; n];
+        d[0] = delta[0];
+        d[n - 1] = delta[n - 2];
+        for i in 1..n - 1 {
+            if delta[i - 1].signum() != delta[i].signum() || delta[i - 1] == 0.0 || delta[i] == 0.0
+            {
+                d[i] = 0.0;
+            } else {
+                let w1 = 2.0 * h[i] + h[i - 1];
+                let w2 = h[i] + 2.0 * h[i - 1];
+                d[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i]);
+            }
+        }
+        let mut coefficients = Vec::with_capacity(n - 1);
+        for i in 0..n - 1 {
+            let c0 = values[i];
+            let c1 = d[i];
+            let c2 = (3.0 * delta[i] - 2.0 * d[i] - d[i + 1]) / h[i];
+            let c3 = (d[i] + d[i + 1] - 2.0 * delta[i]) / (h[i] * h[i]);
+            coefficients.push([c0, c1, c2, c3]);
+        }
+        Ok(Self {
+            grid: grid.to_vec(),
+            coefficients,
+        })
+    }
+
+    pub fn evaluate(&self, x: f64, hint: &mut usize) -> f64 {
+        let n = self.grid.len();
+        if n < 2 {
+            return if n == 1 {
+                self.coefficients.first().map_or(0.0, |c| c[0])
+            } else {
+                0.0
+            };
+        }
+        if x <= self.grid[0] {
+            *hint = 0;
+            return self.coefficients[0][0];
+        }
+        if x >= self.grid[n - 1] {
+            let last = n - 2;
+            *hint = last;
+            let dx = self.grid[n - 1] - self.grid[last];
+            let c = &self.coefficients[last];
+            return c[0] + dx * (c[1] + dx * (c[2] + dx * c[3]));
+        }
+        let i = if *hint < n - 1 && self.grid[*hint] <= x && x <= self.grid[*hint + 1] {
+            *hint
+        } else {
+            let idx = self
+                .grid
+                .partition_point(|&g| g <= x)
+                .saturating_sub(1)
+                .min(n - 2);
+            *hint = idx;
+            idx
+        };
+        let dx = x - self.grid[i];
+        let c = &self.coefficients[i];
+        c[0] + dx * (c[1] + dx * (c[2] + dx * c[3]))
+    }
 }
 
 impl ParameterGraph {
@@ -31,7 +123,8 @@ impl ParameterGraph {
         eval_stack: &mut Vec<RuntimeValue>,
         scalar_stack: &mut Vec<Complex64>,
     ) -> Result<(), String> {
-        self.evaluate_with_overrides_into(t, &[], slots, eval_stack, scalar_stack)
+        let mut pchip_hints = vec![0usize; self.pchip_tables.len()];
+        self.evaluate_with_overrides_into(t, &[], slots, eval_stack, scalar_stack, &mut pchip_hints)
     }
 
     pub fn evaluate_with_overrides_into(
@@ -41,6 +134,7 @@ impl ParameterGraph {
         slots: &mut Vec<RuntimeValue>,
         eval_stack: &mut Vec<RuntimeValue>,
         scalar_stack: &mut Vec<Complex64>,
+        pchip_hints: &mut [usize],
     ) -> Result<(), String> {
         slots.clear();
         slots.extend(self.base_values.iter().cloned());
@@ -64,7 +158,15 @@ impl ParameterGraph {
                     scalar_stack,
                 )?)
             } else {
-                eval_expression_into(&compound.expression, slots.as_slice(), t, &[], eval_stack)?
+                crate::lindblad::eval::eval_expression_into_with_pchip(
+                    &compound.expression,
+                    slots.as_slice(),
+                    t,
+                    &[],
+                    eval_stack,
+                    &self.pchip_tables,
+                    pchip_hints,
+                )?
             };
         }
         Ok(())
@@ -733,10 +835,26 @@ pub fn parse_parameter_graph(obj: &Bound<'_, PyAny>) -> PyResult<ParameterGraph>
         });
     }
 
+    let pchip_tables = if let Some(tables_any) = dict.get_item("pchip_tables")? {
+        let tables_list: &Bound<'_, PyList> = tables_any.cast()?;
+        let mut tables = Vec::with_capacity(tables_list.len());
+        for table_obj in tables_list.iter() {
+            let table_dict: &Bound<'_, PyDict> = table_obj.cast()?;
+            let grid: Vec<f64> = required_item(table_dict, "grid")?.extract()?;
+            let values: Vec<f64> = required_item(table_dict, "values")?.extract()?;
+            tables
+                .push(PchipTable::from_grid_values(&grid, &values).map_err(PyValueError::new_err)?);
+        }
+        tables
+    } else {
+        Vec::new()
+    };
+
     Ok(ParameterGraph {
         slot_names,
         base_values,
         compounds,
+        pchip_tables,
     })
 }
 
