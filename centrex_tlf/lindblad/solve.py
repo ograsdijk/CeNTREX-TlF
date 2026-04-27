@@ -316,6 +316,7 @@ def _solve_rust_fast(
     output_indices: Sequence[tuple[int, int]] | None,
     output_when: str,
     dense_output: bool,
+    integral_weights: Sequence[tuple[int, float]] | None = None,
 ) -> LindbladResult | LindbladObservableResult:
     from ..centrex_tlf_rust import solve_lindblad_ode_py
 
@@ -343,6 +344,7 @@ def _solve_rust_fast(
         output,
         None if output_indices is None else list(output_indices),
         "saveat",
+        None if integral_weights is None else list(integral_weights),
     )
 
     times_array = np.asarray(times, dtype=np.float64)
@@ -352,6 +354,14 @@ def _solve_rust_fast(
             t=times_array,
             packed_y=np.asarray(values, dtype=np.float64).reshape((times_array.size, int(width))),
             layout=prepared.layout,
+            solver_stats=stats_dict,
+        )
+    if output in ("weighted_integral", "photon_integral", "excited_population"):
+        return LindbladObservableResult(
+            t=times_array,
+            values=np.asarray(values, dtype=np.float64),
+            output=output,
+            output_indices=None,
             solver_stats=stats_dict,
         )
     values_array = np.asarray(
@@ -391,6 +401,7 @@ def solve_lindblad(
     output_indices: Sequence[tuple[int, int]] | None = None,
     output_when: str = "saveat",
     dense_output: bool = True,
+    integral_weights: Sequence[tuple[int, float]] | None = None,
 ) -> LindbladResult | LindbladMatrixResult | LindbladObservableResult:
     if solver not in {
         "explicit",
@@ -412,19 +423,22 @@ def solve_lindblad(
             "supported execution_mode values are 'reference', 'structured', 'structured_upper', "
             "and 'expanded_sparse'"
         )
-    if output not in {"full", "populations", "selected"}:
-        raise NotImplementedError("output must be 'full', 'populations', or 'selected'")
+    if output not in {"full", "populations", "selected", "weighted_integral", "photon_integral", "excited_population"}:
+        raise NotImplementedError(
+            "output must be 'full', 'populations', 'selected', 'weighted_integral', "
+            "'photon_integral', or 'excited_population'"
+        )
     if output_when not in {"saveat", "final"}:
         raise NotImplementedError("output_when must be 'saveat' or 'final'")
-    if (output != "full" or output_when != "saveat" or not dense_output) and solver not in {
+    if (output not in {"full"} or output_when != "saveat" or not dense_output or integral_weights is not None) and solver not in {
         "dopri5_fast",
         "tsit5_fast",
         "dopri5",
         "explicit",
     }:
         raise NotImplementedError(
-            "reduced output, final-only output, and dense_output control are currently only "
-            "supported with Rust solvers"
+            "reduced output, final-only output, integral output, and dense_output control are "
+            "currently only supported with Rust solvers"
         )
     if output == "selected" and output_indices is None:
         raise ValueError("output='selected' requires output_indices")
@@ -494,6 +508,7 @@ def solve_lindblad(
             output_indices=output_indices,
             output_when=output_when,
             dense_output=dense_output,
+            integral_weights=integral_weights,
         )
     if backend == "rust" and prepared.rust_plan is not None:
         return _solve_rust_fast(
@@ -513,6 +528,7 @@ def solve_lindblad(
             output_indices=output_indices,
             output_when=output_when,
             dense_output=dense_output,
+            integral_weights=integral_weights,
         )
     if backend == "python" and solver != "explicit":
         raise NotImplementedError("the python backend only supports solver='explicit'")

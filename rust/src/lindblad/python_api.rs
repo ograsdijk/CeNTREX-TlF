@@ -8,6 +8,7 @@ use crate::lindblad::rhs::{
 use crate::ode::batch::{solve_single, OdeSolver};
 use crate::ode::output::{
     FullOutput, OdeOutputValues, PopulationsOutput, SelectedExtraction, SelectedOutput,
+    WeightedIntegralOutput,
 };
 use num_complex::Complex64;
 use numpy::{
@@ -330,7 +331,7 @@ fn build_extractions(n: usize, indices: &[(usize, usize)]) -> Vec<SelectedExtrac
         .collect()
 }
 
-#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat"))]
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat", integral_weights = None))]
 pub fn solve_lindblad_ode_py<'py>(
     py: Python<'py>,
     plan: PyRef<'py, PreparedLindbladPlan>,
@@ -348,6 +349,7 @@ pub fn solve_lindblad_ode_py<'py>(
     output: &str,
     output_indices: Option<Vec<(usize, usize)>>,
     output_when: &str,
+    integral_weights: Option<Vec<(usize, f64)>>,
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Py<PyAny>, usize, Py<PyDict>)> {
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
@@ -384,6 +386,15 @@ pub fn solve_lindblad_ode_py<'py>(
                 .map_err(PyValueError::new_err)?;
             (out.finish(), s)
         }
+        "weighted_integral" | "photon_integral" | "excited_population" => {
+            let weights = integral_weights.ok_or_else(|| {
+                PyValueError::new_err(format!("output='{output}' requires integral_weights"))
+            })?;
+            let mut out = WeightedIntegralOutput::new(weights);
+            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
+                .map_err(PyValueError::new_err)?;
+            (out.finish(), s)
+        }
         _ => {
             let mut out = FullOutput::new(dim, capacity);
             let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
@@ -406,7 +417,7 @@ pub fn solve_lindblad_ode_py<'py>(
     Ok((times_array, values, r.width, d.unbind()))
 }
 
-#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None))]
+#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn solve_lindblad_batch_ode_py<'py>(
     py: Python<'py>,
@@ -425,6 +436,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     output: &str,
     output_indices: Option<Vec<(usize, usize)>>,
     output_when: &str,
+    integral_weights: Option<Vec<(usize, f64)>>,
     parameter_slot_indices: Option<Vec<usize>>,
     parameter_batch: Option<PyReadonlyArray2<'py, Complex64>>,
     parallel: bool,
@@ -495,6 +507,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
                 execution_mode,
                 output,
                 output_indices.as_deref(),
+                integral_weights.as_deref(),
                 &slot_indices,
                 param_values.as_deref(),
                 parallel,
@@ -522,7 +535,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     Ok((times, values, result.width, result.time_count, d.unbind()))
 }
 
-#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", parallel = true, threads = None))]
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parallel = true, threads = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn solve_lindblad_grid_ode_py<'py>(
     py: Python<'py>,
@@ -544,6 +557,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
     output: &str,
     output_indices: Option<Vec<(usize, usize)>>,
     output_when: &str,
+    integral_weights: Option<Vec<(usize, f64)>>,
     parallel: bool,
     threads: Option<usize>,
 ) -> PyResult<(
@@ -598,6 +612,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
                 execution_mode,
                 output,
                 output_indices.as_deref(),
+                integral_weights.as_deref(),
                 &parameter_slot_indices,
                 &axes,
                 &axis_offsets,

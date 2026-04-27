@@ -30,6 +30,9 @@ from centrex_tlf.effective_hamiltonian.rust_plan import (
     prepare_effective_lindblad_rust_plan,
     solve_effective_lindblad,
     EffectiveLindbladResult,
+    EffectiveLindbladBatchResult,
+    parameter_scan,
+    grid_scan,
 )
 
 __all__ = [
@@ -54,4 +57,7 @@ __all__ = [
     "prepare_effective_lindblad_rust_plan",
     "solve_effective_lindblad",
     "EffectiveLindbladResult",
+    "EffectiveLindbladBatchResult",
+    "parameter_scan",
+    "grid_scan",
 ]

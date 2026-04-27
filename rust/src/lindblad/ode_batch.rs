@@ -4,7 +4,7 @@ use crate::lindblad::rhs::ExecutionMode;
 use crate::ode::batch::{solve_single, OdeSolver};
 use crate::ode::output::{
     FullOutput, OdeOutputResult, OdeOutputValues, PopulationsOutput, SelectedExtraction,
-    SelectedOutput,
+    SelectedOutput, WeightedIntegralOutput,
 };
 use crate::ode::{OdeOptions, OdeRhs, OdeStats};
 use num_complex::Complex64;
@@ -45,6 +45,7 @@ enum ConcreteOutput {
     Populations(PopulationsOutput),
     Selected(SelectedOutput),
     Full(FullOutput),
+    WeightedIntegral(WeightedIntegralOutput),
 }
 
 impl ConcreteOutput {
@@ -61,6 +62,7 @@ impl ConcreteOutput {
             Self::Populations(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
             Self::Selected(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
             Self::Full(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
+            Self::WeightedIntegral(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
         }
     }
 
@@ -69,6 +71,7 @@ impl ConcreteOutput {
             Self::Populations(o) => o.finish(),
             Self::Selected(o) => o.finish(),
             Self::Full(o) => o.finish(),
+            Self::WeightedIntegral(o) => o.finish(),
         }
     }
 }
@@ -84,6 +87,9 @@ enum OutputSpec {
     Full {
         dim: usize,
     },
+    WeightedIntegral {
+        weights: Vec<(usize, f64)>,
+    },
 }
 
 impl OutputSpec {
@@ -96,6 +102,9 @@ impl OutputSpec {
                 ConcreteOutput::Selected(SelectedOutput::new(extractions.clone(), capacity))
             }
             Self::Full { dim } => ConcreteOutput::Full(FullOutput::new(*dim, capacity)),
+            Self::WeightedIntegral { weights } => {
+                ConcreteOutput::WeightedIntegral(WeightedIntegralOutput::new(weights.clone()))
+            }
         }
     }
 }
@@ -120,6 +129,7 @@ pub fn solve_batch_ode(
     execution_mode: ExecutionMode,
     output_mode: &str,
     output_indices: Option<&[(usize, usize)]>,
+    integral_weights: Option<&[(usize, f64)]>,
     parameter_slot_indices: &[usize],
     parameter_batch: Option<&[Complex64]>,
     parallel: bool,
@@ -151,6 +161,13 @@ pub fn solve_batch_ode(
             }
         }
         "full" => OutputSpec::Full { dim },
+        "weighted_integral" | "photon_integral" | "excited_population" => {
+            let weights = integral_weights
+                .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+            OutputSpec::WeightedIntegral {
+                weights: weights.to_vec(),
+            }
+        }
         other => return Err(format!("unknown output mode: {other:?}")),
     };
 
@@ -285,6 +302,7 @@ pub fn solve_grid_ode(
     execution_mode: ExecutionMode,
     output_mode: &str,
     output_indices: Option<&[(usize, usize)]>,
+    integral_weights: Option<&[(usize, f64)]>,
     parameter_slot_indices: &[usize],
     axes: &[Complex64],
     axis_offsets: &[usize],
@@ -310,6 +328,13 @@ pub fn solve_grid_ode(
             }
         }
         "full" => OutputSpec::Full { dim },
+        "weighted_integral" | "photon_integral" | "excited_population" => {
+            let weights = integral_weights
+                .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+            OutputSpec::WeightedIntegral {
+                weights: weights.to_vec(),
+            }
+        }
         other => return Err(format!("unknown output mode: {other:?}")),
     };
 

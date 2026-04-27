@@ -6,48 +6,83 @@ pub struct EffectiveLindbladWorkspace {
     pub parameter_values: Vec<RuntimeValue>,
     pub eval_stack: Vec<RuntimeValue>,
     pub scalar_stack: Vec<Complex64>,
-    pub l_scratch: Vec<f64>,
     pub last_interval: usize,
+    pub pchip_hints: Vec<usize>,
+    pub parameter_overrides: Vec<(usize, RuntimeValue)>,
 }
 
 impl EffectiveLindbladWorkspace {
     pub fn new(plan: &EffectiveLindbladPlan) -> Self {
-        let mat_size = plan.real_dim * plan.real_dim;
         Self {
             parameter_values: Vec::with_capacity(plan.parameter_graph.slot_names.len()),
             eval_stack: Vec::new(),
             scalar_stack: Vec::new(),
-            l_scratch: vec![0.0; mat_size],
             last_interval: 0,
+            pchip_hints: vec![0; plan.parameter_graph.pchip_tables.len()],
+            parameter_overrides: Vec::new(),
         }
+    }
+
+    pub fn set_parameter_overrides(
+        &mut self,
+        slot_indices: &[usize],
+        values: &[f64],
+    ) -> Result<(), String> {
+        if slot_indices.len() != values.len() {
+            return Err(format!(
+                "override slot count {} does not match value count {}",
+                slot_indices.len(),
+                values.len()
+            ));
+        }
+        self.parameter_overrides.clear();
+        for (&slot, &value) in slot_indices.iter().zip(values.iter()) {
+            self.parameter_overrides
+                .push((slot, RuntimeValue::Scalar(Complex64::new(value, 0.0))));
+        }
+        Ok(())
     }
 }
 
-fn find_interval_cached(x: f64, grid: &[f64], hint: &mut usize) -> (usize, f64) {
+fn find_interval_cached(x: f64, grid: &[f64], hint: &mut usize) -> Result<(usize, f64), String> {
     let n = grid.len();
     if n < 2 {
-        return (0, 0.0);
+        return Ok((0, 0.0));
     }
-    if x <= grid[0] {
+    let tol = 1e-10 * (grid[n - 1] - grid[0]).abs().max(1.0);
+    if x < grid[0] - tol {
+        return Err(format!(
+            "field coordinate {x:.6e} is below the operator grid minimum {:.6e}",
+            grid[0]
+        ));
+    }
+    if x > grid[n - 1] + tol {
+        return Err(format!(
+            "field coordinate {x:.6e} is above the operator grid maximum {:.6e}",
+            grid[n - 1]
+        ));
+    }
+    let x_clamped = x.clamp(grid[0], grid[n - 1]);
+    if x_clamped <= grid[0] {
         *hint = 0;
-        return (0, 0.0);
+        return Ok((0, 0.0));
     }
-    if x >= grid[n - 1] {
+    if x_clamped >= grid[n - 1] {
         *hint = n - 2;
-        return (n - 2, 1.0);
+        return Ok((n - 2, 1.0));
     }
     let h = *hint;
-    if h < n - 1 && grid[h] <= x && x <= grid[h + 1] {
-        let w = (x - grid[h]) / (grid[h + 1] - grid[h]);
-        return (h, w);
+    if h < n - 1 && grid[h] <= x_clamped && x_clamped <= grid[h + 1] {
+        let w = (x_clamped - grid[h]) / (grid[h + 1] - grid[h]);
+        return Ok((h, w));
     }
     let idx = grid
-        .partition_point(|&g| g <= x)
+        .partition_point(|&g| g <= x_clamped)
         .saturating_sub(1)
         .min(n - 2);
     *hint = idx;
-    let w = (x - grid[idx]) / (grid[idx + 1] - grid[idx]);
-    (idx, w)
+    let w = (x_clamped - grid[idx]) / (grid[idx + 1] - grid[idx]);
+    Ok((idx, w))
 }
 
 pub fn rhs_effective_lindblad(
@@ -57,61 +92,47 @@ pub fn rhs_effective_lindblad(
     workspace: &mut EffectiveLindbladWorkspace,
     dy: &mut [f64],
 ) -> Result<(), String> {
-    let dim = plan.real_dim;
-    let mat_size = dim * dim;
-
-    plan.parameter_graph.evaluate_into(
+    plan.parameter_graph.evaluate_with_overrides_into(
         t,
+        workspace.parameter_overrides.as_slice(),
         &mut workspace.parameter_values,
         &mut workspace.eval_stack,
         &mut workspace.scalar_stack,
+        &mut workspace.pchip_hints,
     )?;
 
     let field_val = match &workspace.parameter_values[plan.field_coordinate_slot] {
         RuntimeValue::Scalar(c) => c.re,
         _ => return Err("field_coordinate must be scalar".to_string()),
     };
-    let rabi_val = match &workspace.parameter_values[plan.rabi_rate_slot] {
-        RuntimeValue::Scalar(c) => c.re,
-        _ => return Err("rabi_rate must be scalar".to_string()),
-    };
-    let detuning_val = match &workspace.parameter_values[plan.detuning_slot] {
-        RuntimeValue::Scalar(c) => c.re,
-        _ => return Err("detuning must be scalar".to_string()),
-    };
+    let rabi_val = plan.constant_rabi.unwrap_or_else(|| {
+        match &workspace.parameter_values[plan.rabi_rate_slot] {
+            RuntimeValue::Scalar(c) => c.re,
+            _ => 0.0,
+        }
+    });
+    let detuning_val = plan.constant_detuning.unwrap_or_else(|| {
+        match &workspace.parameter_values[plan.detuning_slot] {
+            RuntimeValue::Scalar(c) => c.re,
+            _ => 0.0,
+        }
+    });
 
-    let (idx, w) = find_interval_cached(field_val, &plan.field_grid, &mut workspace.last_interval);
+    let (idx, _w) =
+        find_interval_cached(field_val, &plan.field_grid, &mut workspace.last_interval)?;
+    let dx = field_val - plan.field_grid[idx];
 
-    let l_scratch = &mut workspace.l_scratch;
-    let base_combined = idx * mat_size;
-    let base_opt = idx * mat_size;
-    let base_det = idx * mat_size;
     let half_rabi = 0.5 * rabi_val;
 
-    if w == 0.0 && idx == 0 {
-        for k in 0..mat_size {
-            l_scratch[k] = plan.l_combined[base_combined + k]
-                + half_rabi * plan.l_opt[base_opt + k]
-                + detuning_val * plan.l_det[base_det + k];
-        }
-    } else {
-        let diff_base = idx.min(plan.n_grid - 2) * mat_size;
-        for k in 0..mat_size {
-            let lc = plan.l_combined[base_combined + k] + w * plan.dl_combined[diff_base + k];
-            let lo = plan.l_opt[base_opt + k] + w * plan.dl_opt[diff_base + k];
-            let ld = plan.l_det[base_det + k] + w * plan.dl_det[diff_base + k];
-            l_scratch[k] = lc + half_rabi * lo + detuning_val * ld;
-        }
+    for v in dy.iter_mut() {
+        *v = 0.0;
     }
-
-    for i in 0..dim {
-        let mut sum = 0.0;
-        let row_base = i * dim;
-        for j in 0..dim {
-            sum += l_scratch[row_base + j] * y[j];
-        }
-        dy[i] = sum;
-    }
+    plan.sparse_combined
+        .sparse_matvec_interpolated(idx, dx, 1.0, y, dy);
+    plan.sparse_opt
+        .sparse_matvec_interpolated(idx, dx, half_rabi, y, dy);
+    plan.sparse_det
+        .sparse_matvec_interpolated(idx, dx, detuning_val, y, dy);
 
     Ok(())
 }

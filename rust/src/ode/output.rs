@@ -191,3 +191,51 @@ impl OdeOutput for FinalOnlyOutput {
         }
     }
 }
+
+pub struct WeightedIntegralOutput {
+    weights: Vec<(usize, f64)>,
+    integral: f64,
+    last_t: f64,
+    last_value: f64,
+    times: Vec<f64>,
+}
+
+impl WeightedIntegralOutput {
+    pub fn new(weights: Vec<(usize, f64)>) -> Self {
+        Self {
+            weights,
+            integral: 0.0,
+            last_t: f64::NAN,
+            last_value: 0.0,
+            times: Vec::new(),
+        }
+    }
+
+    pub fn finish(self) -> OdeOutputResult {
+        OdeOutputResult {
+            times: self.times,
+            values: OdeOutputValues::Real(vec![self.integral]),
+            width: 1,
+        }
+    }
+}
+
+impl OdeOutput for WeightedIntegralOutput {
+    fn push(&mut self, t: f64, y: &[f64]) {
+        let value: f64 = self.weights.iter().map(|&(i, w)| w * y[i]).sum();
+        if self.last_t.is_finite() {
+            self.integral += 0.5 * (self.last_value + value) * (t - self.last_t);
+        }
+        self.last_t = t;
+        self.last_value = value;
+        if self.times.is_empty() {
+            self.times.push(t);
+        } else {
+            self.times[0] = t;
+        }
+    }
+
+    fn times(&self) -> &[f64] {
+        &self.times
+    }
+}
