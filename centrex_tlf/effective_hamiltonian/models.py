@@ -57,6 +57,7 @@ class PreparedInterpolatedEffectiveHamiltonianModel:
     ground_main_index: int
     patches: tuple[InterpolatedEffectivePatch, ...]
     keep_diagnostics: bool = True
+    grid_variation_diagnostics: dict[str, object] | None = None
 
     @property
     def n_effective_states(self) -> int:
@@ -216,6 +217,7 @@ class PreparedLindbladSafeCompactInterpolatedHamiltonianModel:
     patch_transition_frequencies: np.ndarray
     patches: tuple[LindbladSafeCompactInterpolatedPatch, ...]
     keep_diagnostics: bool = True
+    grid_variation_diagnostics: dict[str, object] | None = None
 
     @property
     def n_effective_states(self) -> int:
@@ -418,6 +420,7 @@ class PreparedInstantaneousInterpolatedEffectiveHamiltonianModel:
     ground_main_index: int
     patches: tuple[InstantaneousInterpolatedEffectivePatch, ...]
     keep_diagnostics: bool = True
+    grid_variation_diagnostics: dict[str, object] | None = None
 
     @property
     def n_effective_states(self) -> int:

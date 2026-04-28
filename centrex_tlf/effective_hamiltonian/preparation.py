@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Sequence
 
 import numpy as np
@@ -44,6 +45,86 @@ from centrex_tlf.effective_hamiltonian.models import (
 )
 
 
+def _relative_adjacent_variation(values: Sequence[np.ndarray]) -> list[float]:
+    variations: list[float] = []
+    for left, right in zip(values[:-1], values[1:]):
+        left_arr = np.asarray(left, dtype=np.complex128)
+        right_arr = np.asarray(right, dtype=np.complex128)
+        scale = max(float(np.linalg.norm(left_arr)), float(np.linalg.norm(right_arr)), 1e-300)
+        variations.append(float(np.linalg.norm(right_arr - left_arr) / scale))
+    return variations
+
+
+def _operator_grid_variation_diagnostics(
+    field_points: Sequence[float],
+    patches: Sequence[
+        InterpolatedEffectivePatch
+        | LindbladSafeCompactInterpolatedPatch
+        | InstantaneousInterpolatedEffectivePatch
+    ],
+) -> dict[str, object]:
+    operator_values = {
+        "h_internal": [patch.bundle.h_internal for patch in patches],
+        "h_opt": [patch.bundle.h_opt for patch in patches],
+        "h_det": [patch.bundle.h_det for patch in patches],
+        "dissipator_superop": [patch.bundle.dissipator_superoperator() for patch in patches],
+        "jump_rate_operator": [patch.bundle.jump_rate_operator() for patch in patches],
+    }
+    intervals = [
+        (float(left), float(right))
+        for left, right in zip(field_points[:-1], field_points[1:])
+    ]
+    by_operator: dict[str, dict[str, object]] = {}
+    max_variation = 0.0
+    max_operator = ""
+    max_interval: tuple[float, float] | None = None
+
+    for name, values in operator_values.items():
+        variations = _relative_adjacent_variation(values)
+        operator_max = max(variations, default=0.0)
+        operator_interval = (
+            intervals[int(np.argmax(variations))]
+            if variations
+            else None
+        )
+        by_operator[name] = {
+            "adjacent_relative_variation": variations,
+            "max_relative_variation": operator_max,
+            "max_interval": operator_interval,
+        }
+        if operator_max > max_variation:
+            max_variation = operator_max
+            max_operator = name
+            max_interval = operator_interval
+
+    return {
+        "metric": "adjacent_relative_frobenius_norm",
+        "by_operator": by_operator,
+        "max_relative_variation": max_variation,
+        "max_operator": max_operator,
+        "max_interval": max_interval,
+    }
+
+
+def _warn_large_operator_grid_variation(
+    diagnostics: dict[str, object],
+    threshold: float | None,
+) -> None:
+    if threshold is None:
+        return
+    max_variation = float(diagnostics.get("max_relative_variation", 0.0))
+    if max_variation <= float(threshold):
+        return
+    warnings.warn(
+        "Effective Hamiltonian operator grid has large adjacent variation: "
+        f"{diagnostics.get('max_operator')} changes by {max_variation:.3g} "
+        f"across field interval {diagnostics.get('max_interval')}. "
+        "Consider adding intermediate field points before relying on interpolation.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+
+
 def prepare_interpolated_effective_model(
     *,
     field_points: Sequence[float | Sequence[float] | np.ndarray],
@@ -53,6 +134,7 @@ def prepare_interpolated_effective_model(
     master_field: float | Sequence[float] | np.ndarray | None = None,
     interpolation_kind: str = "linear",
     keep_diagnostics: bool = True,
+    grid_variation_warning_threshold: float | None = 1.0,
 ) -> PreparedInterpolatedEffectiveHamiltonianModel:
     if interpolation_kind != "linear":
         raise ValueError(
@@ -232,6 +314,14 @@ def prepare_interpolated_effective_model(
             aligned_bundles,
         )
     )
+    grid_variation_diagnostics = _operator_grid_variation_diagnostics(
+        unique_sorted.tolist(),
+        patches,
+    )
+    _warn_large_operator_grid_variation(
+        grid_variation_diagnostics,
+        grid_variation_warning_threshold,
+    )
     return PreparedInterpolatedEffectiveHamiltonianModel(
         transition=transition,
         optical_polarization=optical_polarization,
@@ -246,6 +336,7 @@ def prepare_interpolated_effective_model(
         ground_main_index=int(_optically_bright_ground_index(raw_bundles[master_index], excited_indices)),
         patches=patches,
         keep_diagnostics=bool(keep_diagnostics),
+        grid_variation_diagnostics=grid_variation_diagnostics,
     )
 
 
@@ -258,6 +349,7 @@ def prepare_lindblad_safe_compact_interpolated_model(
     master_field: float | Sequence[float] | np.ndarray | None = None,
     interpolation_kind: str = "linear",
     keep_diagnostics: bool = True,
+    grid_variation_warning_threshold: float | None = 1.0,
 ) -> PreparedLindbladSafeCompactInterpolatedHamiltonianModel:
     base_model = prepare_interpolated_effective_model(
         field_points=field_points,
@@ -267,6 +359,7 @@ def prepare_lindblad_safe_compact_interpolated_model(
         master_field=master_field,
         interpolation_kind=interpolation_kind,
         keep_diagnostics=keep_diagnostics,
+        grid_variation_warning_threshold=None,
     )
     patch_transition_frequencies: list[float] = []
     for field_z in np.asarray(base_model.field_points, dtype=np.float64).tolist():
@@ -313,6 +406,14 @@ def prepare_lindblad_safe_compact_interpolated_model(
             )
         )
     patches = tuple(lindblad_safe_patches)
+    grid_variation_diagnostics = _operator_grid_variation_diagnostics(
+        np.asarray(base_model.field_points, dtype=np.float64).tolist(),
+        patches,
+    )
+    _warn_large_operator_grid_variation(
+        grid_variation_diagnostics,
+        grid_variation_warning_threshold,
+    )
     return PreparedLindbladSafeCompactInterpolatedHamiltonianModel(
         transition=base_model.transition,
         optical_polarization=base_model.optical_polarization,
@@ -330,6 +431,7 @@ def prepare_lindblad_safe_compact_interpolated_model(
         patch_transition_frequencies=np.asarray(patch_transition_frequencies_arr, dtype=np.float64),
         patches=patches,
         keep_diagnostics=bool(keep_diagnostics),
+        grid_variation_diagnostics=grid_variation_diagnostics,
     )
 
 
@@ -341,6 +443,7 @@ def prepare_instantaneous_interpolated_effective_model(
     magnetic_field: Sequence[float] | np.ndarray = (0.0, 0.0, 1e-5),
     master_field: float | Sequence[float] | np.ndarray | None = None,
     keep_diagnostics: bool = True,
+    grid_variation_warning_threshold: float | None = 1.0,
 ) -> PreparedInstantaneousInterpolatedEffectiveHamiltonianModel:
     if len(field_points) < 2:
         raise ValueError(
@@ -489,6 +592,14 @@ def prepare_instantaneous_interpolated_effective_model(
         )
         for patch, gauge_connection in zip(instantaneous_patches, gauge_connections)
     )
+    grid_variation_diagnostics = _operator_grid_variation_diagnostics(
+        unique_sorted.tolist(),
+        patches,
+    )
+    _warn_large_operator_grid_variation(
+        grid_variation_diagnostics,
+        grid_variation_warning_threshold,
+    )
 
     return PreparedInstantaneousInterpolatedEffectiveHamiltonianModel(
         transition=transition,
@@ -505,4 +616,5 @@ def prepare_instantaneous_interpolated_effective_model(
         ground_main_index=int(_optically_bright_ground_index(patches[master_index].bundle, excited_indices)),
         patches=patches,
         keep_diagnostics=bool(keep_diagnostics),
+        grid_variation_diagnostics=grid_variation_diagnostics,
     )

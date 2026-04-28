@@ -64,6 +64,7 @@ __all__ = [
     "Basis",
     "CoupledState",
     "UncoupledState",
+    "expand_uncoupled_parity_to_omega_components",
 ]
 
 
@@ -895,47 +896,57 @@ class UncoupledBasisState(BasisState):
         Raises:
             ValueError: If state is already in Omega basis or cannot be transformed
         """
-        # Determine quantum numbers
-        J = self.J
-        mJ = self.mJ
-        I1 = self.I1
-        m1 = self.m1
-        I2 = self.I2
-        m2 = self.m2
-        Omega = 0 if self.Omega is None else self.Omega
-        electronic_state = self.electronic_state
-        P = self.P
+        return UncoupledState(expand_uncoupled_parity_to_omega_components(self))
 
-        # Check that not already in omega basis
-        if P is not None and not electronic_state == ElectronicState.X:
-            state_minus = 1 * UncoupledBasisState(
-                J,
-                mJ,
-                I1,
-                m1,
-                I2,
-                m2,
-                P=P,
-                Omega=-1 * Omega,
-                electronic_state=electronic_state,
-            )
-            state_plus = 1 * UncoupledBasisState(
-                J,
-                mJ,
-                I1,
-                m1,
-                I2,
-                m2,
-                P=P,
-                Omega=Omega,
-                electronic_state=electronic_state,
-            )
 
-            state = 1 / np.sqrt(2) * (state_plus + P * (-1) ** (J - 1) * state_minus)
-        else:
-            state = 1 * self
+def expand_uncoupled_parity_to_omega_components(
+    state: UncoupledBasisState,
+) -> list[tuple[complex, UncoupledBasisState]]:
+    """Expand an uncoupled parity-basis B state into signed-Omega components.
 
-        return state
+    This is the uncoupled analogue of `CoupledBasisState.transform_to_omega_basis`:
+    |J, |Omega|, P> = (|J, +|Omega|> + P(-1)^J |J, -|Omega|>) / sqrt(2).
+
+    X-state and Omega=0 states are already in a single Omega component and are
+    returned unchanged.
+    """
+    if (
+        state.electronic_state == ElectronicState.B
+        and state.P is not None
+        and state.Omega != 0
+    ):
+        omega_abs = abs(state.Omega)
+        amp_plus = 1.0 / np.sqrt(2)
+        amp_minus = state.P * ((-1) ** state.J) / np.sqrt(2)
+        state_plus = UncoupledBasisState(
+            J=state.J,
+            mJ=state.mJ,
+            I1=state.I1,
+            m1=state.m1,
+            I2=state.I2,
+            m2=state.m2,
+            Omega=omega_abs,
+            P=state.P,
+            electronic_state=state.electronic_state,
+            basis=state.basis,
+            v=state.v,
+        )
+        state_minus = UncoupledBasisState(
+            J=state.J,
+            mJ=state.mJ,
+            I1=state.I1,
+            m1=state.m1,
+            I2=state.I2,
+            m2=state.m2,
+            Omega=-omega_abs,
+            P=state.P,
+            electronic_state=state.electronic_state,
+            basis=state.basis,
+            v=state.v,
+        )
+        return [(complex(amp_plus), state_plus), (complex(amp_minus), state_minus)]
+
+    return [(1.0 + 0j, state)]
 
 
 S = TypeVar("S", bound=BasisState)

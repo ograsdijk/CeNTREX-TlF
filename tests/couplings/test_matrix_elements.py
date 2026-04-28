@@ -91,6 +91,29 @@ def test_ED_ME_uncoupled():
     assert np.isclose(dipole, (0.5773502691896257 + 0j))
 
 
+def test_uncoupled_parity_to_omega_expansion_is_shared_convention():
+    state = states.UncoupledBasisState(
+        J=1,
+        mJ=0,
+        I1=1 / 2,
+        m1=1 / 2,
+        I2=1 / 2,
+        m2=1 / 2,
+        Omega=1,
+        P=1,
+        electronic_state=states.ElectronicState.B,
+    )
+
+    expanded = states.expand_uncoupled_parity_to_omega_components(state)
+    transformed = state.transform_to_omega_basis()
+
+    assert transformed.data == expanded
+    assert expanded[0][1].Omega == 1
+    assert expanded[1][1].Omega == -1
+    assert np.isclose(expanded[0][0], 1 / np.sqrt(2))
+    assert np.isclose(expanded[1][0], -1 / np.sqrt(2))
+
+
 def test_generate_ED_ME_mixed_state_uncoupled():
     bra = states.UncoupledBasisState(
         J=1,

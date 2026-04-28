@@ -151,8 +151,8 @@ def ED_ME_uncoupled(
         This intentionally does not include any physical dipole moment scaling.
     """
     ME = 0j
-    for amp_bra, basis_bra in _expand_uncoupled_parity_to_omega_components(bra):
-        for amp_ket, basis_ket in _expand_uncoupled_parity_to_omega_components(ket):
+    for amp_bra, basis_bra in states.expand_uncoupled_parity_to_omega_components(bra):
+        for amp_ket, basis_ket in states.expand_uncoupled_parity_to_omega_components(ket):
             ME += amp_bra.conjugate() * amp_ket * _ED_ME_uncoupled_omega(
                 basis_bra,
                 basis_ket,
@@ -160,53 +160,6 @@ def ED_ME_uncoupled(
                 rme_only=rme_only,
             )
     return ME
-
-
-def _expand_uncoupled_parity_to_omega_components(
-    state: states.UncoupledBasisState,
-) -> list[tuple[complex, states.UncoupledBasisState]]:
-    """Expand a parity-basis B-state |J,|Ω|,P⟩ into signed-Ω components.
-
-    This mirrors `states.CoupledBasisState.transform_to_omega_basis`'s convention:
-        |J Ω P⟩ = (|J +Ω⟩ + P(-1)^J |J -Ω⟩)/√2
-
-    For X (Ω=0) and for Ω=0 states, returns the state itself.
-    """
-    if state.electronic_state == states.ElectronicState.B and state.P is not None and state.Omega != 0:
-        Omega_abs = abs(state.Omega)
-        amp_plus = 1 / math.sqrt(2)
-        amp_minus = state.P * ((-1) ** state.J) / math.sqrt(2)
-
-        state_plus = states.UncoupledBasisState(
-            J=state.J,
-            mJ=state.mJ,
-            I1=state.I1,
-            m1=state.m1,
-            I2=state.I2,
-            m2=state.m2,
-            Omega=Omega_abs,
-            P=state.P,
-            electronic_state=state.electronic_state,
-            basis=state.basis,
-            v=state.v,
-        )
-        state_minus = states.UncoupledBasisState(
-            J=state.J,
-            mJ=state.mJ,
-            I1=state.I1,
-            m1=state.m1,
-            I2=state.I2,
-            m2=state.m2,
-            Omega=-Omega_abs,
-            P=state.P,
-            electronic_state=state.electronic_state,
-            basis=state.basis,
-            v=state.v,
-        )
-
-        return [(complex(amp_plus), state_plus), (complex(amp_minus), state_minus)]
-
-    return [(1.0 + 0j, state)]
 
 
 @lru_cache(maxsize=int(1e6))
