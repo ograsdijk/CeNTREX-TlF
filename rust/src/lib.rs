@@ -238,6 +238,47 @@ fn generate_coupled_hamiltonian_B_py<'py>(
     ))
 }
 
+enum CachedBasisExpansion {
+    Coupled(CoupledBasisState, Vec<(Complex64, UncoupledBasisState)>),
+    Uncoupled(UncoupledBasisState),
+}
+
+fn cached_basis_expansion(state: &states::BasisStateEnum) -> CachedBasisExpansion {
+    match state {
+        states::BasisStateEnum::Coupled(state) => {
+            CachedBasisExpansion::Coupled(*state, state.transform_to_uncoupled().terms)
+        }
+        states::BasisStateEnum::Uncoupled(state) => CachedBasisExpansion::Uncoupled(*state),
+    }
+}
+
+fn cached_inner_product(left: &CachedBasisExpansion, right: &CachedBasisExpansion) -> Complex64 {
+    match (left, right) {
+        (CachedBasisExpansion::Coupled(a, _), CachedBasisExpansion::Coupled(b, _)) => {
+            if a == b {
+                Complex64::ONE
+            } else {
+                Complex64::ZERO
+            }
+        }
+        (CachedBasisExpansion::Uncoupled(a), CachedBasisExpansion::Uncoupled(b)) => {
+            if a == b {
+                Complex64::ONE
+            } else {
+                Complex64::ZERO
+            }
+        }
+        (CachedBasisExpansion::Uncoupled(a), CachedBasisExpansion::Coupled(_, b)) => b
+            .iter()
+            .find_map(|(amp, ket)| if ket == a { Some(*amp) } else { None })
+            .unwrap_or(Complex64::ZERO),
+        (CachedBasisExpansion::Coupled(_, a), CachedBasisExpansion::Uncoupled(b)) => a
+            .iter()
+            .find_map(|(amp, ket)| if ket == b { Some(amp.conj()) } else { None })
+            .unwrap_or(Complex64::ZERO),
+    }
+}
+
 #[pyfunction(signature = (basis1, basis2))]
 fn generate_transform_matrix_py<'py>(
     py: Python<'py>,
@@ -255,11 +296,13 @@ fn generate_transform_matrix_py<'py>(
 
     let n1 = b1.len();
     let n2 = b2.len();
+    let b1_expansions: Vec<CachedBasisExpansion> = b1.iter().map(cached_basis_expansion).collect();
+    let b2_expansions: Vec<CachedBasisExpansion> = b2.iter().map(cached_basis_expansion).collect();
     let mut matrix = Vec::with_capacity(n1 * n2);
 
-    for s1 in &b1 {
-        for s2 in &b2 {
-            matrix.push(s1.inner_product(s2));
+    for s1 in &b1_expansions {
+        for s2 in &b2_expansions {
+            matrix.push(cached_inner_product(s1, s2));
         }
     }
 

@@ -341,23 +341,37 @@ fn d_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledState {
     spherical_tensor_matrix_element(&psi, p, constants.mu_e)
 }
 
-/// Stark Hamiltonian for E along x: H_Sx = -(d_-1 - d_+1)/sqrt(2).
-pub fn h_sx(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
-    // H_Sx = (d_+1 - d_-1) / sqrt(2)
-    let res = d_p(psi, 1, constants) - d_p(psi, -1, constants);
-    res / SQRT_2
+/// Stark components (x, y, z) built from one d_p evaluation per spherical component.
+pub fn stark_components(
+    psi: CoupledBasisState,
+    constants: &BConstants,
+) -> (CoupledState, CoupledState, CoupledState) {
+    let d_minus = d_p(psi, -1, constants);
+    let d_zero = d_p(psi, 0, constants);
+    let d_plus = d_p(psi, 1, constants);
+
+    let h_sx = (d_plus.clone() - d_minus.clone()) / SQRT_2;
+    let h_sy = (d_minus + d_plus) * -Complex64::I / SQRT_2;
+    let h_sz = d_zero * -1.0;
+    (h_sx, h_sy, h_sz)
 }
 
-/// Stark Hamiltonian for E along y: H_Sy = -i(d_-1 + d_+1)/sqrt(2).
+/// Stark Hamiltonian for E along x: H_Sx = (d_{+1} - d_{-1}) / sqrt(2).
+#[allow(dead_code)]
+pub fn h_sx(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
+    stark_components(psi, constants).0
+}
+
+/// Stark Hamiltonian for E along y: H_Sy = -i(d_{-1} + d_{+1}) / sqrt(2).
+#[allow(dead_code)]
 pub fn h_sy(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
-    let sum = d_p(psi, -1, constants) + d_p(psi, 1, constants);
-    let minus_i = -Complex64::I;
-    sum * minus_i / SQRT_2
+    stark_components(psi, constants).1
 }
 
 /// Stark Hamiltonian for E along z: H_Sz = -d_0.
+#[allow(dead_code)]
 pub fn h_sz(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
-    d_p(psi, 0, constants) * -1.0
+    stark_components(psi, constants).2
 }
 
 fn mu_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledState {
@@ -365,22 +379,37 @@ fn mu_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledState 
     spherical_tensor_matrix_element(&psi, p, prefactor)
 }
 
-/// Zeeman Hamiltonian for B along x: H_Zx = (μ_+1 - μ_-1)/sqrt(2).
+/// Zeeman components (x, y, z) built from one mu_p evaluation per spherical component.
+pub fn zeeman_components(
+    psi: CoupledBasisState,
+    constants: &BConstants,
+) -> (CoupledState, CoupledState, CoupledState) {
+    let mu_minus = mu_p(psi, -1, constants);
+    let mu_zero = mu_p(psi, 0, constants);
+    let mu_plus = mu_p(psi, 1, constants);
+
+    let h_zx = (mu_plus.clone() - mu_minus.clone()) / SQRT_2;
+    let h_zy = (mu_minus + mu_plus) * -Complex64::I / SQRT_2;
+    let h_zz = mu_zero * -1.0;
+    (h_zx, h_zy, h_zz)
+}
+
+/// Zeeman Hamiltonian for B along x: H_Zx = (mu_{+1} - mu_{-1}) / sqrt(2).
+#[allow(dead_code)]
 pub fn h_zx(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
-    let res = mu_p(psi, 1, constants) - mu_p(psi, -1, constants);
-    res / SQRT_2
+    zeeman_components(psi, constants).0
 }
 
-/// Zeeman Hamiltonian for B along y: H_Zy = -i(μ_-1 + μ_+1)/sqrt(2).
+/// Zeeman Hamiltonian for B along y: H_Zy = -i(mu_{-1} + mu_{+1}) / sqrt(2).
+#[allow(dead_code)]
 pub fn h_zy(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
-    let sum = mu_p(psi, -1, constants) + mu_p(psi, 1, constants);
-    let minus_i = -Complex64::I;
-    sum * minus_i / SQRT_2
+    zeeman_components(psi, constants).1
 }
 
-/// Zeeman Hamiltonian for B along z: H_Zz = -μ_0.
+/// Zeeman Hamiltonian for B along z: H_Zz = -mu_0.
+#[allow(dead_code)]
 pub fn h_zz(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
-    mu_p(psi, 0, constants) * -1.0
+    zeeman_components(psi, constants).2
 }
 
 #[cfg(test)]

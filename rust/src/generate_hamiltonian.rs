@@ -4,6 +4,8 @@ use crate::states::{CoupledBasisState, CoupledState, UncoupledBasisState, Uncoup
 use crate::x_uncoupled;
 use num_complex::Complex64;
 use rayon::prelude::*;
+use std::collections::HashMap;
+use std::hash::Hash;
 
 pub struct HamiltonianUncoupledX {
     pub h_ff: Vec<Complex64>,
@@ -31,7 +33,7 @@ pub struct HamiltonianCoupledB {
 }
 
 pub trait OperatorState: Sized {
-    type BasisState: Copy + Eq;
+    type BasisState: Copy + Eq + Hash;
     fn terms(&self) -> &[(Complex64, Self::BasisState)];
 }
 
@@ -53,23 +55,35 @@ impl OperatorState for CoupledState {
 
 fn h_mat_elems_generic<B, S, C>(h: fn(B, &C) -> S, qn: &[B], constants: &C) -> Vec<Complex64>
 where
-    B: Copy + Eq,
+    B: Copy + Eq + Hash,
+    S: OperatorState<BasisState = B>,
+{
+    let h_applied: Vec<S> = qn.iter().map(|b| h(*b, constants)).collect();
+    h_mat_elems_from_applied(qn, &h_applied)
+}
+
+fn h_mat_elems_from_applied<B, S>(qn: &[B], h_applied: &[S]) -> Vec<Complex64>
+where
+    B: Copy + Eq + Hash,
     S: OperatorState<BasisState = B>,
 {
     let n = qn.len();
+    debug_assert_eq!(n, h_applied.len());
     let mut result = vec![Complex64::ZERO; n * n];
-
-    let h_applied: Vec<S> = qn.iter().map(|b| h(*b, constants)).collect();
+    let lookups: Vec<HashMap<B, Complex64>> = h_applied
+        .iter()
+        .map(|psi| {
+            let mut lookup = HashMap::with_capacity(psi.terms().len());
+            for &(amp, basis) in psi.terms() {
+                *lookup.entry(basis).or_insert(Complex64::ZERO) += amp;
+            }
+            lookup
+        })
+        .collect();
 
     for (i, a) in qn.iter().enumerate() {
         for j in i..n {
-            let psi = &h_applied[j];
-            let mut val = Complex64::ZERO;
-            for &(amp, ref basis) in psi.terms() {
-                if *basis == *a {
-                    val += amp;
-                }
-            }
+            let val = lookups[j].get(a).copied().unwrap_or(Complex64::ZERO);
             result[i * n + j] = val;
             if i != j {
                 result[j * n + i] = val.conj();
@@ -139,12 +153,6 @@ pub fn generate_coupled_hamiltonian_b(
         b_coupled::h_ld,
         b_coupled::h_cp1_tl,
         b_coupled::h_c_tl,
-        b_coupled::h_sx,
-        b_coupled::h_sy,
-        b_coupled::h_sz,
-        b_coupled::h_zx,
-        b_coupled::h_zy,
-        b_coupled::h_zz,
     ];
 
     let results: Vec<Vec<Complex64>> = ops
@@ -152,7 +160,49 @@ pub fn generate_coupled_hamiltonian_b(
         .map(|op| h_mat_elems_b(op, qn, constants))
         .collect();
 
+    let component_results = rayon::join(
+        || {
+            let components: Vec<(CoupledState, CoupledState, CoupledState)> = qn
+                .par_iter()
+                .map(|basis| b_coupled::stark_components(*basis, constants))
+                .collect();
+            let mut sx = Vec::with_capacity(components.len());
+            let mut sy = Vec::with_capacity(components.len());
+            let mut sz = Vec::with_capacity(components.len());
+            for (x, y, z) in components {
+                sx.push(x);
+                sy.push(y);
+                sz.push(z);
+            }
+            (
+                h_mat_elems_from_applied(qn, &sx),
+                h_mat_elems_from_applied(qn, &sy),
+                h_mat_elems_from_applied(qn, &sz),
+            )
+        },
+        || {
+            let components: Vec<(CoupledState, CoupledState, CoupledState)> = qn
+                .par_iter()
+                .map(|basis| b_coupled::zeeman_components(*basis, constants))
+                .collect();
+            let mut zx = Vec::with_capacity(components.len());
+            let mut zy = Vec::with_capacity(components.len());
+            let mut zz = Vec::with_capacity(components.len());
+            for (x, y, z) in components {
+                zx.push(x);
+                zy.push(y);
+                zz.push(z);
+            }
+            (
+                h_mat_elems_from_applied(qn, &zx),
+                h_mat_elems_from_applied(qn, &zy),
+                h_mat_elems_from_applied(qn, &zz),
+            )
+        },
+    );
+
     let mut it = results.into_iter();
+    let (stark, zeeman) = component_results;
     HamiltonianCoupledB {
         h_rot: it.next().unwrap(),
         h_mhf_tl: it.next().unwrap(),
@@ -160,12 +210,12 @@ pub fn generate_coupled_hamiltonian_b(
         h_ld: it.next().unwrap(),
         h_cp1_tl: it.next().unwrap(),
         h_c_tl: it.next().unwrap(),
-        h_sx: it.next().unwrap(),
-        h_sy: it.next().unwrap(),
-        h_sz: it.next().unwrap(),
-        h_zx: it.next().unwrap(),
-        h_zy: it.next().unwrap(),
-        h_zz: it.next().unwrap(),
+        h_sx: stark.0,
+        h_sy: stark.1,
+        h_sz: stark.2,
+        h_zx: zeeman.0,
+        h_zy: zeeman.1,
+        h_zz: zeeman.2,
     }
 }
 

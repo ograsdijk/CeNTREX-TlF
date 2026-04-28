@@ -74,6 +74,7 @@ macro_rules! impl_state_ops {
 
             fn add(self, other: $State) -> $State {
                 let mut terms = self.terms;
+                terms.reserve(other.terms.len());
                 for (amp, ket) in other.terms {
                     if let Some(existing) = terms.iter_mut().find(|(_, k)| *k == ket) {
                         existing.0 += amp;
@@ -89,7 +90,17 @@ macro_rules! impl_state_ops {
             type Output = $State;
 
             fn sub(self, other: $State) -> $State {
-                self + (other * -1.0)
+                let mut terms = self.terms;
+                terms.reserve(other.terms.len());
+                for (amp, ket) in other.terms {
+                    if let Some(existing) = terms.iter_mut().find(|(_, k)| *k == ket) {
+                        existing.0 -= amp;
+                    } else {
+                        terms.push((-amp, ket));
+                    }
+                }
+                terms.retain(|(amp, _)| amp.re != 0.0 || amp.im != 0.0);
+                $State { terms }
             }
         }
 
@@ -97,12 +108,17 @@ macro_rules! impl_state_ops {
             type Output = $State;
 
             fn mul(self, rhs: f64) -> $State {
-                let terms = self
-                    .terms
-                    .into_iter()
-                    .map(|(amp, ket)| (amp * rhs, ket))
-                    .filter(|(amp, _)| amp.re != 0.0 || amp.im != 0.0)
-                    .collect();
+                if rhs == 0.0 {
+                    return $State { terms: Vec::new() };
+                }
+
+                let mut terms = Vec::with_capacity(self.terms.len());
+                for (amp, ket) in self.terms {
+                    let amp = amp * rhs;
+                    if amp.re != 0.0 || amp.im != 0.0 {
+                        terms.push((amp, ket));
+                    }
+                }
                 $State { terms }
             }
         }
@@ -111,12 +127,17 @@ macro_rules! impl_state_ops {
             type Output = $State;
 
             fn mul(self, rhs: Complex64) -> $State {
-                let terms = self
-                    .terms
-                    .into_iter()
-                    .map(|(amp, ket)| (amp * rhs, ket))
-                    .filter(|(amp, _)| amp.re != 0.0 || amp.im != 0.0)
-                    .collect();
+                if rhs == Complex64::ZERO {
+                    return $State { terms: Vec::new() };
+                }
+
+                let mut terms = Vec::with_capacity(self.terms.len());
+                for (amp, ket) in self.terms {
+                    let amp = amp * rhs;
+                    if amp.re != 0.0 || amp.im != 0.0 {
+                        terms.push((amp, ket));
+                    }
+                }
                 $State { terms }
             }
         }
@@ -305,6 +326,7 @@ pub enum BasisStateEnum {
 
 impl BasisStateEnum {
     /// Calculate inner product <self|other>.
+    #[allow(dead_code)]
     pub fn inner_product(&self, other: &BasisStateEnum) -> Complex64 {
         match (self, other) {
             (BasisStateEnum::Coupled(a), BasisStateEnum::Coupled(b)) => {
