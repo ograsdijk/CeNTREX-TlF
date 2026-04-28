@@ -40,8 +40,12 @@ def matrix_to_states(V, QN):
     Returns:
         List[State]: list of eigenstates expressed as State objects
     """
+    if len(QN) == 0:
+        raise ValueError("QN must contain at least one basis state")
+
     # find dimensions of matrix
     matrix_dimensions = V.shape
+    basis_type = type(QN[0])
 
     # initialize a list for storing eigenstates
     eigenstates = []
@@ -63,11 +67,11 @@ def matrix_to_states(V, QN):
         # store the state in the list
         if isinstance(QN[0], CoupledBasisState):
             state = CoupledState(data)
-        elif isinstance(QN[1], UncoupledBasisState):
+        elif isinstance(QN[0], UncoupledBasisState):
             state = UncoupledState(data)
         else:
             raise ValueError(
-                f"QN should be list of CoupledBasisState or UncoupledBasisState, not {type(QN[0])}"
+                f"QN should be list of CoupledBasisState or UncoupledBasisState, not {basis_type}"
             )
         eigenstates.append(state)
 

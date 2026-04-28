@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -85,6 +86,38 @@ def _normalize_saveat(
     if not save_start and values.size > 0 and np.isclose(values[0], t_span[0]):
         values = values[1:]
     return values
+
+
+def _assert_dense_output_available(
+    saveat: None | np.ndarray,
+    t_span: tuple[float, float],
+    output_when: str,
+    dense_output: bool,
+) -> None:
+    if dense_output or output_when != "saveat" or saveat is None:
+        return
+    interior = saveat[
+        ~np.isclose(saveat, t_span[0])
+        & ~np.isclose(saveat, t_span[1])
+    ]
+    if interior.size:
+        raise ValueError("dense_output=False cannot be used with interior saveat points")
+
+
+def _solver_stats_with_compat(
+    solver_stats: Any,
+    *,
+    solver: str,
+    saved_points: int,
+    elapsed_seconds: float,
+) -> dict[str, Any]:
+    stats = dict(solver_stats)
+    stats["solver"] = solver
+    stats.setdefault("function_evaluations", stats.get("rhs_calls", 0))
+    stats.setdefault("saved_points", saved_points)
+    stats.setdefault("rhs_seconds", elapsed_seconds)
+    stats.setdefault("total_seconds", elapsed_seconds)
+    return stats
 
 
 def _solve_python_reference(
@@ -328,6 +361,7 @@ def _solve_rust_fast(
         effective_saveat = np.array([t_span[1]], dtype=np.float64)
         effective_save_start = False
 
+    start = time.perf_counter()
     times, values, width, solver_stats = solve_lindblad_ode_py(
         prepared.rust_plan,
         packed_rho0,
@@ -346,9 +380,19 @@ def _solve_rust_fast(
         "saveat",
         None if integral_weights is None else list(integral_weights),
     )
+    elapsed = time.perf_counter() - start
 
     times_array = np.asarray(times, dtype=np.float64)
-    stats_dict = dict(solver_stats) if collect_stats else None
+    stats_dict = (
+        _solver_stats_with_compat(
+            solver_stats,
+            solver=solver,
+            saved_points=times_array.size,
+            elapsed_seconds=elapsed,
+        )
+        if collect_stats
+        else None
+    )
     if output == "full":
         return LindbladResult(
             t=times_array,
@@ -370,6 +414,8 @@ def _solve_rust_fast(
     )
     if times_array.size > 0 and width > 0:
         values_array = values_array.reshape((times_array.size, int(width)))
+        if output_when == "final":
+            values_array = values_array.reshape((int(width),))
     return LindbladObservableResult(
         t=times_array,
         values=values_array,
@@ -456,6 +502,7 @@ def solve_lindblad(
     rho0_array = np.asarray(rho0, dtype=np.complex128)
     packed_rho0 = prepared.layout.pack(rho0_array)
     saveat_values = _normalize_saveat(saveat, t_span_tuple, save_start)
+    _assert_dense_output_available(saveat_values, t_span_tuple, output_when, dense_output)
     if backend == "rust" and solver == "scipy":
         return _solve_scipy_with_rust_matrix_rhs(
             prepared,

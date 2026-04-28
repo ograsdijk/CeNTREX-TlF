@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -122,6 +123,22 @@ def _parameter_slot_names(parameter_slots: Sequence[ParameterSlot] | None) -> li
     return [_parameter_slot_name(slot) for slot in parameter_slots]
 
 
+def _solver_stats_with_compat(
+    solver_stats: Any,
+    *,
+    solver: str,
+    saved_points: int,
+    elapsed_seconds: float,
+) -> dict[str, Any]:
+    stats = dict(solver_stats)
+    stats["solver"] = solver
+    stats.setdefault("function_evaluations", stats.get("rhs_calls", 0))
+    stats.setdefault("saved_points", saved_points)
+    stats.setdefault("rhs_seconds", elapsed_seconds)
+    stats.setdefault("total_seconds", elapsed_seconds)
+    return stats
+
+
 def solve_lindblad_batch(
     prepared: PreparedLindbladProblem,
     rho0_batch: npt.NDArray[np.complex128] | npt.NDArray[np.float64],
@@ -189,6 +206,7 @@ def solve_lindblad_batch(
 
     solver_name = "dopri5" if solver == "dopri5_fast" else "tsit5"
 
+    start = time.perf_counter()
     times, flat_values, width, time_count, solver_stats = solve_lindblad_batch_ode_py(
         prepared.rust_plan,
         packed_batch,
@@ -205,11 +223,13 @@ def solve_lindblad_batch(
         output,
         None if output_indices is None else list(output_indices),
         output_when,
+        None,
         slot_indices or None,
         parameter_values,
         bool(parallel),
         threads,
     )
+    elapsed = time.perf_counter() - start
 
     dtype = np.float64 if output == "populations" else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
@@ -226,7 +246,16 @@ def solve_lindblad_batch(
         trajectory_count=trajectory_count,
         parameter_slots=_parameter_slot_names(parameter_slots),
         parameter_values=parameter_values,
-        solver_stats=dict(solver_stats) if collect_stats else None,
+        solver_stats=(
+            _solver_stats_with_compat(
+                solver_stats,
+                solver=f"{solver}_batch",
+                saved_points=int(time_count),
+                elapsed_seconds=elapsed,
+            )
+            if collect_stats
+            else None
+        ),
         metadata={} if metadata is None else dict(metadata),
     )
 
@@ -341,6 +370,7 @@ def grid_scan(
 
     solver_name = "dopri5" if solver == "dopri5_fast" else "tsit5"
 
+    start = time.perf_counter()
     times, flat_values, width, time_count, solver_stats = (
         solve_lindblad_grid_ode_py(
             prepared.rust_plan,
@@ -361,10 +391,12 @@ def grid_scan(
             output,
             None if output_indices is None else list(output_indices),
             output_when,
+            None,
             parallel,
             threads,
         )
     )
+    elapsed = time.perf_counter() - start
     dtype = np.float64 if output == "populations" else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
     if output_when == "final":
@@ -380,7 +412,16 @@ def grid_scan(
         trajectory_count=trajectory_count,
         parameter_slots=parameter_slot_names,
         parameter_values=None,
-        solver_stats=dict(solver_stats) if collect_stats else None,
+        solver_stats=(
+            _solver_stats_with_compat(
+                solver_stats,
+                solver=f"{solver}_grid",
+                saved_points=int(time_count),
+                elapsed_seconds=elapsed,
+            )
+            if collect_stats
+            else None
+        ),
         metadata={} if metadata is None else dict(metadata),
     )
     result.metadata.update(
