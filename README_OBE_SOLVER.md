@@ -1,16 +1,20 @@
-# Rust OBE Solver
+# OBE and Effective Lindblad Solver Map
 
-This document describes the newer Lindblad/OBE solver path used by
-`centrex_tlf.lindblad.solve_lindblad`.
+This document is the practical map for the current density-matrix solver stack.
+It covers the full OBE/Lindblad path in `centrex_tlf.lindblad`, the Rust-side
+batch and scan APIs, and the lower-dimensional effective-Hamiltonian Lindblad
+path in `centrex_tlf.effective_hamiltonian`.
 
-## Recommended Path
+## Recommended Paths
 
-For non-stiff optical Bloch equation workloads, use the Rust backend with the
-expanded sparse RHS:
+Use the full OBE Rust path when you need the complete Hilbert-space model:
 
 ```python
+import numpy as np
+
 from centrex_tlf.lindblad import prepare_lindblad_problem, solve_lindblad
 
+saveat = np.linspace(0.0, 10e-6, 201)
 prepared = prepare_lindblad_problem(
     obe_system,
     parameters,
@@ -22,68 +26,106 @@ result = solve_lindblad(
     prepared,
     rho0,
     (0.0, 10e-6),
-    solver="dopri5_fast",
+    solver="dopri5",
     execution_mode="expanded_sparse",
     saveat=saveat,
+    output="populations",
+    output_when="saveat",
     abstol=1e-9,
     reltol=1e-7,
     dt=1e-10,
 )
 ```
 
-Current defaults are:
-
-- `prepare_lindblad_problem(..., hamiltonian_representation="decomposed")`
-- `solve_lindblad(..., backend="rust", solver="explicit", execution_mode="expanded_sparse")`
-- On the Rust backend, `solver="explicit"` is routed to `solver="dopri5_fast"`.
-- On the Python backend, `solver="explicit"` remains the Python/SciPy reference path.
-
-## Available Solvers
-
-The main solver choices are:
-
-- `dopri5_fast`: custom Rust Dormand-Prince 5(4) integrator. This is usually the fastest full-output path.
-- `tsit5_fast`: custom Rust Tsitouras 5(4) integrator. This is useful to compare against Julia-style Tsit5 behavior and can be competitive for final-only output.
-- `dopri5`: older Rust wrapper around `ode_solvers`. Kept for comparison and compatibility.
-- `scipy`: SciPy `RK45` using the Rust matrix RHS callback.
-- `scipy_bdf`: SciPy `BDF` using the Rust packed RHS callback and optional exact sparse Jacobian.
-- `scipy_radau`: SciPy `Radau` using the Rust packed RHS callback and optional exact sparse Jacobian.
-- `python` backend with `solver="explicit"`: pure Python reference implementation, mainly for correctness checks.
-
-The native Rust `bdf`/DiffSol path was removed. Stiff methods are still
-available through SciPy as `scipy_bdf` and `scipy_radau`.
-
-## Execution Modes
-
-The RHS execution modes are:
-
-- `expanded_sparse`: default and recommended. Python lowers the decomposed Hamiltonian and dissipator into an entrywise sparse update graph over the packed Hermitian state. Rust evaluates that graph directly.
-- `structured_upper`: builds the RHS using upper-triangular Hermitian structure and matrix-style kernels.
-- `structured`: older structured dense/matrix path.
-- `reference`: dense reference path, useful for debugging only.
-
-For the fast solvers, output can be reduced:
-
-- `output="full"` returns the packed density matrix trajectory.
-- `output="populations"` returns only diagonal populations.
-- `output="selected"` returns selected `(i, j)` density-matrix entries.
-- `output_when="saveat"` records at requested save points.
-- `output_when="final"` records only the final output.
-- `dense_output=False` avoids dense interpolation coefficient work when it is not needed.
-
-Selected entries are specified with zero-based density-matrix indices in
-`output_indices`. The indices refer to the full `rho[i, j]` matrix, not to the
-packed internal storage. Populations can be requested either with
-`output="populations"` or as selected diagonal entries such as `(0, 0)`.
-Coherences are selected with off-diagonal entries such as `(2, 7)`.
+Use Rust-side scans when many independent trajectories share one prepared OBE
+system. For final-value scans, keep output compact:
 
 ```python
-# Save selected populations and coherences at each requested save point.
+import numpy as np
+
+from centrex_tlf.lindblad import grid_scan
+
+# `delta0` and `omega0` are Parameter objects registered on the same
+# LindbladParameters used to prepare `prepared`.
+# `target_indices` are the density-matrix diagonal indices to collect.
+target_entries = [(idx, idx) for idx in target_indices]
+
+scan_result = grid_scan(
+    prepared,
+    rho0,
+    (0.0, 200e-6),
+    scan={delta0: detuning_axis, omega0: rabi_axis},
+    solver="dopri5",
+    execution_mode="expanded_sparse",
+    output="selected",
+    output_indices=target_entries,
+    output_when="final",
+    dense_output=False,
+    parallel=True,
+)
+
+grid_shape = scan_result.metadata["grid_shape"]
+target_population = scan_result.values.reshape(*grid_shape, len(target_indices)).real.sum(axis=-1)
+```
+
+Use the effective-Hamiltonian Rust path only after constructing an effective
+model. It is a reduced model path, not a drop-in replacement for a full OBE
+solve.
+
+## Solver Selection
+
+| Path | Use for | Main entrypoints | Notes |
+| --- | --- | --- | --- |
+| Full OBE Rust solvers | Non-stiff full OBE trajectories and scans | `prepare_lindblad_problem`, `solve_lindblad`, `grid_scan` | Recommended default. Use `hamiltonian_representation="decomposed"` and `execution_mode="expanded_sparse"`. |
+| Full OBE SciPy stiff fallback | Stiff or difficult problems where native Rust solvers struggle | `solve_lindblad(..., solver="scipy_bdf")`, `solve_lindblad(..., solver="scipy_radau")` | Uses Rust RHS/Jacobian probing where available, but usually has more Python/SciPy overhead. |
+| Python/reference OBE | Correctness checks and debugging | `solve_lindblad(..., backend="python", solver="python_rk45")` | Not intended for production scan throughput. |
+| Effective-Hamiltonian Lindblad | Lower-dimensional effective models | `prepare_effective_lindblad_rust_plan`, `solve_effective_lindblad`, effective scans | Requires an effective model prepared separately. Output/API details differ from full OBE. |
+
+Current full OBE solver choices:
+
+| Solver | Status | Typical role |
+| --- | --- | --- |
+| `dopri5` | Recommended Rust solver | Custom Rust Dormand-Prince 5(4). Usually the first solver to try. |
+| `tsit5` | Recommended Rust alternative | Custom Rust Tsitouras 5(4). Useful for comparison and sometimes competitive for final-only outputs. |
+| `scipy_rk45` | SciPy RK45 path | SciPy RK45 using Rust matrix RHS callback. |
+| `scipy_bdf` | Stiff fallback | SciPy BDF using Rust packed RHS and optional exact sparse Jacobian path. |
+| `scipy_radau` | Stiff fallback | SciPy Radau using Rust packed RHS and optional exact sparse Jacobian path. |
+| `python_rk45` | Python/reference path | Python/reference RK45 implementation for correctness checks and debugging. |
+
+Native Rust stiff/BDF solving is not implemented. Use `scipy_bdf` or
+`scipy_radau` when a stiff fallback is needed.
+
+In short: for full OBE examples, prefer `dopri5` or `tsit5`. For
+effective-Hamiltonian examples, use `dopri5` or `tsit5`.
+
+## Full OBE Outputs
+
+`solve_lindblad` accepts a prepared problem or an OBE system plus parameters. A
+prepared problem is preferred for repeated solves and scans because symbolic
+lowering is done once.
+
+Full OBE output modes:
+
+| Output | Meaning | Single-solve shape |
+| --- | --- | --- |
+| `full` | Packed density matrix trajectory for Rust fast path, or matrix trajectory for matrix paths | `(n_times, packed_len)` for `LindbladResult`; matrix paths expose density matrices |
+| `populations` | Diagonal populations only | `(n_times, n_states)` for `output_when="saveat"`; `(n_states,)` for `output_when="final"` |
+| `selected` | Selected density-matrix entries | `(n_times, n_selected)` for `saveat`; `(n_selected,)` for `final` |
+| `weighted_integral` | Time integral of weighted populations | Observable result array |
+| `photon_integral` | Weighted integral used for photon/scattering style outputs | Observable result array |
+| `excited_population` | Weighted excited-population style integral/output | Observable result array |
+
+Selected entries use full density-matrix indices, not packed-storage indices:
+
+```python
+import numpy as np
+
+saveat = np.linspace(0.0, 10e-6, 201)
 selected = solve_lindblad(
     prepared,
     rho0,
     (0.0, 10e-6),
-    solver="dopri5_fast",
+    solver="dopri5",
     execution_mode="expanded_sparse",
     saveat=saveat,
     output="selected",
@@ -94,60 +136,42 @@ selected = solve_lindblad(
     ],
 )
 
-# selected.values has shape (len(selected.t), len(output_indices)).
 rho_00 = selected.values[:, 0]
-rho_55 = selected.values[:, 1]
 rho_27 = selected.values[:, 2]
 ```
 
+Integral outputs require `integral_weights`:
+
 ```python
-# Save only the final value of selected entries.
-final_selected = solve_lindblad(
+import numpy as np
+
+gamma_rate = 1.0  # replace with the decay/scattering rate for these states
+photon_weights = [(int(idx), float(gamma_rate)) for idx in excited_indices]
+t_eval = np.linspace(0.0, 100e-6, 1001)
+
+signal = solve_lindblad(
     prepared,
     rho0,
-    (0.0, 10e-6),
-    solver="tsit5_fast",
+    (0.0, 100e-6),
+    solver="dopri5",
     execution_mode="expanded_sparse",
-    output="selected",
-    output_indices=[(0, 0), (2, 7)],
-    output_when="final",
-    dense_output=False,
+    saveat=t_eval,
+    output="photon_integral",
+    integral_weights=photon_weights,
+    output_when="saveat",
 )
-
-# final_selected.values has shape (len(output_indices),).
-final_rho_00 = final_selected.values[0]
-final_rho_27 = final_selected.values[1]
 ```
 
-For Hermitian conjugate coherences, request the entry you want to inspect. For
-example, `(2, 7)` returns `rho[2, 7]`, while `(7, 2)` returns `rho[7, 2]`.
+`output_when="saveat"` records requested save points. `output_when="final"`
+records only the final value. Use `dense_output=False` only when no interior
+save points are needed; it is intended for final-only work and rejects interior
+`saveat` points.
 
-## How It Works
+## Batch Solving and Full OBE Scans
 
-`prepare_lindblad_problem` lowers the symbolic OBE system once:
-
-- Parameters are adapted into a compact runtime graph.
-- The Hamiltonian is lowered into a decomposed representation,
-  `H(t) = sum_k c_k(t) H_k`, so Rust only reevaluates scalar coefficients at
-  runtime.
-- Collapse operators are converted into structured decay data.
-- The `expanded_sparse` plan combines Hamiltonian and dissipator contributions
-  into per-output update terms for the packed upper-triangular Hermitian density
-  matrix.
-- The Rust `PreparedLindbladPlan` stores only the data needed by Rust. Python-only
-  reference structures are no longer serialized into the Rust plan.
-
-During integration, Rust keeps the OBE state in packed real form. Diagonal
-entries are stored as real populations. Off-diagonal upper-triangular entries are
-stored as real/imaginary pairs. Lower-triangular entries are recovered from
-Hermiticity when needed, avoiding redundant state variables and redundant RHS
-work.
-
-## Batch Solving and Grid Scans
-
-For many independent trajectories, use `solve_lindblad_batch` instead of a
-Python loop. The batch path keeps the trajectory loop in Rust, optionally runs
-trajectories in parallel with Rayon, and returns one aggregated NumPy array.
+For independent trajectories, use `solve_lindblad_batch`, `parameter_scan`, or
+`grid_scan` instead of a Python loop. These APIs keep the trajectory loop in
+Rust and return one aggregated NumPy array.
 
 ```python
 from centrex_tlf.lindblad import solve_lindblad_batch
@@ -156,61 +180,25 @@ batch = solve_lindblad_batch(
     prepared,
     rho0_batch,  # shape: (n_trajectories, n, n) or (n_trajectories, packed_len)
     (0.0, 200e-6),
-    solver="dopri5_fast",
+    solver="dopri5",
     execution_mode="expanded_sparse",
-    output="selected",
-    output_indices=[(0, 0), (2, 7)],
+    output="populations",
     output_when="final",
     dense_output=False,
     parallel=True,
 )
 
-# Final selected output shape: (n_trajectories, len(output_indices)).
-final_rho_00 = batch.values[:, 0]
-final_rho_27 = batch.values[:, 1]
+final_populations = batch.values  # shape: (n_trajectories, n_states)
 ```
 
-Supported batch outputs in the first implementation are:
-
-- `output="populations"` with shape `(n_trajectories, n_states)` for final output.
-- `output="selected"` with shape `(n_trajectories, n_selected)` for final output.
-- `output="populations"` with shape `(n_trajectories, n_times, n_states)` for save-at output.
-- `output="selected"` with shape `(n_trajectories, n_times, n_selected)` for save-at output.
-
-Full density-matrix batch output is intentionally not supported yet because it
-can allocate very large arrays.
-
-Runtime parameters can be built with typed `Parameter` objects. The object owns
-the base slot name/default, can be used in runtime expressions, and can also be
-used directly as a scan key:
+`parameter_scan` varies base parameter slots using an explicit trajectory table:
 
 ```python
-from centrex_tlf.lindblad import LindbladParameters, Time, gaussian, sine
+import numpy as np
 
-params = LindbladParameters()
-t = Time()
-omega0 = params.real("omega0", 2 * np.pi * 1e6)
-delta0 = params.real("delta0", 0.0)
-z0 = params.real("z0", -0.01)
-vz = params.real("vz", 180.0)
-sigma_z = params.real("sigma_z", 0.003)
-
-z = z0 + vz * t
-params.bind(selector.Ω, omega0 * gaussian(z, center=0.0, sigma=sigma_z))
-params.bind(selector.δ, sine(t, offset=delta0, amplitude=0.0))
-```
-
-`params.real(name, default)` and `params.complex(name, default)` both return a
-`Parameter`. If the Hamiltonian symbol itself should be scanned, use that exact
-symbol name as the parameter name and no explicit `bind` is needed.
-
-Parameter scans can avoid rebuilding the Rust plan for every trajectory. The
-batch solver accepts per-trajectory base-parameter overrides and reevaluates
-compound parameters in Rust:
-
-```python
 from centrex_tlf.lindblad import parameter_scan
 
+# `omega0` and `delta0` are registered base Parameter objects.
 parameter_values = np.array(
     [
         [0.5e6, -1.0e6],
@@ -220,86 +208,262 @@ parameter_values = np.array(
     dtype=np.complex128,
 )
 
-scan_result = parameter_scan(
+scan = parameter_scan(
     prepared,
     rho0,
     (0.0, 200e-6),
-    parameter_slots=["Ω0", "δ0"],
+    parameter_slots=[omega0, delta0],
     parameter_batch=parameter_values,
     output="populations",
     output_when="final",
+    dense_output=False,
 )
 ```
 
-For structured parameter grids, use `grid_scan`. It creates the Cartesian
-product of the provided axes and stores grid metadata on the result:
+`grid_scan` varies one-dimensional axes and creates the Cartesian product in the
+Rust grid path:
 
 ```python
-from centrex_tlf.lindblad import grid_scan
+import numpy as np
 
 grid = grid_scan(
     prepared,
     rho0,
     (0.0, 200e-6),
     scan={
-        "δ0": np.linspace(-5e6, 5e6, 101),
-        "Ω0": 2 * np.pi * np.array([0.5e6, 1.0e6, 2.0e6]),
+        delta0: np.linspace(-5e6, 5e6, 101),
+        omega0: 2 * np.pi * np.array([0.5e6, 1.0e6, 2.0e6]),
     },
     output="selected",
     output_indices=[(0, 0), (5, 5)],
     output_when="final",
+    dense_output=False,
 )
 
-grid_shape = grid.metadata["grid_shape"]
-values_on_grid = grid.values.reshape(*grid_shape, grid.values.shape[-1])
+values_on_grid = grid.values.reshape(*grid.metadata["grid_shape"], grid.values.shape[-1])
 ```
 
-The same `parameter_scan` and `grid_scan` calls also accept `Parameter` objects:
+Full OBE batch/scan outputs support `populations`, `selected`,
+`weighted_integral`, `photon_integral`, and `excited_population`. Final output
+has shape `(n_trajectories, width)`. Save-at output has shape
+`(n_trajectories, n_times, width)`.
+
+`grid_scan` metadata includes:
+
+- `metadata["scan_kind"] == "grid"`
+- `metadata["grid_shape"]`
+- `metadata["grid_axes"]`
+- `metadata["compact_grid"] == True` for the compact Rust OBE grid path
+
+Parallelism uses Rayon. With `parallel=True` and `threads=None`, Rayon uses its
+global thread pool. Passing `threads=N` builds a local pool for that batch/grid
+call. Use explicit `threads` only when you need to cap worker count; otherwise
+prefer `threads=None` or set `RAYON_NUM_THREADS` before Python initializes Rayon.
+
+## Runtime Parameters and Helper Expressions
+
+Use `LindbladParameters` for named runtime parameters and symbolic bindings:
+
+```python
+import numpy as np
+
+from centrex_tlf.lindblad import LindbladParameters, Time, gaussian, sine
+
+# Example assumes a transition selector produced by
+# couplings.generate_transition_selectors(...).
+selector = selectors[0]
+
+params = LindbladParameters()
+t = Time()
+
+omega0 = params.real("omega0", 2 * np.pi * 1e6)
+delta0 = params.real("delta0", 0.0)
+z0 = params.real("z0", -0.01)
+vz = params.real("vz", 180.0)
+sigma_z = params.real("sigma_z", 0.003)
+
+z = z0 + vz * t
+params.bind(selector.Ω, omega0 * gaussian(z, center=0.0, sigma=sigma_z), finalize=False)
+params.bind(selector.δ, sine(t, offset=delta0, amplitude=0.0), finalize=False)
+params._finalize()
+```
+
+Common methods:
+
+- `params.real(name, default)` registers a real base parameter.
+- `params.complex(name, default)` registers a complex base parameter.
+- `params.bind(symbol, expression, finalize=False)` binds a Hamiltonian or
+  polarization symbol to a scalar or runtime expression.
+- `params.drive(selector, rabi=..., detuning=..., finalize=False)` binds the
+  Rabi and detuning symbols for a transition selector.
+
+Scan keys can be `Parameter` objects or legacy string names. New code should
+prefer `Parameter` objects:
 
 ```python
 parameter_scan(..., parameter_slots=[omega0, delta0], parameter_batch=parameter_values)
 grid_scan(..., scan={delta0: detuning_axis, omega0: rabi_axis})
 ```
 
-Only base parameters can be scanned directly. Compound parameters are updated by
-changing their base-parameter dependencies. Legacy string slot names are still
-accepted, but new examples should prefer `Parameter` objects so renames and
-multi-drive scans are less fragile.
+Only base parameters can be scanned directly. Compound parameters update when
+their base-parameter dependencies are overridden in Rust.
 
-## Benchmark
+The polymorphic helper functions work numerically and as `RuntimeExpression`
+builders when any argument is expression-like. Current helper coverage includes:
 
-Benchmark problem:
+- Gaussian/profile helpers: `gaussian_1d`, `gaussian_2d`,
+  `gaussian_2d_rotated`, `gaussian`.
+- Modulation/waveform helpers: `phase_modulation`, `square_wave`,
+  `resonant_polarization_modulation`, `sawtooth_wave`, `variable_on_off`,
+  `variable_on_off_duty`, `variable_on_off_duty_invT`, `square_wave_profile`,
+  `alternating_sign`, `linear`, `sine`.
+- Intensity/Rabi helpers: `multipass_2d_intensity`, `rabi_from_intensity`,
+  `multipass_2d_rabi`, `gaussian_beam_rabi`.
+- Interpolation helpers: `linear_interp`, `pchip_interp`, `tabulated`,
+  `pchip_tabulated`.
 
-- Transition: `transitions.R0_F1_3o2_F2`
-- Coupling: one `polarization_Z` transition group
-- State count: 65
-- Time span: `0` to `10 us`
-- Save points: 201 for full-output rows
-- Initial state: equal population over ground states
-- Tolerances: `abstol=1e-9`, `reltol=1e-7`, `dt=1e-10`
-- Build: Rust release build, staged extension loaded directly
+Tuple-valued registered parameters are supported for helpers such as multipass
+profiles and tabulated interpolation.
 
-Machine:
+## Effective-Hamiltonian Lindblad Solver
 
-- CPU: AMD Ryzen 7 9800X3D, user-provided; environment reports 16 logical processors
-- OS: Windows `10.0.26200`
-- Architecture: AMD64
-- Python: `3.11.13`
-- Rust: `rustc 1.94.0`
+The effective-Hamiltonian path works on prepared effective models from
+`centrex_tlf.effective_hamiltonian`. It propagates a lower-dimensional density
+matrix using the generic Rust ODE machinery and effective operators.
 
-Timings from this checkout:
+Typical preparation flow:
 
-| Solver | Execution mode | Output | Median | Min | RHS calls | Accepted/rejected |
-| --- | --- | --- | ---: | ---: | ---: | ---: |
-| `dopri5_fast` | `expanded_sparse` | full `saveat` | 5.477 ms | 5.017 ms | 361 | 59 / 1 |
-| `tsit5_fast` | `expanded_sparse` | full `saveat` | 7.090 ms | 6.535 ms | 337 | 55 / 1 |
-| `dopri5_fast` | `structured_upper` | full `saveat` | 7.175 ms | 6.948 ms | 361 | 59 / 1 |
-| `tsit5_fast` | `structured_upper` | full `saveat` | 7.440 ms | 6.802 ms | 337 | 55 / 1 |
-| `scipy` | `expanded_sparse` | full `saveat` | 73.361 ms | 70.646 ms | n/a | n/a |
-| `scipy_bdf` | `expanded_sparse` | full `saveat` | 134.711 ms | 120.834 ms | n/a | n/a |
-| `dopri5_fast` | `expanded_sparse` | final populations | 5.028 ms | 4.024 ms | 361 | 59 / 1 |
-| `tsit5_fast` | `expanded_sparse` | final populations | 5.635 ms | 4.325 ms | 337 | 55 / 1 |
+```python
+import numpy as np
 
-These numbers are for a small benchmark system. For larger rotational-cooling
-systems, solver step count and stiffness dominate more strongly, and SciPy stiff
-methods can be much slower even with an exact Jacobian.
+from centrex_tlf.effective_hamiltonian import (
+    default_effective_density_matrix,
+    prepare_effective_lindblad_rust_plan,
+    prepare_lindblad_safe_compact_interpolated_model,
+    solve_effective_lindblad,
+)
+from centrex_tlf.lindblad import LindbladParameters
+
+model = prepare_lindblad_safe_compact_interpolated_model(...)
+
+params = LindbladParameters()
+# Bind model-specific runtime parameters here.
+
+plan = prepare_effective_lindblad_rust_plan(
+    model,
+    params,
+    operator_interpolation="linear",  # or "pchip"
+)
+rho0 = default_effective_density_matrix(model)
+t_eval = np.linspace(0.0, 100e-6, 1001)
+
+result = solve_effective_lindblad(
+    plan,
+    rho0,
+    (0.0, 100e-6),
+    saveat=t_eval,
+    solver="dopri5",
+    output="full",
+    output_when="saveat",
+)
+```
+
+Effective single-solve outputs:
+
+| Output | Meaning |
+| --- | --- |
+| `full` | Effective density matrices in `result.rho`; `result.density_matrices()` returns the same data. |
+| `populations` | Population array in `result.rho`. |
+| `selected` | Selected effective density-matrix entries. |
+| `weighted_integral`, `photon_integral`, `excited_population` | Integral-style observable arrays. |
+
+Effective batch scans live in `centrex_tlf.effective_hamiltonian.rust_plan`.
+Because the names overlap with full OBE scans, import aliases are usually
+clearer:
+
+```python
+import numpy as np
+
+from centrex_tlf.effective_hamiltonian.rust_plan import (
+    grid_scan as effective_grid_scan,
+    parameter_scan as effective_parameter_scan,
+)
+
+# `velocity` and `rabi_rate` are base Parameter objects in the effective plan's
+# LindbladParameters.
+effective_scan = effective_parameter_scan(
+    plan,
+    rho0,
+    (0.0, 100e-6),
+    parameter_slots=[velocity],
+    parameter_batch=velocity_values.reshape(-1, 1),
+    output="populations",
+    output_when="final",
+    parallel=True,
+)
+
+effective_grid = effective_grid_scan(
+    plan,
+    rho0,
+    (0.0, 100e-6),
+    scan={velocity: velocity_axis, rabi_rate: rabi_axis},
+    output="populations",
+    output_when="final",
+)
+```
+
+Effective batch `parameter_scan` and `grid_scan` currently support
+`output="populations"` and `output="full"`. Final output has shape
+`(n_trajectories, width)`, and save-at output has shape
+`(n_trajectories, n_times, width)`. Effective grid results include
+`metadata["grid_shape"]` and `metadata["grid_axes"]`.
+
+`operator_interpolation="linear"` and `"pchip"` are supported when preparing
+the effective Rust plan. Use the interpolation mode that matches how the
+effective operator grid was validated for the model.
+
+## Performance Notes
+
+Exact timings depend on system size, stiffness, Hamiltonian time dependence,
+output mode, save-point count, scan dimensions, and hardware.
+
+High-level guidance:
+
+- Prepare once and reuse `PreparedLindbladProblem` or effective Rust plans.
+- Prefer `expanded_sparse` for full OBE Rust solves unless debugging another
+  execution mode.
+- For scans that only need final objectives, use `output_when="final"` and
+  `dense_output=False`.
+- Prefer `output="selected"` or `output="populations"` over full trajectories
+  when the full density matrix is not needed.
+- Use Rust `grid_scan` for structured Cartesian scans. It avoids materializing a
+  repeated initial-state batch and full Cartesian parameter table in Python.
+- Keep `threads=None` unless you need to cap parallelism. If you need a process
+  wide Rayon worker count, set `RAYON_NUM_THREADS` before Python starts.
+- Use SciPy stiff fallbacks only when native Rust solvers are not suitable; they
+  can be much slower for large scan workloads.
+
+## Examples and Timing Scripts
+
+Curated examples:
+
+- `examples/lindblad/r0_f2_batch_grid_scan.ipynb`: compact Rust OBE grid scan.
+- `examples/lindblad/rotational_cooling_parameter_scans.ipynb`: large
+  rotational-cooling OBE scan pattern.
+- `examples/lindblad/q1_circular_polarization_switching_scan.ipynb`:
+  photon-integral scan output.
+- `examples/lindblad/q1_effective_fixed_basis_vs_static_regular_rust.ipynb`:
+  effective-Hamiltonian versus full static OBE comparison.
+
+Useful timing and validation scripts:
+
+- `benchmarks/benchmark_obe.py`
+- `benchmarks/benchmark_julia_comparison.py`
+- `benchmarks/bench_square_wave.py`
+- `benchmarks/bench_effective_batch_vs_python.py`
+- `benchmarks/bench_q1_timedep_methods.py`
+- `benchmarks/validate_effective_lindblad_timedep.py`
+
+Run benchmarks in the target environment when exact numbers matter. Do not
+treat notebook output timings or historical local tables as portable
+performance claims.

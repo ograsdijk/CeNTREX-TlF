@@ -36,8 +36,8 @@ The fixed Rust Lindblad issues were:
   signatures.
 - Rust solver stats expose `solver`, `accepted_steps`, `rejected_steps`, and
   `rhs_calls`, while tests expect `function_evaluations`.
-- Fast solvers return stats names such as `dopri5` and `tsit5`, while tests
-  expect `dopri5_fast`, `tsit5_fast`, and `dopri5_fast_batch`.
+- Native Rust solvers return stats names such as `dopri5` and `tsit5`, and
+  batch/grid stats use the same canonical solver names.
 - Some final-output reduced result shapes are now `(1, n)` while tests expect
   `(n,)`.
 
