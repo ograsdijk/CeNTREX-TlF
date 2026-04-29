@@ -104,7 +104,7 @@ def _assert_dense_output_available(
         raise ValueError("dense_output=False cannot be used with interior saveat points")
 
 
-def _solver_stats_with_compat(
+def _solver_stats_dict(
     solver_stats: Any,
     *,
     solver: str,
@@ -331,7 +331,7 @@ def _solve_scipy_with_rust_packed_rhs(
     return LindbladResult(t=times, packed_y=packed_states, layout=prepared.layout)
 
 
-def _solve_rust_fast(
+def _solve_rust_native(
     prepared: PreparedLindbladProblem,
     packed_rho0: np.ndarray,
     t_span: tuple[float, float],
@@ -353,8 +353,6 @@ def _solve_rust_fast(
 ) -> LindbladResult | LindbladObservableResult:
     from ..centrex_tlf_rust import solve_lindblad_ode_py
 
-    solver_name = "tsit5" if solver == "tsit5_fast" else "dopri5"
-
     effective_saveat = saveat
     effective_save_start = save_start
     if output_when == "final":
@@ -374,7 +372,7 @@ def _solve_rust_fast(
         bool(effective_save_start),
         int(maxiters),
         execution_mode,
-        solver_name,
+        solver,
         output,
         None if output_indices is None else list(output_indices),
         "saveat",
@@ -384,7 +382,7 @@ def _solve_rust_fast(
 
     times_array = np.asarray(times, dtype=np.float64)
     stats_dict = (
-        _solver_stats_with_compat(
+        _solver_stats_dict(
             solver_stats,
             solver=solver,
             saved_points=times_array.size,
@@ -432,7 +430,7 @@ def solve_lindblad(
     *,
     parameters: Any | None = None,
     backend: str = "rust",
-    solver: str = "explicit",
+    solver: str | None = None,
     abstol: float = 1e-7,
     reltol: float = 1e-4,
     dt: float = 1e-8,
@@ -449,21 +447,20 @@ def solve_lindblad(
     dense_output: bool = True,
     integral_weights: Sequence[tuple[int, float]] | None = None,
 ) -> LindbladResult | LindbladMatrixResult | LindbladObservableResult:
+    if solver is None:
+        solver = "python_rk45" if backend == "python" else "dopri5"
     if solver not in {
-        "explicit",
         "dopri5",
-        "dopri5_fast",
-        "tsit5_fast",
-        "scipy",
+        "tsit5",
+        "scipy_rk45",
         "scipy_bdf",
         "scipy_radau",
+        "python_rk45",
     }:
         raise NotImplementedError(
-            "supported solvers are 'explicit'/'dopri5', 'dopri5_fast', 'tsit5_fast', "
-            "'scipy', 'scipy_bdf', and 'scipy_radau'"
+            "supported solvers are 'dopri5', 'tsit5', 'scipy_rk45', "
+            "'scipy_bdf', 'scipy_radau', and 'python_rk45'"
         )
-    if backend == "rust" and solver == "explicit":
-        solver = "dopri5_fast"
     if execution_mode not in {"reference", "structured", "structured_upper", "expanded_sparse"}:
         raise NotImplementedError(
             "supported execution_mode values are 'reference', 'structured', 'structured_upper', "
@@ -477,10 +474,8 @@ def solve_lindblad(
     if output_when not in {"saveat", "final"}:
         raise NotImplementedError("output_when must be 'saveat' or 'final'")
     if (output not in {"full"} or output_when != "saveat" or not dense_output or integral_weights is not None) and solver not in {
-        "dopri5_fast",
-        "tsit5_fast",
         "dopri5",
-        "explicit",
+        "tsit5",
     }:
         raise NotImplementedError(
             "reduced output, final-only output, integral output, and dense_output control are "
@@ -503,7 +498,7 @@ def solve_lindblad(
     packed_rho0 = prepared.layout.pack(rho0_array)
     saveat_values = _normalize_saveat(saveat, t_span_tuple, save_start)
     _assert_dense_output_available(saveat_values, t_span_tuple, output_when, dense_output)
-    if backend == "rust" and solver == "scipy":
+    if backend == "rust" and solver == "scipy_rk45":
         return _solve_scipy_with_rust_matrix_rhs(
             prepared,
             rho0_array,
@@ -537,8 +532,8 @@ def solve_lindblad(
             jacobian=jacobian,
             jacobian_format=chosen_format,
         )
-    if backend == "rust" and solver in {"dopri5_fast", "tsit5_fast", "dopri5", "explicit"} and prepared.rust_plan is not None:
-        return _solve_rust_fast(
+    if backend == "rust" and solver in {"dopri5", "tsit5"} and prepared.rust_plan is not None:
+        return _solve_rust_native(
             prepared,
             packed_rho0,
             t_span_tuple,
@@ -557,28 +552,12 @@ def solve_lindblad(
             dense_output=dense_output,
             integral_weights=integral_weights,
         )
-    if backend == "rust" and prepared.rust_plan is not None:
-        return _solve_rust_fast(
-            prepared,
-            packed_rho0,
-            t_span_tuple,
-            solver="dopri5_fast",
-            execution_mode=execution_mode,
-            abstol=abstol,
-            reltol=reltol,
-            dt=dt,
-            saveat=saveat_values,
-            save_start=save_start,
-            maxiters=maxiters,
-            collect_stats=collect_stats,
-            output=output,
-            output_indices=output_indices,
-            output_when=output_when,
-            dense_output=dense_output,
-            integral_weights=integral_weights,
-        )
-    if backend == "python" and solver != "explicit":
-        raise NotImplementedError("the python backend only supports solver='explicit'")
+    if backend == "rust" and solver == "python_rk45":
+        raise NotImplementedError("solver='python_rk45' requires backend='python'")
+    if backend == "python" and solver != "python_rk45":
+        raise NotImplementedError("the python backend only supports solver='python_rk45'")
+    if backend != "python":
+        raise NotImplementedError(f"unsupported backend/solver combination: backend={backend!r}, solver={solver!r}")
     return _solve_python_reference(
         prepared,
         packed_rho0,

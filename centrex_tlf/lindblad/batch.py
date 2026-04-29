@@ -14,10 +14,10 @@ from .plan_static import PreparedLindbladProblem
 
 __all__ = [
     "LindbladBatchResult",
-    "solve_lindblad_batch",
+    "grid_scan",
     "initial_condition_scan",
     "parameter_scan",
-    "grid_scan",
+    "solve_lindblad_batch",
 ]
 
 
@@ -50,7 +50,7 @@ def _normalize_saveat(
 ) -> None | np.ndarray:
     if saveat is None:
         return None
-    if isinstance(saveat, (float, int, np.floating, np.integer)):
+    if isinstance(saveat, float | int | np.floating | np.integer):
         step = float(saveat)
         if step <= 0:
             raise ValueError("saveat step must be positive")
@@ -123,7 +123,7 @@ def _parameter_slot_names(parameter_slots: Sequence[ParameterSlot] | None) -> li
     return [_parameter_slot_name(slot) for slot in parameter_slots]
 
 
-def _solver_stats_with_compat(
+def _solver_stats_dict(
     solver_stats: Any,
     *,
     solver: str,
@@ -146,7 +146,7 @@ def solve_lindblad_batch(
     *,
     parameter_batch: npt.NDArray[np.complex128] | None = None,
     parameter_slots: Sequence[ParameterSlot] | None = None,
-    solver: str = "dopri5_fast",
+    solver: str = "dopri5",
     execution_mode: str = "expanded_sparse",
     abstol: float = 1e-7,
     reltol: float = 1e-4,
@@ -158,6 +158,7 @@ def solve_lindblad_batch(
     output: str = "populations",
     output_indices: Sequence[tuple[int, int]] | None = None,
     output_when: str = "final",
+    integral_weights: Sequence[tuple[int, float]] | None = None,
     dense_output: bool = True,
     parallel: bool = True,
     threads: int | None = None,
@@ -165,18 +166,28 @@ def solve_lindblad_batch(
 ) -> LindbladBatchResult:
     if prepared.rust_plan is None:
         raise RuntimeError("solve_lindblad_batch requires a Rust prepared plan")
-    if solver not in {"dopri5_fast", "tsit5_fast"}:
-        raise NotImplementedError("batch solving currently supports 'dopri5_fast' and 'tsit5_fast'")
-    if output not in {"populations", "selected"}:
-        raise NotImplementedError("batch solving currently supports output='populations' or 'selected'")
+    if solver not in {"dopri5", "tsit5"}:
+        raise NotImplementedError("batch solving currently supports 'dopri5' and 'tsit5'")
+    integral_outputs = {"weighted_integral", "photon_integral", "excited_population"}
+    if output not in {"populations", "selected", *integral_outputs}:
+        raise NotImplementedError(
+            "batch solving currently supports output='populations', 'selected', "
+            "'weighted_integral', 'photon_integral', or 'excited_population'"
+        )
     if output == "selected" and output_indices is None:
         raise ValueError("output='selected' requires output_indices")
     if output != "selected" and output_indices is not None:
         raise ValueError("output_indices is only valid with output='selected'")
+    if output in integral_outputs and integral_weights is None:
+        raise ValueError(f"output={output!r} requires integral_weights")
+    if output not in integral_outputs and integral_weights is not None:
+        raise ValueError("integral_weights are only valid with integral output modes")
     if output_when not in {"final", "saveat"}:
         raise ValueError("output_when must be 'final' or 'saveat'")
     if output_when == "saveat" and saveat is None:
         raise ValueError("batch output_when='saveat' requires explicit saveat values")
+    if output in integral_outputs and saveat is None:
+        raise ValueError(f"output={output!r} requires explicit saveat values")
     if threads is not None and threads <= 0:
         raise ValueError("threads must be positive when provided")
 
@@ -201,10 +212,10 @@ def solve_lindblad_batch(
         raise ValueError("parameter_slots were provided without parameter_batch")
 
     saveat_values = _normalize_saveat(saveat, t_span_tuple, save_start)
+    if not dense_output and output_when == "saveat" and saveat_values is not None:
+        raise ValueError("dense_output=False is only supported with output_when='final'")
 
     from ..centrex_tlf_rust import solve_lindblad_batch_ode_py
-
-    solver_name = "dopri5" if solver == "dopri5_fast" else "tsit5"
 
     start = time.perf_counter()
     times, flat_values, width, time_count, solver_stats = solve_lindblad_batch_ode_py(
@@ -219,11 +230,11 @@ def solve_lindblad_batch(
         bool(save_start),
         int(maxiters),
         execution_mode,
-        solver_name,
+        solver,
         output,
         None if output_indices is None else list(output_indices),
         output_when,
-        None,
+        None if integral_weights is None else list(integral_weights),
         slot_indices or None,
         parameter_values,
         bool(parallel),
@@ -231,7 +242,7 @@ def solve_lindblad_batch(
     )
     elapsed = time.perf_counter() - start
 
-    dtype = np.float64 if output == "populations" else np.complex128
+    dtype = np.float64 if output in {"populations", *integral_outputs} else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
     if output_when == "final":
         values = values.reshape((trajectory_count, int(width)))
@@ -247,9 +258,9 @@ def solve_lindblad_batch(
         parameter_slots=_parameter_slot_names(parameter_slots),
         parameter_values=parameter_values,
         solver_stats=(
-            _solver_stats_with_compat(
+            _solver_stats_dict(
                 solver_stats,
-                solver=f"{solver}_batch",
+                solver=solver,
                 saved_points=int(time_count),
                 elapsed_seconds=elapsed,
             )
@@ -330,7 +341,7 @@ def grid_scan(
     t_span_tuple = _normalize_t_span(t_span)
     save_start = bool(kwargs.pop("save_start", True))
     saveat_values = _normalize_saveat(kwargs.pop("saveat", None), t_span_tuple, save_start)
-    solver = kwargs.pop("solver", "dopri5_fast")
+    solver = kwargs.pop("solver", "dopri5")
     execution_mode = kwargs.pop("execution_mode", "expanded_sparse")
     abstol = float(kwargs.pop("abstol", 1e-7))
     reltol = float(kwargs.pop("reltol", 1e-4))
@@ -340,6 +351,7 @@ def grid_scan(
     output = kwargs.pop("output", "populations")
     output_indices = kwargs.pop("output_indices", None)
     output_when = kwargs.pop("output_when", "final")
+    integral_weights = kwargs.pop("integral_weights", None)
     dense_output = bool(kwargs.pop("dense_output", True))
     parallel = bool(kwargs.pop("parallel", True))
     threads = kwargs.pop("threads", None)
@@ -349,16 +361,28 @@ def grid_scan(
         raise TypeError(f"unexpected grid_scan keyword argument(s): {unknown}")
     if prepared.rust_plan is None:
         raise RuntimeError("grid_scan requires a Rust prepared plan")
-    if solver not in {"dopri5_fast", "tsit5_fast"}:
-        raise NotImplementedError("grid_scan currently supports 'dopri5_fast' and 'tsit5_fast'")
-    if output not in {"populations", "selected"}:
-        raise NotImplementedError("grid_scan currently supports output='populations' or 'selected'")
+    if solver not in {"dopri5", "tsit5"}:
+        raise NotImplementedError("grid_scan currently supports 'dopri5' and 'tsit5'")
+    integral_outputs = {"weighted_integral", "photon_integral", "excited_population"}
+    if output not in {"populations", "selected", *integral_outputs}:
+        raise NotImplementedError(
+            "grid_scan currently supports output='populations', 'selected', "
+            "'weighted_integral', 'photon_integral', or 'excited_population'"
+        )
     if output == "selected" and output_indices is None:
         raise ValueError("output='selected' requires output_indices")
     if output != "selected" and output_indices is not None:
         raise ValueError("output_indices is only valid with output='selected'")
+    if output in integral_outputs and integral_weights is None:
+        raise ValueError(f"output={output!r} requires integral_weights")
+    if output not in integral_outputs and integral_weights is not None:
+        raise ValueError("integral_weights are only valid with integral output modes")
     if output_when == "saveat" and saveat_values is None:
         raise ValueError("grid_scan output_when='saveat' requires explicit saveat values")
+    if output in integral_outputs and saveat_values is None:
+        raise ValueError(f"output={output!r} requires explicit saveat values")
+    if not dense_output and output_when == "saveat" and saveat_values is not None:
+        raise ValueError("dense_output=False is only supported with output_when='final'")
     if threads is not None and threads <= 0:
         raise ValueError("threads must be positive when provided")
 
@@ -367,8 +391,6 @@ def grid_scan(
     flat_axes = np.ascontiguousarray(np.concatenate(axes), dtype=np.complex128)
 
     from ..centrex_tlf_rust import solve_lindblad_grid_ode_py
-
-    solver_name = "dopri5" if solver == "dopri5_fast" else "tsit5"
 
     start = time.perf_counter()
     times, flat_values, width, time_count, solver_stats = (
@@ -387,17 +409,17 @@ def grid_scan(
             save_start,
             maxiters,
             execution_mode,
-            solver_name,
+            solver,
             output,
             None if output_indices is None else list(output_indices),
             output_when,
-            None,
+            None if integral_weights is None else list(integral_weights),
             parallel,
             threads,
         )
     )
     elapsed = time.perf_counter() - start
-    dtype = np.float64 if output == "populations" else np.complex128
+    dtype = np.float64 if output in {"populations", *integral_outputs} else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
     if output_when == "final":
         values = values.reshape((trajectory_count, int(width)))
@@ -413,9 +435,9 @@ def grid_scan(
         parameter_slots=parameter_slot_names,
         parameter_values=None,
         solver_stats=(
-            _solver_stats_with_compat(
+            _solver_stats_dict(
                 solver_stats,
-                solver=f"{solver}_grid",
+                solver=solver,
                 saved_points=int(time_count),
                 elapsed_seconds=elapsed,
             )
@@ -428,7 +450,9 @@ def grid_scan(
         {
             "scan_kind": "grid",
             "grid_shape": tuple(int(axis.size) for axis in axes),
-            "grid_axes": {name: axis for name, axis in zip(parameter_slot_names or [], axes)},
+            "grid_axes": {
+                name: axis for name, axis in zip(parameter_slot_names or [], axes, strict=True)
+            },
             "compact_grid": True,
         }
     )

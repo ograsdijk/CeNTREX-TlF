@@ -140,7 +140,7 @@ def test_typed_lindblad_parameters_lower_and_scan() -> None:
             omega: np.array([0.4, 0.7]),
             delta: np.array([-0.1, 0.2]),
         },
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="expanded_sparse",
         output="populations",
         output_when="final",
@@ -498,7 +498,7 @@ def test_rust_dopri5_solver_stats_are_reported() -> None:
     ],
 )
 @pytest.mark.parametrize("execution_mode", ["structured_upper", "expanded_sparse"])
-def test_rust_dopri5_fast_matches_dopri5(saveat: np.ndarray, execution_mode: str) -> None:
+def test_rust_dopri5_matches_dopri5(saveat: np.ndarray, execution_mode: str) -> None:
     system = _make_two_level_system()
     rho0 = _ground_state_density()
     parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
@@ -521,7 +521,7 @@ def test_rust_dopri5_fast_matches_dopri5(saveat: np.ndarray, execution_mode: str
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode=execution_mode,
         saveat=saveat,
         dt=1e-3,
@@ -532,11 +532,11 @@ def test_rust_dopri5_fast_matches_dopri5(saveat: np.ndarray, execution_mode: str
     np.testing.assert_allclose(fast.t, reference.t, atol=1e-13, rtol=0.0)
     np.testing.assert_allclose(fast.packed_y, reference.packed_y, atol=5e-10, rtol=5e-8)
     assert fast.solver_stats is not None
-    assert fast.solver_stats["solver"] == "dopri5_fast"
+    assert fast.solver_stats["solver"] == "dopri5"
     assert fast.solver_stats["rhs_calls"] > 0
 
 
-def test_rust_dopri5_fast_population_outputs_match_full() -> None:
+def test_rust_dopri5_population_outputs_match_full() -> None:
     system = _make_two_level_system()
     rho0 = _ground_state_density()
     parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
@@ -547,7 +547,7 @@ def test_rust_dopri5_fast_population_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="expanded_sparse",
         saveat=saveat,
         dt=1e-3,
@@ -560,7 +560,7 @@ def test_rust_dopri5_fast_population_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="expanded_sparse",
         saveat=saveat,
         dt=1e-3,
@@ -579,7 +579,7 @@ def test_rust_dopri5_fast_population_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="expanded_sparse",
         saveat=saveat,
         dt=1e-3,
@@ -593,7 +593,7 @@ def test_rust_dopri5_fast_population_outputs_match_full() -> None:
     np.testing.assert_allclose(final.values, full.populations()[-1], atol=1e-12, rtol=1e-10)
 
 
-def test_rust_dopri5_fast_selected_outputs_match_full() -> None:
+def test_rust_dopri5_selected_outputs_match_full() -> None:
     system = _make_two_level_system()
     rho0 = _ground_state_density()
     parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
@@ -604,7 +604,7 @@ def test_rust_dopri5_fast_selected_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="structured_upper",
         saveat=saveat,
         dt=1e-3,
@@ -618,7 +618,7 @@ def test_rust_dopri5_fast_selected_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="structured_upper",
         saveat=saveat,
         dt=1e-3,
@@ -638,7 +638,7 @@ def test_rust_dopri5_fast_selected_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="structured_upper",
         saveat=saveat,
         dt=1e-3,
@@ -652,7 +652,7 @@ def test_rust_dopri5_fast_selected_outputs_match_full() -> None:
     np.testing.assert_allclose(final.values, expected[-1], atol=1e-12, rtol=1e-10)
 
 
-def test_rust_dopri5_fast_dense_output_false_rejects_interior_saveat() -> None:
+def test_rust_dopri5_dense_output_false_rejects_interior_saveat() -> None:
     system = _make_two_level_system()
     rho0 = _ground_state_density()
     parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
@@ -663,7 +663,7 @@ def test_rust_dopri5_fast_dense_output_false_rejects_interior_saveat() -> None:
             (0.0, 0.5),
             parameters=parameters,
             backend="rust",
-            solver="dopri5_fast",
+            solver="dopri5",
             execution_mode="expanded_sparse",
             saveat=np.linspace(0.0, 0.5, 7),
             dt=1e-3,
@@ -681,7 +681,7 @@ def test_rust_dopri5_fast_dense_output_false_rejects_interior_saveat() -> None:
     ],
 )
 @pytest.mark.parametrize("execution_mode", ["structured_upper", "expanded_sparse"])
-def test_rust_tsit5_fast_matches_dopri5(saveat: np.ndarray, execution_mode: str) -> None:
+def test_rust_tsit5_matches_dopri5(saveat: np.ndarray, execution_mode: str) -> None:
     system = _make_two_level_system()
     rho0 = _ground_state_density()
     parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
@@ -704,7 +704,7 @@ def test_rust_tsit5_fast_matches_dopri5(saveat: np.ndarray, execution_mode: str)
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="tsit5_fast",
+        solver="tsit5",
         execution_mode=execution_mode,
         saveat=saveat,
         dt=1e-3,
@@ -715,11 +715,11 @@ def test_rust_tsit5_fast_matches_dopri5(saveat: np.ndarray, execution_mode: str)
     np.testing.assert_allclose(fast.t, reference.t, atol=1e-13, rtol=0.0)
     np.testing.assert_allclose(fast.packed_y, reference.packed_y, atol=5e-10, rtol=5e-8)
     assert fast.solver_stats is not None
-    assert fast.solver_stats["solver"] == "tsit5_fast"
+    assert fast.solver_stats["solver"] == "tsit5"
     assert fast.solver_stats["rhs_calls"] > 0
 
 
-def test_rust_tsit5_fast_reduced_outputs_match_full() -> None:
+def test_rust_tsit5_reduced_outputs_match_full() -> None:
     system = _make_two_level_system()
     rho0 = _ground_state_density()
     parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
@@ -730,7 +730,7 @@ def test_rust_tsit5_fast_reduced_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="tsit5_fast",
+        solver="tsit5",
         execution_mode="expanded_sparse",
         saveat=saveat,
         dt=1e-3,
@@ -743,7 +743,7 @@ def test_rust_tsit5_fast_reduced_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="tsit5_fast",
+        solver="tsit5",
         execution_mode="expanded_sparse",
         saveat=saveat,
         dt=1e-3,
@@ -760,7 +760,7 @@ def test_rust_tsit5_fast_reduced_outputs_match_full() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="tsit5_fast",
+        solver="tsit5",
         execution_mode="expanded_sparse",
         saveat=saveat,
         dt=1e-3,
@@ -785,7 +785,7 @@ def test_rust_batch_initial_conditions_match_repeated_solves() -> None:
         prepared,
         np.stack([rho0_a, rho0_b]),
         (0.0, 0.5),
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="expanded_sparse",
         output="populations",
         output_when="final",
@@ -802,7 +802,7 @@ def test_rust_batch_initial_conditions_match_repeated_solves() -> None:
             prepared,
             rho0,
             (0.0, 0.5),
-            solver="dopri5_fast",
+            solver="dopri5",
             execution_mode="expanded_sparse",
             output="populations",
             output_when="final",
@@ -814,13 +814,13 @@ def test_rust_batch_initial_conditions_match_repeated_solves() -> None:
         expected.append(result.values)
     np.testing.assert_allclose(batch.values, np.asarray(expected), atol=1e-12, rtol=1e-10)
     assert batch.solver_stats is not None
-    assert batch.solver_stats["solver"] == "dopri5_fast_batch"
+    assert batch.solver_stats["solver"] == "dopri5"
 
     parallel = solve_lindblad_batch(
         prepared,
         np.stack([rho0_a, rho0_b]),
         (0.0, 0.5),
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="expanded_sparse",
         output="populations",
         output_when="final",
@@ -846,7 +846,7 @@ def test_rust_batch_selected_saveat_matches_repeated_solves() -> None:
         prepared,
         np.stack([rho0_a, rho0_b]),
         (0.0, 0.5),
-        solver="tsit5_fast",
+        solver="tsit5",
         execution_mode="expanded_sparse",
         output="selected",
         output_indices=selected_indices,
@@ -863,7 +863,7 @@ def test_rust_batch_selected_saveat_matches_repeated_solves() -> None:
             prepared,
             rho0,
             (0.0, 0.5),
-            solver="tsit5_fast",
+            solver="tsit5",
             execution_mode="expanded_sparse",
             output="selected",
             output_indices=selected_indices,
@@ -892,7 +892,7 @@ def test_rust_batch_parameter_grid_matches_repeated_solves() -> None:
         rho0,
         (0.0, 0.5),
         scan=scan,
-        solver="dopri5_fast",
+        solver="dopri5",
         execution_mode="expanded_sparse",
         output="populations",
         output_when="final",
@@ -911,7 +911,7 @@ def test_rust_batch_parameter_grid_matches_repeated_solves() -> None:
                 (0.0, 0.5),
                 parameters={omega: omega_value, delta: delta_value},
                 backend="rust",
-                solver="dopri5_fast",
+                solver="dopri5",
                 execution_mode="expanded_sparse",
                 output="populations",
                 output_when="final",
@@ -1072,7 +1072,7 @@ def test_rust_dopri5_solver_matches_python_reference() -> None:
     np.testing.assert_allclose(np.sum(populations, axis=1), 1.0, atol=2e-6)
 
 
-def test_rust_scipy_solver_matches_python_structured_reference() -> None:
+def test_rust_scipy_rk45_solver_matches_python_structured_reference() -> None:
     system = _make_two_level_system()
     rho0 = _ground_state_density()
     saveat = np.linspace(0.0, 0.5, 11)
@@ -1102,7 +1102,7 @@ def test_rust_scipy_solver_matches_python_structured_reference() -> None:
         (0.0, 0.5),
         parameters=parameters,
         backend="rust",
-        solver="scipy",
+        solver="scipy_rk45",
         execution_mode="structured",
         saveat=saveat,
         dt=1e-3,

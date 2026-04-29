@@ -42,7 +42,7 @@ for mode in ["full", "populations", "selected"]:
     if mode == "selected":
         kwargs["output_indices"] = [(0, 0), (1, 1), (0, 1)]
     try:
-        r = solve_lindblad(prepared, rho0_obe, (0, 10e-6), solver="dopri5_fast",
+        r = solve_lindblad(prepared, rho0_obe, (0, 10e-6), solver="dopri5",
                           execution_mode="structured_upper", saveat=saveat,
                           dt=1e-10, reltol=1e-7, abstol=1e-9, output=mode, **kwargs)
         print(f"  {mode:20s}: OK")
@@ -52,7 +52,7 @@ for mode in ["full", "populations", "selected"]:
 # weighted_integral
 try:
     weights = [(i, 1.0) for i in range(n)]  # sum all populations = trace
-    r = solve_lindblad(prepared, rho0_obe, (0, 10e-6), solver="dopri5_fast",
+    r = solve_lindblad(prepared, rho0_obe, (0, 10e-6), solver="dopri5",
                       execution_mode="structured_upper", saveat=saveat,
                       dt=1e-10, reltol=1e-7, abstol=1e-9,
                       output="weighted_integral", integral_weights=weights)

@@ -76,13 +76,13 @@ rust_configs = [
     ("dopri5", "structured"),
     ("dopri5", "structured_upper"),
     ("dopri5", "expanded_sparse"),
-    ("dopri5_fast", "structured_upper"),
-    ("dopri5_fast", "expanded_sparse"),
-    ("tsit5_fast", "structured_upper"),
-    ("tsit5_fast", "expanded_sparse"),
-    ("scipy", "structured"),
-    ("scipy", "structured_upper"),
-    ("scipy", "expanded_sparse"),
+    ("dopri5", "structured_upper"),
+    ("dopri5", "expanded_sparse"),
+    ("tsit5", "structured_upper"),
+    ("tsit5", "expanded_sparse"),
+    ("scipy_rk45", "structured"),
+    ("scipy_rk45", "structured_upper"),
+    ("scipy_rk45", "expanded_sparse"),
     ("scipy_bdf", "structured"),
     ("scipy_bdf", "structured_upper"),
     ("scipy_bdf", "expanded_sparse"),
@@ -106,7 +106,7 @@ for solver, exec_mode in rust_configs:
     median_ms = np.median(ms)
     print(f"  {label:40s} {median_ms:8.1f} ms")
     solver_stats = None
-    if collect_solve_stats and solver in {"dopri5", "dopri5_fast", "tsit5_fast"}:
+    if collect_solve_stats and solver in {"dopri5", "tsit5"}:
         profiled_result = solve_lindblad(
             prepared_rust, rho0, t_span,
             solver=solver, execution_mode=exec_mode,

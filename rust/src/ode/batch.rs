@@ -12,8 +12,8 @@ pub enum OdeSolver {
 impl OdeSolver {
     pub fn from_str(value: &str) -> Result<Self, String> {
         match value {
-            "dopri5" | "dopri5_fast" => Ok(Self::Dopri5),
-            "tsit5" | "tsit5_fast" => Ok(Self::Tsit5),
+            "dopri5" => Ok(Self::Dopri5),
+            "tsit5" => Ok(Self::Tsit5),
             other => Err(format!("solver must be 'dopri5' or 'tsit5', got {other:?}")),
         }
     }

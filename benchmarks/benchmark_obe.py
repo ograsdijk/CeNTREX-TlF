@@ -114,20 +114,20 @@ def run_benchmarks():
         ("dopri5", "structured", "rust", prepared_rust),
         ("dopri5", "structured_upper", "rust", prepared_rust),
         ("dopri5", "expanded_sparse", "rust", prepared_rust),
-        ("dopri5_fast", "structured_upper", "rust", prepared_rust),
-        ("dopri5_fast", "expanded_sparse", "rust", prepared_rust),
-        ("tsit5_fast", "structured_upper", "rust", prepared_rust),
-        ("tsit5_fast", "expanded_sparse", "rust", prepared_rust),
+        ("dopri5", "structured_upper", "rust", prepared_rust),
+        ("dopri5", "expanded_sparse", "rust", prepared_rust),
+        ("tsit5", "structured_upper", "rust", prepared_rust),
+        ("tsit5", "expanded_sparse", "rust", prepared_rust),
         ("dopri5", "reference", "rust", prepared_rust),
-        ("scipy", "structured", "rust", prepared_rust),
-        ("scipy", "expanded_sparse", "rust", prepared_rust),
+        ("scipy_rk45", "structured", "rust", prepared_rust),
+        ("scipy_rk45", "expanded_sparse", "rust", prepared_rust),
         ("scipy_bdf", "structured", "rust", prepared_rust),
         ("scipy_bdf", "structured_upper", "rust", prepared_rust),
         ("scipy_bdf", "expanded_sparse", "rust", prepared_rust),
         ("scipy_radau", "structured", "rust", prepared_rust),
         ("scipy_radau", "structured_upper", "rust", prepared_rust),
         ("scipy_radau", "expanded_sparse", "rust", prepared_rust),
-        ("explicit", "structured", "python", prepared_python),
+        ("python_rk45", "structured", "python", prepared_python),
     ]
 
     print(f"\nRunning benchmarks ({n_runs} runs each)...")
@@ -160,8 +160,7 @@ def run_benchmarks():
             solver_stats = None
             if collect_solve_stats and backend == "rust" and solver in {
                 "dopri5",
-                "dopri5_fast",
-                "tsit5_fast",
+                "tsit5",
             }:
                 profiled = solve_lindblad(
                     prepared,
