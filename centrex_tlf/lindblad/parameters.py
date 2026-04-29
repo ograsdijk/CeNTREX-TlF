@@ -1,31 +1,50 @@
 from __future__ import annotations
 
-from collections import OrderedDict
-from collections.abc import Sequence
-from dataclasses import dataclass, field
 import numbers
-from typing import Any, Mapping
+from collections import OrderedDict
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import sympy as smp
-from centrex_tlf import hamiltonian
 from sympy.parsing import sympy_parser
 
+from centrex_tlf import hamiltonian
+
+from . import helper_functions as _helper_functions
 from .helper_functions import HELPER_FUNCTIONS
 
 __all__ = [
+    "LindbladParameters",
     "Parameter",
     "RuntimeExpression",
     "Time",
-    "LindbladParameters",
     "adapt_lindblad_parameters",
-    "generate_lindblad_parameters",
+    "alternating_sign",
     "gaussian",
+    "gaussian_1d",
+    "gaussian_2d",
+    "gaussian_2d_rotated",
+    "gaussian_beam_rabi",
+    "generate_lindblad_parameters",
     "linear",
+    "linear_interp",
+    "multipass_2d_intensity",
+    "multipass_2d_rabi",
+    "pchip_interp",
+    "pchip_tabulated",
+    "phase_modulation",
+    "rabi_from_intensity",
+    "resonant_polarization_modulation",
+    "sawtooth_wave",
     "sine",
+    "square_wave",
     "square_wave_profile",
     "tabulated",
-    "pchip_tabulated",
+    "variable_on_off",
+    "variable_on_off_duty",
+    "variable_on_off_duty_invT",
 ]
 
 
@@ -39,7 +58,7 @@ def _normalize_symbol_name(value: str) -> str:
 def _is_sequence(value: Any) -> bool:
     if isinstance(value, np.ndarray):
         return value.ndim == 1
-    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+    return isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray)
 
 
 def _coerce_base_value(value: Any) -> complex | tuple[complex, ...]:
@@ -249,7 +268,10 @@ class RuntimeExpression:
                 expr,
                 modules=[HELPER_FUNCTIONS, "numpy"],
             )
-            return float(func(0))
+            result = func(0)
+            if isinstance(result, complex) or np.iscomplexobj(result):
+                return complex(result)
+            return float(result)
         try:
             return complex(expr)
         except (TypeError, ValueError):
@@ -258,9 +280,9 @@ class RuntimeExpression:
     def evaluate_array(
         self,
         variable: str,
-        values: "np.ndarray",
+        values: np.ndarray,
         **overrides: float | complex,
-    ) -> "np.ndarray":
+    ) -> np.ndarray:
         """Evaluate the expression over an array of values for one variable.
 
         Uses ``sympy.lambdify`` with helper function modules so that
@@ -274,6 +296,7 @@ class RuntimeExpression:
             Omega_vs_t = Omega.evaluate_array("t", t_array)
         """
         import numpy as np
+
         from centrex_tlf.lindblad.helper_functions import HELPER_FUNCTIONS
 
         sym_by_name: dict[str, smp.Symbol] = {
@@ -311,7 +334,7 @@ class RuntimeExpression:
         )
         return np.asarray(func(np.asarray(values)), dtype=np.float64)
 
-    def compile_callable(self, variable: str = "t", **overrides: float | complex) -> "Callable[[float], float]":
+    def compile_callable(self, variable: str = "t", **overrides: float | complex) -> Callable[[float], float]:
         """Compile the expression to a fast callable function of one variable.
 
         Uses ``sympy.lambdify`` with helper function modules. The returned
@@ -323,7 +346,6 @@ class RuntimeExpression:
             z_func = z.compile_callable("t")
             z_func(25e-6)  # fast, no sympy
         """
-        import numpy as np
         from centrex_tlf.lindblad.helper_functions import HELPER_FUNCTIONS
 
         sym_by_name: dict[str, smp.Symbol] = {
@@ -397,8 +419,317 @@ def _call_function(name: str, *args: ExpressionLike) -> RuntimeExpression:
     return RuntimeExpression(smp.Function(name)(*(arg.expr for arg in coerced)), parameters)
 
 
+def _is_expression_like(value: Any) -> bool:
+    return isinstance(value, Parameter | RuntimeExpression | smp.Expr)
+
+
+def _helper_or_expression(
+    name: str,
+    numeric_func: Callable[..., Any],
+    *args: Any,
+) -> complex | float | np.ndarray | RuntimeExpression:
+    if any(_is_expression_like(arg) for arg in args):
+        return _call_function(name, *args)
+    return numeric_func(*args)
+
+
 def Time() -> RuntimeExpression:
     return RuntimeExpression(smp.Symbol("t", real=True), {})
+
+
+def gaussian_1d(
+    x: ExpressionLike,
+    center: ExpressionLike,
+    sigma: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "gaussian_1d",
+        _helper_functions.gaussian_1d,
+        x,
+        center,
+        sigma,
+    )
+
+
+def gaussian_2d(
+    x: ExpressionLike,
+    y: ExpressionLike,
+    amplitude: ExpressionLike,
+    mean_x: ExpressionLike,
+    mean_y: ExpressionLike,
+    sigma_x: ExpressionLike,
+    sigma_y: ExpressionLike,
+    theta: ExpressionLike | None = None,
+) -> complex | float | RuntimeExpression:
+    if theta is None:
+        return _helper_or_expression(
+            "gaussian_2d",
+            _helper_functions.gaussian_2d,
+            x,
+            y,
+            amplitude,
+            mean_x,
+            mean_y,
+            sigma_x,
+            sigma_y,
+        )
+    return gaussian_2d_rotated(
+        x,
+        y,
+        amplitude,
+        mean_x,
+        mean_y,
+        sigma_x,
+        sigma_y,
+        theta,
+    )
+
+
+def gaussian_2d_rotated(
+    x: ExpressionLike,
+    y: ExpressionLike,
+    amplitude: ExpressionLike,
+    mean_x: ExpressionLike,
+    mean_y: ExpressionLike,
+    sigma_x: ExpressionLike,
+    sigma_y: ExpressionLike,
+    theta: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "gaussian_2d_rotated",
+        _helper_functions.gaussian_2d_rotated,
+        x,
+        y,
+        amplitude,
+        mean_x,
+        mean_y,
+        sigma_x,
+        sigma_y,
+        theta,
+    )
+
+
+def phase_modulation(
+    t: ExpressionLike,
+    beta: ExpressionLike,
+    omega: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "phase_modulation",
+        _helper_functions.phase_modulation,
+        t,
+        beta,
+        omega,
+    )
+
+
+def square_wave(
+    t: ExpressionLike,
+    omega: ExpressionLike,
+    phase: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    """Julia-compatible 0/1 square wave helper."""
+    return _helper_or_expression(
+        "square_wave",
+        _helper_functions.square_wave,
+        t,
+        omega,
+        phase,
+    )
+
+
+def resonant_polarization_modulation(
+    t: ExpressionLike,
+    gamma: ExpressionLike,
+    omega: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "resonant_polarization_modulation",
+        _helper_functions.resonant_polarization_modulation,
+        t,
+        gamma,
+        omega,
+    )
+
+
+def sawtooth_wave(
+    t: ExpressionLike,
+    omega: ExpressionLike,
+    phase: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "sawtooth_wave",
+        _helper_functions.sawtooth_wave,
+        t,
+        omega,
+        phase,
+    )
+
+
+def variable_on_off(
+    t: ExpressionLike,
+    ton: ExpressionLike,
+    toff: ExpressionLike,
+    phase: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "variable_on_off",
+        _helper_functions.variable_on_off,
+        t,
+        ton,
+        toff,
+        phase,
+    )
+
+
+def variable_on_off_duty(
+    t: ExpressionLike,
+    duty: ExpressionLike,
+    inv_period: ExpressionLike,
+    phase: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "variable_on_off_duty",
+        _helper_functions.variable_on_off_duty,
+        t,
+        duty,
+        inv_period,
+        phase,
+    )
+
+
+def variable_on_off_duty_invT(
+    t: ExpressionLike,
+    duty: ExpressionLike,
+    inv_period: ExpressionLike,
+    phase: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "variable_on_off_duty_invT",
+        _helper_functions.variable_on_off_duty_invT,
+        t,
+        duty,
+        inv_period,
+        phase,
+    )
+
+
+def multipass_2d_intensity(
+    x: ExpressionLike,
+    y: ExpressionLike,
+    amplitudes: ExpressionLike,
+    xlocs: ExpressionLike,
+    ylocs: ExpressionLike,
+    sigma_x: ExpressionLike,
+    sigma_y: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "multipass_2d_intensity",
+        _helper_functions.multipass_2d_intensity,
+        x,
+        y,
+        amplitudes,
+        xlocs,
+        ylocs,
+        sigma_x,
+        sigma_y,
+    )
+
+
+def rabi_from_intensity(
+    intensity: ExpressionLike,
+    coupling: ExpressionLike,
+    dipole_moment: ExpressionLike = 2.6675506e-30,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "rabi_from_intensity",
+        _helper_functions.rabi_from_intensity,
+        intensity,
+        coupling,
+        dipole_moment,
+    )
+
+
+def multipass_2d_rabi(
+    x: ExpressionLike,
+    y: ExpressionLike,
+    intensities: ExpressionLike,
+    xlocs: ExpressionLike,
+    ylocs: ExpressionLike,
+    sigma_x: ExpressionLike,
+    sigma_y: ExpressionLike,
+    main_coupling: ExpressionLike,
+    dipole_moment: ExpressionLike = 2.6675506e-30,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "multipass_2d_rabi",
+        _helper_functions.multipass_2d_rabi,
+        x,
+        y,
+        intensities,
+        xlocs,
+        ylocs,
+        sigma_x,
+        sigma_y,
+        main_coupling,
+        dipole_moment,
+    )
+
+
+def gaussian_beam_rabi(
+    x: ExpressionLike,
+    y: ExpressionLike,
+    intensity: ExpressionLike,
+    xloc: ExpressionLike,
+    yloc: ExpressionLike,
+    sigma_x: ExpressionLike,
+    sigma_y: ExpressionLike,
+    main_coupling: ExpressionLike,
+    dipole_moment: ExpressionLike = 2.6675506e-30,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "gaussian_beam_rabi",
+        _helper_functions.gaussian_beam_rabi,
+        x,
+        y,
+        intensity,
+        xloc,
+        yloc,
+        sigma_x,
+        sigma_y,
+        main_coupling,
+        dipole_moment,
+    )
+
+
+def alternating_sign(
+    x: ExpressionLike,
+    x0: ExpressionLike,
+    width: ExpressionLike,
+) -> complex | float | RuntimeExpression:
+    return _helper_or_expression(
+        "alternating_sign",
+        _helper_functions.alternating_sign,
+        x,
+        x0,
+        width,
+    )
+
+
+def linear_interp(
+    x: ExpressionLike,
+    grid: ExpressionLike,
+    values: ExpressionLike,
+) -> complex | float | np.ndarray | RuntimeExpression:
+    return _helper_or_expression("linear_interp", _helper_functions.linear_interp, x, grid, values)
+
+
+def pchip_interp(
+    x: ExpressionLike,
+    grid: ExpressionLike,
+    values: ExpressionLike,
+) -> complex | float | np.ndarray | RuntimeExpression:
+    return _helper_or_expression("pchip_interp", _helper_functions.pchip_interp, x, grid, values)
 
 
 def linear(
@@ -452,6 +783,7 @@ def square_wave_profile(
     phase: ExpressionLike = 0.0,
     duty: ExpressionLike = 0.5,
 ) -> RuntimeExpression:
+    """Configurable low/high/period/duty profile built on variable_on_off_duty."""
     on = _call_function(
         "variable_on_off_duty",
         x,
@@ -503,14 +835,14 @@ class LindbladParameters:
     def _looks_like_binding_mapping(mapping: Mapping[Any, Any]) -> bool:
         return any(
             isinstance(key, smp.Symbol)
-            or isinstance(value, (RuntimeExpression, Parameter, smp.Expr))
+            or isinstance(value, RuntimeExpression | Parameter | smp.Expr)
             for key, value in mapping.items()
         )
 
     @classmethod
     def from_kwargs(cls, **kwargs: Any) -> LindbladParameters:
         if any(
-            isinstance(value, (RuntimeExpression, Parameter, smp.Expr))
+            isinstance(value, RuntimeExpression | Parameter | smp.Expr)
             for value in kwargs.values()
         ):
             return cls(kwargs)
@@ -528,11 +860,11 @@ class LindbladParameters:
         if not hasattr(legacy, "_parameters") or not hasattr(legacy, "_compound_vars"):
             raise TypeError("legacy object does not look like odeParameters")
         base = OrderedDict(
-            (name, getattr(legacy, name)) for name in list(getattr(legacy, "_parameters"))
+            (name, getattr(legacy, name)) for name in list(legacy._parameters)
         )
         compound = OrderedDict(
             (name, getattr(legacy, name))
-            for name in list(getattr(legacy, "_compound_vars"))
+            for name in list(legacy._compound_vars)
         )
         return cls(base, compound)
 
@@ -582,8 +914,8 @@ class LindbladParameters:
         detuning: ExpressionLike,
         overwrite: bool = True,
     ) -> LindbladParameters:
-        self.bind(getattr(selector, "Ω"), rabi, overwrite=overwrite, finalize=False)
-        self.bind(getattr(selector, "δ"), detuning, overwrite=overwrite, finalize=False)
+        self.bind(selector.Ω, rabi, overwrite=overwrite, finalize=False)
+        self.bind(selector.δ, detuning, overwrite=overwrite, finalize=False)
         self._finalize()
         return self
 
@@ -699,7 +1031,7 @@ def adapt_lindblad_parameters(parameters: Any) -> LindbladParameters:
         return parameters
     if isinstance(parameters, Mapping):
         if any(
-            not isinstance(key, str) or isinstance(value, (RuntimeExpression, Parameter, smp.Expr))
+            not isinstance(key, str) or isinstance(value, RuntimeExpression | Parameter | smp.Expr)
             for key, value in parameters.items()
         ):
             return LindbladParameters(parameters)
