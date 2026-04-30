@@ -23,8 +23,10 @@ Repository = "https://github.com/ograsdijk/CeNTREX-TlF"
 [project.optional-dependencies]
 dev = [
     "pytest>=7.1.2",
+    "pytest-cov>=4.0",
     "mypy>=0.961",
     "ruff",
+    "pre-commit>=3.0",
 ]
 
 [build-system]
@@ -37,6 +39,46 @@ manifest-path = "rust/Cargo.toml"
 module-name = "centrex_tlf.centrex_tlf_rust"
 bindings = "pyo3"
 
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific rules
+]
+ignore = [
+    "E501",   # line length (handled by formatter)
+    "E741",   # ambiguous variable names (physics code uses l, I, etc.)
+    "RUF003", # ambiguous unicode (Ω, Γ, δ are intentional)
+    "UP007",  # X | Y union syntax (keep Optional for 3.10 compat)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["centrex_tlf"]
+
+[tool.coverage.run]
+source = ["centrex_tlf"]
+omit = ["centrex_tlf/utils/plotting.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
 
 [tool.mypy]
 
@@ -55,5 +97,6 @@ dev = [
     "mypy>=1.17.0",
     "pandas-stubs>=2.3.2.250926",
     "pytest>=8.4.1",
+    "ruff",
     "scipy-stubs>=1.15.3.0",
 ]

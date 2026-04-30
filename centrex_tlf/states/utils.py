@@ -74,18 +74,31 @@ DType = TypeVar("DType")
 
 
 def get_unique_list(states: Sequence[DType]) -> List[DType]:
-    """get a list/array of unique entries in the list/array
+    """Get a list/array of unique entries in the list/array.
 
     Args:
-        states (Union[list, np.ndarray]): list/array
+        states: list or array of items supporting hash and equality
 
     Returns:
-        Union[list, np.ndarray]: list/array with unique entries
+        list or array with unique entries, preserving first-occurrence order
     """
+    seen: dict = {}
     states_unique = []
     for state in states:
-        if state not in states_unique:
+        h = hash(state)
+        bucket = seen.get(h)
+        if bucket is None:
+            seen[h] = [state]
             states_unique.append(state)
+        else:
+            is_dup = False
+            for existing in bucket:
+                if existing == state:
+                    is_dup = True
+                    break
+            if not is_dup:
+                bucket.append(state)
+                states_unique.append(state)
 
     if isinstance(states, np.ndarray):
         return np.asarray(states_unique)

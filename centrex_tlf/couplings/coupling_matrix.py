@@ -77,7 +77,8 @@ def _generate_coupling_matrix_python(
         >>> H_coupling = generate_coupling_matrix(QN, ground_states, excited_states)
         >>> coupling_strength = np.abs(H_coupling[ground_idx, excited_idx])
     """
-    assert isinstance(QN, list), "QN required to be of type list"
+    if not isinstance(QN, list):
+        raise TypeError("QN required to be of type list")
 
     # Initialize default polarization vector if not provided
     if pol_vec is None:
@@ -172,10 +173,13 @@ def generate_coupling_matrix(
         excited_states = [qn.transform_to_omega_basis() for qn in excited_states]
 
     if HAS_RUST and _generate_coupling_matrix_rust is not None:
+        idx_map = {s.largest: i for i, s in enumerate(QN)}
+        ground_indices = [idx_map[gs.largest] for gs in ground_states]
+        excited_indices = [idx_map[es.largest] for es in excited_states]
         return _generate_coupling_matrix_rust(
             QN,
-            ground_states,
-            excited_states,
+            ground_indices,
+            excited_indices,
             pol_vec,
             reduced,
         )
@@ -341,16 +345,15 @@ def generate_coupling_field(
     if pol_vecs is None:
         pol_vecs = []
 
-    assert isinstance(pol_main, np.ndarray), (
-        "supply a numpy ndarray with dtype np.complex128 for pol_main"
-    )
-    if len(pol_vecs) > 0:
-        assert isinstance(pol_vecs[0], np.ndarray), (
+    if not isinstance(pol_main, np.ndarray):
+        raise TypeError("supply a numpy ndarray with dtype np.complex128 for pol_main")
+    if len(pol_vecs) > 0 and not isinstance(pol_vecs[0], np.ndarray):
+        raise TypeError(
             "supply a Sequence of np.ndarrays with dtype np.complex128 for pol_vecs"
         )
     if not np.issubdtype(pol_main.dtype, np.complex128):
-        pol_main.astype(np.complex128)
-    if not np.issubdtype(pol_vecs[0].dtype, np.complex128):
+        pol_main = pol_main.astype(np.complex128)
+    if len(pol_vecs) > 0 and not np.issubdtype(pol_vecs[0].dtype, np.complex128):
         pol_vecs = [pol.astype(np.complex128) for pol in pol_vecs]
 
     _ground_states_approx: Sequence[states.CoupledState]
@@ -405,10 +408,11 @@ def generate_coupling_field(
         normalize_pol=normalize_pol,
     )
 
-    assert ME_main != 0, (
-        f"main coupling element for {ground_main_approx} -> "
-        f"{excited_main_approx} is zero, pol = {pol_main}"
-    )
+    if ME_main == 0:
+        raise ValueError(
+            f"main coupling element for {ground_main_approx} -> "
+            f"{excited_main_approx} is zero, pol = {pol_main}"
+        )
 
     _ground_main = cast(CoupledBasisState, ground_main.largest)
     _excited_main = cast(CoupledBasisState, excited_main.largest)
@@ -493,9 +497,10 @@ def generate_coupling_field_automatic(
                                 polarization, containing the polarization and coupling
                                 field
     """
-    assert isinstance(pol_vecs[0], np.ndarray), (
-        "supply a Sequence of np.ndarrays with dtype np.floating for pol_vecs"
-    )
+    if not isinstance(pol_vecs[0], np.ndarray):
+        raise TypeError(
+            "supply a Sequence of np.ndarrays with dtype np.floating for pol_vecs"
+        )
 
     _ground_states_approx: Sequence[states.CoupledState]
     _excited_states_approx: Sequence[states.CoupledState]

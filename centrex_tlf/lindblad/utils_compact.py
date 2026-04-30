@@ -86,10 +86,11 @@ def compact_symbolic_hamiltonian_indices(
     # Verify diagonal elements are numeric (no symbolic variables)
     # This ensures the states are sufficiently far detuned and can be compacted
     num_free_symbols = sum(len(val.free_symbols) for val in diagonal_to_compact)
-    assert num_free_symbols == 0, (
-        "Diagonal elements for states to compact contain symbolic variables. "
-        "These states may be coupled to the system and cannot be compacted safely."
-    )
+    if num_free_symbols != 0:
+        raise ValueError(
+            "Diagonal elements for states to compact contain symbolic variables. "
+            "These states may be coupled to the system and cannot be compacted safely."
+        )
 
     # Delete rows and columns for all states except the first (representative) state
     # We keep the first index as the representative that will hold the mean energy
@@ -111,14 +112,16 @@ def compact_symbolic_hamiltonian_indices(
         row_coupling = np.sum(row) - diagonal_element  # type: ignore[arg-type]
         col_coupling = np.sum(col) - diagonal_element  # type: ignore[arg-type]
 
-        assert row_coupling == 0, (
-            f"Row couplings exist for state at index {idx}. "
-            f"Sum of off-diagonal elements: {row_coupling}. Cannot compact."
-        )
-        assert col_coupling == 0, (
-            f"Column couplings exist for state at index {idx}. "
-            f"Sum of off-diagonal elements: {col_coupling}. Cannot compact."
-        )
+        if row_coupling != 0:
+            raise ValueError(
+                f"Row couplings exist for state at index {idx}. "
+                f"Sum of off-diagonal elements: {row_coupling}. Cannot compact."
+            )
+        if col_coupling != 0:
+            raise ValueError(
+                f"Column couplings exist for state at index {idx}. "
+                f"Sum of off-diagonal elements: {col_coupling}. Cannot compact."
+            )
 
         # Delete this row and column
         hamiltonian_compact.row_del(current_idx)

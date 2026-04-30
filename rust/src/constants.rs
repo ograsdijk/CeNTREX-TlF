@@ -1,4 +1,3 @@
-pub const A0: f64 = 0.529177210903e-10; // m
 pub const DEBYE: f64 = 3.333333333333333e-30; // C·m
 pub const DEBYE_HZ_V_CM: f64 = 503411.7791722602; // Hz/(V/cm)
 pub const B_EPSILON: f64 = 6.689873e9; // Hz
@@ -46,7 +45,7 @@ impl Default for XConstants {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Constants for the B state Hamiltonian.
 pub struct BConstants {
     /// Rotational constant (Hz)
@@ -75,4 +74,24 @@ pub struct BConstants {
     pub mu_e: f64,
     /// Decay rate (Hz)
     pub gamma: f64,
+}
+
+impl Default for BConstants {
+    fn default() -> Self {
+        BConstants {
+            b_rot: 6687.879e6,
+            d_rot: 0.010869e6,
+            h_const: -8.1e-2,
+            h1_tl: 28789e6,
+            h1_f: 861e6,
+            q: 2.423e6,
+            c_tl: -7.83e6,
+            c1p_tl: 11.17e6,
+            mu_b: 1.4e6,
+            gl: 1.0,
+            gs: 2.0,
+            mu_e: 2.28 * DEBYE_HZ_V_CM,
+            gamma: 2.0 * std::f64::consts::PI * 1.56e6,
+        }
+    }
 }

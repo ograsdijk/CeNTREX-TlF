@@ -1,6 +1,5 @@
-import numpy as np
+from centrex_tlf.constants import BConstants
 
 __all__ = ["Γ"]
 
-# keep this for compatibility
-Γ = 2 * np.pi * 1.56e6
+Γ = BConstants().Γ

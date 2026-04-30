@@ -114,7 +114,7 @@ def HMatElemsBCoupledP(
 
 @dataclass
 class Hamiltonian:
-    None
+    pass
 
 
 @dataclass
@@ -179,7 +179,8 @@ def _generate_uncoupled_hamiltonian_X_python(
             matrix terms (Hff, HSx, HSy, HSz, HZx, HZy, HZz)
     """
     for qn in QN:
-        assert qn.isUncoupled, "supply list with UncoupledBasisStates"
+        if not isinstance(qn, UncoupledBasisState):
+            raise TypeError("supply list with UncoupledBasisStates")
 
     return HamiltonianUncoupledX(
         HMatElems(X_uncoupled.Hff_alt, QN, constants),
@@ -214,7 +215,8 @@ def generate_uncoupled_hamiltonian_X(
         This function uses a Rust implementation if available for better performance.
     """
     for qn in QN:
-        assert qn.isUncoupled, "supply list with UncoupledBasisStates"
+        if not isinstance(qn, UncoupledBasisState):
+            raise TypeError("supply list with UncoupledBasisStates")
 
     if HAS_RUST and _generate_uncoupled_hamiltonian_X_rust is not None:
         return _generate_uncoupled_hamiltonian_X_rust(QN, constants)
@@ -286,7 +288,8 @@ def generate_coupled_hamiltonian_B(
         when using the Omega basis.
     """
     for qn in QN:
-        assert qn.isCoupled, "supply list withCoupledBasisStates"
+        if not isinstance(qn, CoupledBasisState):
+            raise TypeError("supply list with CoupledBasisStates")
     if all([qn.basis == Basis.CoupledP for qn in QN]):
         # raise NotImplementedError(
         #     "Generating the hamiltonian in the CoupledP basis is not yet implemented."

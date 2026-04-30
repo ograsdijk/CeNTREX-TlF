@@ -248,7 +248,8 @@ def assert_transition_coupled_allowed(
         ground_state, excited_state, ΔmF_allowed, return_err=True
     )
     allowed, errors = ret
-    assert allowed, errors
+    if not allowed:
+        raise ValueError(errors)
     return allowed
 
 
