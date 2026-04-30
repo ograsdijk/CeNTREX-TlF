@@ -17,9 +17,14 @@ Examples
 >>> half_x = 0.5 * polarization_X
 """
 
+import sys
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Self
+
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 
 import numpy as np
 import numpy.typing as npt
