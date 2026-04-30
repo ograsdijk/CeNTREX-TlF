@@ -167,6 +167,63 @@ records only the final value. Use `dense_output=False` only when no interior
 save points are needed; it is intended for final-only work and rejects interior
 `saveat` points.
 
+## Terminal Events
+
+Full OBE solves support one terminal `stop_event`. Without `stop_event`, solver
+behavior is unchanged. If the event triggers, `result.t[-1]` is the event time,
+the event value is appended as the final output point even when it is not in
+`saveat`, and later `saveat` points are skipped. With `output_when="final"`, the
+result contains only the terminal value.
+
+Runtime-expression events stop when the expression crosses zero:
+
+```python
+from centrex_tlf.lindblad import Time
+
+stop_event = Time() - 250e-6
+
+result = solve_lindblad(
+    prepared,
+    rho0,
+    (0.0, 1e-3),
+    stop_event=stop_event,
+    output="populations",
+    output_when="final",
+)
+```
+
+Population threshold events stop when the summed population in the selected
+state indices reaches the threshold:
+
+```python
+from centrex_tlf.lindblad.events import population
+
+stop_event = population(target_indices, threshold=0.95)
+
+scan_result = grid_scan(
+    prepared,
+    rho0,
+    (0.0, 1e-3),
+    scan={delta0: detuning_axis, omega0: rabi_axis},
+    stop_event=stop_event,
+    output="selected",
+    output_indices=[(idx, idx) for idx in target_indices],
+    output_when="final",
+    dense_output=False,
+)
+
+grid_shape = scan_result.metadata["grid_shape"]
+time_to_threshold_us = scan_result.t.reshape(grid_shape) * 1e6
+reached_threshold = scan_result.metadata["event_triggered"].reshape(grid_shape)
+```
+
+When `collect_stats=True`, single solves include `event_triggered`,
+`event_time`, `event_index`, and `event_name` in `solver_stats`. Batch and grid
+solves support `stop_event` only with `output_when="final"`; using an event with
+`output_when="saveat"` raises `ValueError`. For event batch/grid solves,
+`result.t` contains per-trajectory terminal or final times, and metadata includes
+per-trajectory `event_triggered` and `event_times` arrays.
+
 ## Batch Solving and Full OBE Scans
 
 For independent trajectories, use `solve_lindblad_batch`, `parameter_scan`, or
@@ -450,6 +507,8 @@ Curated examples:
 - `examples/lindblad/r0_f2_batch_grid_scan.ipynb`: compact Rust OBE grid scan.
 - `examples/lindblad/rotational_cooling_parameter_scans.ipynb`: large
   rotational-cooling OBE scan pattern.
+- `examples/lindblad/rotational_cooling_terminal_event_scans.ipynb`:
+  rotational-cooling time-to-threshold scan using terminal events.
 - `examples/lindblad/q1_circular_polarization_switching_scan.ipynb`:
   photon-integral scan output.
 - `examples/lindblad/q1_effective_fixed_basis_vs_static_regular_rust.ipynb`:
