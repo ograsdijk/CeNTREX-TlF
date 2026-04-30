@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 import numpy as np
 import pytest
 import scipy.sparse
 import sympy as smp
 
-from centrex_tlf.lindblad.ir import evaluate_parameter_graph_py, fill_hamiltonian_py
 from centrex_tlf.lindblad.batch import grid_scan, solve_lindblad_batch
+from centrex_tlf.lindblad.events import population
+from centrex_tlf.lindblad.ir import evaluate_parameter_graph_py, fill_hamiltonian_py
 from centrex_tlf.lindblad.parameters import (
     LindbladParameters,
     Time,
@@ -78,8 +81,8 @@ def test_packed_layout_roundtrip() -> None:
 
 def test_lindblad_parameters_order_and_adapter() -> None:
     class LegacyParameters:
-        _parameters = ["Ω0", "β", "ωphase", "δ"]
-        _compound_vars = ["Ω"]
+        _parameters: ClassVar[list[str]] = ["Ω0", "β", "ωphase", "δ"]
+        _compound_vars: ClassVar[list[str]] = ["Ω"]
 
         Ω0 = 1.2
         β = 0.4
@@ -593,6 +596,163 @@ def test_rust_dopri5_population_outputs_match_full() -> None:
     np.testing.assert_allclose(final.values, full.populations()[-1], atol=1e-12, rtol=1e-10)
 
 
+@pytest.mark.parametrize("solver", ["dopri5", "tsit5"])
+def test_native_terminal_runtime_event_appends_event_time(solver: str) -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    event_time = 0.23
+    result = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver=solver,
+        execution_mode="expanded_sparse",
+        saveat=np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        stop_event=Time() - event_time,
+        collect_stats=True,
+    )
+    assert result.t[-1] == pytest.approx(event_time, abs=1e-10)
+    assert np.all(result.t <= event_time + 1e-12)
+    assert result.solver_stats is not None
+    assert result.solver_stats["event_triggered"] is True
+    assert result.solver_stats["event_time"] == pytest.approx(event_time, abs=1e-10)
+
+
+def test_native_terminal_runtime_helper_event() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    stop_event = gaussian(Time(), center=0.2, sigma=0.05) - 0.5
+    result = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        saveat=np.linspace(0.0, 0.5, 8),
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        stop_event=stop_event,
+        collect_stats=True,
+    )
+    expected = 0.2 - 0.05 * np.sqrt(2.0 * np.log(2.0))
+    assert result.t[-1] == pytest.approx(expected, abs=1e-7)
+    assert result.solver_stats is not None
+    assert result.solver_stats["event_triggered"] is True
+
+
+def test_native_population_threshold_events() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 2.0, str(system.coupling_symbols[1]): 0.0}
+    single = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.8),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        saveat=np.linspace(0.0, 0.8, 9),
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        stop_event=population(1, threshold=0.05),
+    )
+    assert single.t[-1] < 0.8
+    assert single.populations()[-1, 1] == pytest.approx(0.05, abs=2e-5)
+
+    multi = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.8),
+        parameters=parameters,
+        backend="rust",
+        solver="tsit5",
+        execution_mode="expanded_sparse",
+        saveat=np.linspace(0.0, 0.8, 9),
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        stop_event=population([0, 1], threshold=1.0),
+    )
+    assert multi.t[-1] == pytest.approx(0.0, abs=1e-12)
+
+
+@pytest.mark.parametrize("solver", ["python_rk45", "scipy_rk45", "scipy_bdf", "scipy_radau"])
+def test_scipy_and_python_terminal_runtime_event(solver: str) -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    backend = "python" if solver == "python_rk45" else "rust"
+    result = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend=backend,
+        solver=solver,
+        execution_mode="structured_upper",
+        saveat=np.array([0.0, 0.1, 0.3, 0.5]),
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        stop_event=Time() - 0.2,
+    )
+    assert result.t[-1] == pytest.approx(0.2, abs=1e-10)
+    assert result.solver_stats is not None
+    assert result.solver_stats["event_triggered"] is True
+
+
+def test_terminal_event_final_output_returns_event_state() -> None:
+    system = _make_two_level_system()
+    rho0 = _ground_state_density()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    event_time = 0.2
+    final = solve_lindblad(
+        system,
+        rho0,
+        (0.0, 0.5),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        stop_event=Time() - event_time,
+    )
+    full = solve_lindblad(
+        system,
+        rho0,
+        (0.0, event_time),
+        parameters=parameters,
+        backend="rust",
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+    np.testing.assert_allclose(final.t, [event_time], atol=1e-10, rtol=0.0)
+    np.testing.assert_allclose(final.values, full.values, atol=2e-10, rtol=2e-8)
+
+
 def test_rust_dopri5_selected_outputs_match_full() -> None:
     system = _make_two_level_system()
     rho0 = _ground_state_density()
@@ -926,6 +1086,87 @@ def test_rust_batch_parameter_grid_matches_repeated_solves() -> None:
     assert batch.metadata["grid_shape"] == (2, 2)
 
 
+def test_batch_terminal_event_final_only_times() -> None:
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    rho0_a = _ground_state_density()
+    rho0_b = np.array([[0.25, 0.0], [0.0, 0.75]], dtype=np.complex128)
+    batch = solve_lindblad_batch(
+        prepared,
+        np.stack([rho0_a, rho0_b]),
+        (0.0, 0.5),
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        stop_event=Time() - 0.2,
+        parallel=False,
+        collect_stats=True,
+    )
+    np.testing.assert_allclose(batch.t, [0.2, 0.2], atol=1e-10, rtol=0.0)
+    np.testing.assert_array_equal(batch.metadata["event_triggered"], [True, True])
+    np.testing.assert_allclose(batch.metadata["event_times"], [0.2, 0.2], atol=1e-10, rtol=0.0)
+    assert batch.solver_stats is not None
+    assert batch.solver_stats["event_count"] == 2
+
+
+def test_grid_terminal_event_final_only_times() -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(system, {omega: 0.6, delta: 0.0}, backend="rust")
+    batch = grid_scan(
+        prepared,
+        _ground_state_density(),
+        (0.0, 0.5),
+        scan={omega: np.array([0.4, 0.7]), delta: np.array([-0.1, 0.2])},
+        solver="tsit5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        stop_event=Time() - 0.2,
+        parallel=False,
+        collect_stats=True,
+    )
+    np.testing.assert_allclose(batch.t, np.full(4, 0.2), atol=1e-10, rtol=0.0)
+    np.testing.assert_array_equal(batch.metadata["event_triggered"], np.full(4, True))
+    assert batch.solver_stats is not None
+    assert batch.solver_stats["event_count"] == 4
+
+
+def test_batch_and_grid_reject_saveat_terminal_events() -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(system, {omega: 0.6, delta: 0.0}, backend="rust")
+    with pytest.raises(ValueError, match="stop_event is only supported"):
+        solve_lindblad_batch(
+            prepared,
+            np.stack([_ground_state_density(), _ground_state_density()]),
+            (0.0, 0.5),
+            output_when="saveat",
+            saveat=np.linspace(0.0, 0.5, 4),
+            stop_event=Time() - 0.2,
+        )
+    with pytest.raises(ValueError, match="stop_event is only supported"):
+        grid_scan(
+            prepared,
+            _ground_state_density(),
+            (0.0, 0.5),
+            scan={omega: np.array([0.4, 0.7])},
+            output_when="saveat",
+            saveat=np.linspace(0.0, 0.5, 4),
+            stop_event=Time() - 0.2,
+        )
 def test_rust_rhs_evaluator_profile_summary_tracks_calls() -> None:
     system = _make_two_level_system()
     parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}

@@ -1,5 +1,5 @@
-use crate::lindblad::ode_impl::LindbladRhs;
-use crate::lindblad::plan::{parse_plan_payload, PreparedLindbladPlan};
+use crate::lindblad::ode_impl::{LindbladRhs, LindbladStopEvent};
+use crate::lindblad::plan::{parse_expression, parse_plan_payload, PreparedLindbladPlan};
 use crate::lindblad::rhs::{
     build_packed_jacobian_sparse, build_split_jacobian_sparse, rhs_matrix_into,
     rhs_matrix_into_with_profile, rhs_packed, rhs_packed_into_with_profile,
@@ -16,7 +16,7 @@ use numpy::{
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyDict, PyDictMethods};
+use pyo3::types::{PyAny, PyAnyMethods, PyDict, PyDictMethods};
 use std::cell::{Cell, RefCell};
 
 #[pyclass(module = "centrex_tlf.centrex_tlf_rust", unsendable)]
@@ -331,7 +331,40 @@ fn build_extractions(n: usize, indices: &[(usize, usize)]) -> Vec<SelectedExtrac
         .collect()
 }
 
-#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat", integral_weights = None))]
+fn parse_stop_event(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<LindbladStopEvent>> {
+    let Some(obj) = obj else {
+        return Ok(None);
+    };
+    let dict: &Bound<'_, PyDict> = obj.cast()?;
+    let kind: String = dict
+        .get_item("kind")?
+        .ok_or_else(|| PyValueError::new_err("stop_event missing kind"))?
+        .extract()?;
+    match kind.as_str() {
+        "population" => {
+            let indices: Vec<usize> = dict
+                .get_item("indices")?
+                .ok_or_else(|| PyValueError::new_err("population stop_event missing indices"))?
+                .extract()?;
+            let threshold: f64 = dict
+                .get_item("threshold")?
+                .ok_or_else(|| PyValueError::new_err("population stop_event missing threshold"))?
+                .extract()?;
+            Ok(Some(LindbladStopEvent::PopulationThreshold { indices, threshold }))
+        }
+        "runtime_expression" => {
+            let expression_obj = dict
+                .get_item("expression")?
+                .ok_or_else(|| PyValueError::new_err("runtime stop_event missing expression"))?;
+            Ok(Some(LindbladStopEvent::RuntimeExpression {
+                expression: parse_expression(&expression_obj)?,
+            }))
+        }
+        other => Err(PyValueError::new_err(format!("unknown stop_event kind {other:?}"))),
+    }
+}
+
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat", integral_weights = None, stop_event = None))]
 pub fn solve_lindblad_ode_py<'py>(
     py: Python<'py>,
     plan: PyRef<'py, PreparedLindbladPlan>,
@@ -350,6 +383,7 @@ pub fn solve_lindblad_ode_py<'py>(
     output_indices: Option<Vec<(usize, usize)>>,
     output_when: &str,
     integral_weights: Option<Vec<(usize, f64)>>,
+    stop_event: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Py<PyAny>, usize, Py<PyDict>)> {
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
@@ -369,7 +403,8 @@ pub fn solve_lindblad_ode_py<'py>(
         save_start,
         saveat: saveat_vec,
     };
-    let mut rhs = LindbladRhs::new(&plan, execution_mode);
+    let event = parse_stop_event(stop_event)?;
+    let mut rhs = LindbladRhs::new(&plan, execution_mode).with_stop_event(event);
     let result = match output {
         "populations" => {
             let mut out = PopulationsOutput::new((0..n).collect(), capacity);
@@ -414,10 +449,15 @@ pub fn solve_lindblad_ode_py<'py>(
     d.set_item("accepted_steps", stats.accepted_steps)?;
     d.set_item("rejected_steps", stats.rejected_steps)?;
     d.set_item("rhs_calls", stats.rhs_calls)?;
+    d.set_item("event_triggered", stats.event_triggered)?;
+    if stats.event_triggered {
+        d.set_item("event_time", stats.event_time)?;
+        d.set_item("event_index", stats.event_index)?;
+    }
     Ok((times_array, values, r.width, d.unbind()))
 }
 
-#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None))]
+#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None, stop_event = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn solve_lindblad_batch_ode_py<'py>(
     py: Python<'py>,
@@ -441,6 +481,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     parameter_batch: Option<PyReadonlyArray2<'py, Complex64>>,
     parallel: bool,
     threads: Option<usize>,
+    stop_event: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<(
     Bound<'py, PyArray1<f64>>,
     Py<PyAny>,
@@ -486,6 +527,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
         None => None,
     };
     let plan_owned = plan.clone();
+    let event = parse_stop_event(stop_event)?;
     let options = crate::ode::OdeOptions {
         abstol,
         reltol,
@@ -510,6 +552,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
                 integral_weights.as_deref(),
                 &slot_indices,
                 param_values.as_deref(),
+                event,
                 parallel,
                 threads,
             )
@@ -532,10 +575,15 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     d.set_item("accepted_steps", result.stats.accepted_steps)?;
     d.set_item("rejected_steps", result.stats.rejected_steps)?;
     d.set_item("rhs_calls", result.stats.rhs_calls)?;
+    let event_count = result.event_triggered.iter().filter(|&&triggered| triggered).count();
+    d.set_item("event_triggered", result.stats.event_triggered)?;
+    d.set_item("event_triggered_by_trajectory", result.event_triggered)?;
+    d.set_item("event_times", result.event_times)?;
+    d.set_item("event_count", event_count)?;
     Ok((times, values, result.width, result.time_count, d.unbind()))
 }
 
-#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parallel = true, threads = None))]
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parallel = true, threads = None, stop_event = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn solve_lindblad_grid_ode_py<'py>(
     py: Python<'py>,
@@ -560,6 +608,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
     integral_weights: Option<Vec<(usize, f64)>>,
     parallel: bool,
     threads: Option<usize>,
+    stop_event: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<(
     Bound<'py, PyArray1<f64>>,
     Py<PyAny>,
@@ -567,7 +616,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
     usize,
     Py<PyDict>,
 )> {
-    use crate::lindblad::ode_batch::{grid_trajectory_count, solve_grid_ode};
+    use crate::lindblad::ode_batch::solve_grid_ode;
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
     let y0 = packed_rho0
@@ -592,6 +641,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
         off += len;
     }
     let plan_owned = plan.clone();
+    let event = parse_stop_event(stop_event)?;
     let options = crate::ode::OdeOptions {
         abstol,
         reltol,
@@ -617,6 +667,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
                 &axes,
                 &axis_offsets,
                 &parameter_axis_lengths,
+                event,
                 parallel,
                 threads,
             )
@@ -639,5 +690,10 @@ pub fn solve_lindblad_grid_ode_py<'py>(
     d.set_item("accepted_steps", result.stats.accepted_steps)?;
     d.set_item("rejected_steps", result.stats.rejected_steps)?;
     d.set_item("rhs_calls", result.stats.rhs_calls)?;
+    let event_count = result.event_triggered.iter().filter(|&&triggered| triggered).count();
+    d.set_item("event_triggered", result.stats.event_triggered)?;
+    d.set_item("event_triggered_by_trajectory", result.event_triggered)?;
+    d.set_item("event_times", result.event_times)?;
+    d.set_item("event_count", event_count)?;
     Ok((times, values, result.width, result.time_count, d.unbind()))
 }

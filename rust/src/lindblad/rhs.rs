@@ -574,6 +574,34 @@ impl RhsWorkspace {
             &mut self.pchip_hints,
         )
     }
+
+    pub fn evaluate_runtime_expression_real(
+        &mut self,
+        plan: &PreparedLindbladPlan,
+        expression: &crate::lindblad::eval::CompiledExpression,
+        t: f64,
+    ) -> Result<f64, String> {
+        self.evaluate_parameter_graph(plan, t)?;
+        let value = crate::lindblad::eval::eval_expression_into_with_pchip(
+            expression,
+            self.parameter_values.as_slice(),
+            t,
+            &[],
+            &mut self.eval_stack,
+            plan.parameter_graph.pchip_tables.as_slice(),
+            &mut self.pchip_hints,
+        )?;
+        match value {
+            RuntimeValue::Scalar(value) => {
+                if value.im.abs() > 1e-12 {
+                    Err("event expression evaluated to a complex value".to_string())
+                } else {
+                    Ok(value.re)
+                }
+            }
+            RuntimeValue::Tuple(_) => Err("event expression evaluated to a tuple".to_string()),
+        }
+    }
 }
 
 fn split_real_to_complex(input: &[f64], out: &mut [Complex64]) -> Result<(), String> {

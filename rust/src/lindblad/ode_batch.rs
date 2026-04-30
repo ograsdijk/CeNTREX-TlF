@@ -1,4 +1,4 @@
-use crate::lindblad::ode_impl::LindbladRhs;
+use crate::lindblad::ode_impl::{LindbladRhs, LindbladStopEvent};
 use crate::lindblad::plan::PreparedLindbladPlan;
 use crate::lindblad::rhs::ExecutionMode;
 use crate::ode::batch::{solve_single, OdeSolver};
@@ -115,6 +115,8 @@ pub struct BatchOdeResult {
     pub width: usize,
     pub time_count: usize,
     pub stats: OdeStats,
+    pub event_triggered: Vec<bool>,
+    pub event_times: Vec<f64>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -132,6 +134,7 @@ pub fn solve_batch_ode(
     integral_weights: Option<&[(usize, f64)]>,
     parameter_slot_indices: &[usize],
     parameter_batch: Option<&[Complex64]>,
+    stop_event: Option<LindbladStopEvent>,
     parallel: bool,
     threads: Option<usize>,
 ) -> Result<BatchOdeResult, String> {
@@ -178,14 +181,15 @@ pub fn solve_batch_ode(
             let batch = parameter_batch.unwrap();
             let start = trajectory * parameter_width;
             let param_values = &batch[start..start + parameter_width];
-            LindbladRhs::new_with_overrides(
+            LindbladRhs::new_with_overrides_and_event(
                 plan,
                 execution_mode,
                 parameter_slot_indices,
                 param_values,
+                stop_event.clone(),
             )?
         } else {
-            LindbladRhs::new(plan, execution_mode)
+            LindbladRhs::new(plan, execution_mode).with_stop_event(stop_event.clone())
         };
         let mut output = output_spec.create(capacity);
         let stats = output.solve(&mut rhs, y0, t0, t1, options, solver)?;
@@ -220,15 +224,26 @@ pub fn solve_batch_ode(
     let mut width = 0usize;
     let mut time_count = 0usize;
     let mut total_stats = OdeStats::default();
+    let mut event_triggered = Vec::with_capacity(trajectory_count);
+    let mut event_times = Vec::with_capacity(trajectory_count);
 
     for (idx, result) in results.into_iter().enumerate() {
         let (r, stats) = result.map_err(|e| format!("trajectory {idx}: {e}"))?;
         total_stats.accepted_steps += stats.accepted_steps;
         total_stats.rejected_steps += stats.rejected_steps;
         total_stats.rhs_calls += stats.rhs_calls;
+        if stats.event_triggered {
+            total_stats.event_triggered = true;
+        }
+        event_triggered.push(stats.event_triggered);
+        event_times.push(if stats.event_triggered {
+            stats.event_time
+        } else {
+            *r.times.last().unwrap_or(&t1)
+        });
         width = r.width;
         time_count = r.times.len();
-        if ref_times.is_none() {
+        if ref_times.is_none() && stop_event.is_none() {
             ref_times = Some(r.times);
         }
         match r.values {
@@ -239,7 +254,11 @@ pub fn solve_batch_ode(
     }
 
     Ok(BatchOdeResult {
-        times: ref_times.unwrap_or_default(),
+        times: if stop_event.is_some() {
+            event_times.clone()
+        } else {
+            ref_times.unwrap_or_default()
+        },
         values: if is_complex {
             OdeOutputValues::Complex(all_c64)
         } else {
@@ -248,6 +267,8 @@ pub fn solve_batch_ode(
         width,
         time_count,
         stats: total_stats,
+        event_triggered,
+        event_times,
     })
 }
 
@@ -307,6 +328,7 @@ pub fn solve_grid_ode(
     axes: &[Complex64],
     axis_offsets: &[usize],
     axis_lengths: &[usize],
+    stop_event: Option<LindbladStopEvent>,
     parallel: bool,
     threads: Option<usize>,
 ) -> Result<BatchOdeResult, String> {
@@ -353,7 +375,8 @@ pub fn solve_grid_ode(
             execution_mode,
             parameter_slot_indices,
             &param_values,
-        )?;
+        )?
+        .with_stop_event(stop_event.clone());
         let mut output = output_spec.create(capacity);
         let stats = output.solve(&mut rhs, y0, t0, t1, options, solver)?;
         Ok((output.finish(), stats))
@@ -387,15 +410,26 @@ pub fn solve_grid_ode(
     let mut width = 0usize;
     let mut time_count = 0usize;
     let mut total_stats = OdeStats::default();
+    let mut event_triggered = Vec::with_capacity(trajectory_count);
+    let mut event_times = Vec::with_capacity(trajectory_count);
 
     for (idx, result) in results.into_iter().enumerate() {
         let (r, stats) = result.map_err(|e| format!("trajectory {idx}: {e}"))?;
         total_stats.accepted_steps += stats.accepted_steps;
         total_stats.rejected_steps += stats.rejected_steps;
         total_stats.rhs_calls += stats.rhs_calls;
+        if stats.event_triggered {
+            total_stats.event_triggered = true;
+        }
+        event_triggered.push(stats.event_triggered);
+        event_times.push(if stats.event_triggered {
+            stats.event_time
+        } else {
+            *r.times.last().unwrap_or(&t1)
+        });
         width = r.width;
         time_count = r.times.len();
-        if ref_times.is_none() {
+        if ref_times.is_none() && stop_event.is_none() {
             ref_times = Some(r.times);
         }
         match r.values {
@@ -406,7 +440,11 @@ pub fn solve_grid_ode(
     }
 
     Ok(BatchOdeResult {
-        times: ref_times.unwrap_or_default(),
+        times: if stop_event.is_some() {
+            event_times.clone()
+        } else {
+            ref_times.unwrap_or_default()
+        },
         values: if is_complex {
             OdeOutputValues::Complex(all_c64)
         } else {
@@ -415,5 +453,7 @@ pub fn solve_grid_ode(
         width,
         time_count,
         stats: total_stats,
+        event_triggered,
+        event_times,
     })
 }

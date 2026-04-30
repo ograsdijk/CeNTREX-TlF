@@ -9,6 +9,7 @@ import numpy as np
 import numpy.typing as npt
 import sympy as smp
 
+from .events import normalize_stop_event
 from .parameters import Parameter
 from .plan_static import PreparedLindbladProblem
 
@@ -163,6 +164,7 @@ def solve_lindblad_batch(
     parallel: bool = True,
     threads: int | None = None,
     metadata: Mapping[str, Any] | None = None,
+    stop_event: Any | None = None,
 ) -> LindbladBatchResult:
     if prepared.rust_plan is None:
         raise RuntimeError("solve_lindblad_batch requires a Rust prepared plan")
@@ -186,6 +188,8 @@ def solve_lindblad_batch(
         raise ValueError("output_when must be 'final' or 'saveat'")
     if output_when == "saveat" and saveat is None:
         raise ValueError("batch output_when='saveat' requires explicit saveat values")
+    if stop_event is not None and output_when != "final":
+        raise ValueError("batch stop_event is only supported with output_when='final'")
     if output in integral_outputs and saveat is None:
         raise ValueError(f"output={output!r} requires explicit saveat values")
     if threads is not None and threads <= 0:
@@ -215,6 +219,8 @@ def solve_lindblad_batch(
     if not dense_output and output_when == "saveat" and saveat_values is not None:
         raise ValueError("dense_output=False is only supported with output_when='final'")
 
+    event_spec = normalize_stop_event(stop_event, prepared)
+
     from ..centrex_tlf_rust import solve_lindblad_batch_ode_py
 
     start = time.perf_counter()
@@ -239,6 +245,7 @@ def solve_lindblad_batch(
         parameter_values,
         bool(parallel),
         threads,
+        event_spec,
     )
     elapsed = time.perf_counter() - start
 
@@ -248,6 +255,17 @@ def solve_lindblad_batch(
         values = values.reshape((trajectory_count, int(width)))
     else:
         values = values.reshape((trajectory_count, int(time_count), int(width)))
+
+    result_metadata = {} if metadata is None else dict(metadata)
+    if event_spec is not None:
+        result_metadata["event_triggered"] = np.asarray(
+            solver_stats.get("event_triggered_by_trajectory", []),
+            dtype=bool,
+        )
+        result_metadata["event_times"] = np.asarray(
+            solver_stats.get("event_times", []),
+            dtype=np.float64,
+        )
 
     return LindbladBatchResult(
         t=np.asarray(times, dtype=np.float64),
@@ -267,7 +285,7 @@ def solve_lindblad_batch(
             if collect_stats
             else None
         ),
-        metadata={} if metadata is None else dict(metadata),
+        metadata=result_metadata,
     )
 
 
@@ -356,6 +374,7 @@ def grid_scan(
     parallel = bool(kwargs.pop("parallel", True))
     threads = kwargs.pop("threads", None)
     metadata = kwargs.pop("metadata", None)
+    stop_event = kwargs.pop("stop_event", None)
     if kwargs:
         unknown = ", ".join(sorted(kwargs))
         raise TypeError(f"unexpected grid_scan keyword argument(s): {unknown}")
@@ -379,6 +398,8 @@ def grid_scan(
         raise ValueError("integral_weights are only valid with integral output modes")
     if output_when == "saveat" and saveat_values is None:
         raise ValueError("grid_scan output_when='saveat' requires explicit saveat values")
+    if stop_event is not None and output_when != "final":
+        raise ValueError("grid_scan stop_event is only supported with output_when='final'")
     if output in integral_outputs and saveat_values is None:
         raise ValueError(f"output={output!r} requires explicit saveat values")
     if not dense_output and output_when == "saveat" and saveat_values is not None:
@@ -389,6 +410,7 @@ def grid_scan(
     axis_lengths = [int(axis.size) for axis in axes]
     trajectory_count = int(np.prod(axis_lengths, dtype=np.int64))
     flat_axes = np.ascontiguousarray(np.concatenate(axes), dtype=np.complex128)
+    event_spec = normalize_stop_event(stop_event, prepared)
 
     from ..centrex_tlf_rust import solve_lindblad_grid_ode_py
 
@@ -416,6 +438,7 @@ def grid_scan(
             None if integral_weights is None else list(integral_weights),
             parallel,
             threads,
+            event_spec,
         )
     )
     elapsed = time.perf_counter() - start
@@ -425,6 +448,17 @@ def grid_scan(
         values = values.reshape((trajectory_count, int(width)))
     else:
         values = values.reshape((trajectory_count, int(time_count), int(width)))
+
+    result_metadata = {} if metadata is None else dict(metadata)
+    if event_spec is not None:
+        result_metadata["event_triggered"] = np.asarray(
+            solver_stats.get("event_triggered_by_trajectory", []),
+            dtype=bool,
+        )
+        result_metadata["event_times"] = np.asarray(
+            solver_stats.get("event_times", []),
+            dtype=np.float64,
+        )
 
     result = LindbladBatchResult(
         t=np.asarray(times, dtype=np.float64),
@@ -444,7 +478,7 @@ def grid_scan(
             if collect_stats
             else None
         ),
-        metadata={} if metadata is None else dict(metadata),
+        metadata=result_metadata,
     )
     result.metadata.update(
         {

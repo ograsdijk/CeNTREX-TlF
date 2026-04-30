@@ -142,6 +142,21 @@ fn dense_out(th: f64, r0: &[f64], r1: &[f64], r2: &[f64], r3: &[f64], r4: &[f64]
     }
 }
 
+fn crossed_zero(g0: f64, g1: f64) -> bool {
+    g0 == 0.0 || g1 == 0.0 || (g0 < 0.0 && g1 > 0.0) || (g0 > 0.0 && g1 < 0.0)
+}
+
+fn push_unique<O: OdeOutput>(output: &mut O, t: f64, y: &[f64]) {
+    if output
+        .times()
+        .last()
+        .is_some_and(|&last| (last - t).abs() <= time_tol(t))
+    {
+        return;
+    }
+    output.push(t, y);
+}
+
 pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
     rhs: &mut R,
     y0: &[f64],
@@ -193,6 +208,7 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
     let pn = sign(1.0, t1 - t0);
     rhs.eval(x, &y, &mut k[..dim])?;
     st.rhs_calls += 1;
+    let mut event_old = rhs.event_value(x, &y)?;
     let mut si = 0usize;
     if let Some(p) = &sp {
         while si < p.times.len() && close_to_start(p.times[si], t0) {
@@ -261,9 +277,50 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
             }
             let xo = x;
             x += h;
+            let event_new = rhs.event_value(x, &yn)?;
+            let mut event_hit: Option<(f64, Vec<f64>)> = None;
+            if let (Some(g0), Some(g1)) = (event_old, event_new) {
+                if crossed_zero(g0, g1) {
+                    if g0 == 0.0 {
+                        event_hit = Some((xo, y.clone()));
+                    } else if g1 == 0.0 {
+                        event_hit = Some((x, yn.clone()));
+                    } else {
+                        fill_dense_rcont4(h, &k, &mut r4);
+                        fill_dense_coeffs(
+                            &y, &yn, h, &k, dim, &mut r0, &mut r1, &mut r2, &mut r3,
+                        );
+                        let mut lo = 0.0;
+                        let mut hi = 1.0;
+                        let mut glo = g0;
+                        for _ in 0..60 {
+                            let mid = 0.5 * (lo + hi);
+                            dense_out(mid, &r0, &r1, &r2, &r3, &r4, &mut ds);
+                            let gm = rhs.event_value(xo + mid * h, &ds)?.ok_or_else(|| {
+                                "event disappeared during root finding".to_string()
+                            })?;
+                            if gm == 0.0 {
+                                lo = mid;
+                                hi = mid;
+                                break;
+                            }
+                            if (glo < 0.0 && gm > 0.0) || (glo > 0.0 && gm < 0.0) {
+                                hi = mid;
+                            } else {
+                                lo = mid;
+                                glo = gm;
+                            }
+                        }
+                        let theta = 0.5 * (lo + hi);
+                        dense_out(theta, &r0, &r1, &r2, &r3, &r4, &mut ds);
+                        event_hit = Some((xo + theta * h, ds.clone()));
+                    }
+                }
+            }
             if let Some(p) = &sp {
                 let mut dr = false;
-                while si < p.times.len() && p.times[si] <= x + time_tol(x) {
+                let event_time = event_hit.as_ref().map(|(t, _)| *t).unwrap_or(x);
+                while si < p.times.len() && p.times[si] <= event_time + time_tol(event_time) {
                     let ts = p.times[si];
                     if ts >= xo - time_tol(xo) {
                         if (ts - xo).abs() <= time_tol(xo) {
@@ -284,12 +341,20 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
                     }
                     si += 1;
                 }
-            } else {
+            } else if event_hit.is_none() {
                 output.push(x, &yn);
+            }
+            if let Some((te, ye)) = event_hit {
+                push_unique(output, te, &ye);
+                st.event_triggered = true;
+                st.event_time = te;
+                st.event_index = 0;
+                break;
             }
             std::mem::swap(&mut y, &mut yn);
             let (f, l) = k.split_at_mut(dim);
             f.copy_from_slice(&l[5 * dim..6 * dim]);
+            event_old = event_new;
             if last {
                 break;
             }
@@ -303,6 +368,9 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
     }
     if let Some(p) = &sp {
         if si != p.times.len() {
+            if st.event_triggered {
+                return Ok(st);
+            }
             return Err(format!(
                 "ended before all saveat: {si} of {}",
                 p.times.len()

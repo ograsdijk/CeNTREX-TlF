@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 import scipy.sparse
 from scipy.integrate import solve_ivp
 
+from .events import normalize_stop_event, scipy_event_function
 from .plan_static import PreparedLindbladProblem, prepare_lindblad_problem
 from .reference_dense import reference_rhs, structured_rhs
 
 __all__ = [
-    "LindbladResult",
     "LindbladMatrixResult",
     "LindbladObservableResult",
+    "LindbladResult",
     "prepare_lindblad_problem",
     "solve_lindblad",
 ]
@@ -76,7 +78,7 @@ def _normalize_saveat(
 ) -> None | np.ndarray:
     if saveat is None:
         return None
-    if isinstance(saveat, (float, int, np.floating, np.integer)):
+    if isinstance(saveat, float | int | np.floating | np.integer):
         step = float(saveat)
         if step <= 0:
             raise ValueError("saveat step must be positive")
@@ -120,6 +122,36 @@ def _solver_stats_dict(
     return stats
 
 
+def _append_scipy_event_point(
+    times: np.ndarray,
+    states: np.ndarray,
+    solution: Any,
+) -> tuple[np.ndarray, np.ndarray]:
+    if not getattr(solution, "t_events", None) or len(solution.t_events[0]) == 0:
+        return times, states
+    event_time = float(solution.t_events[0][0])
+    event_state = np.asarray(solution.y_events[0][0], dtype=states.dtype)
+    if times.size > 0 and np.isclose(times[-1], event_time):
+        states[-1] = event_state
+        return times, states
+    keep = times < event_time
+    times = np.concatenate((times[keep], np.array([event_time], dtype=np.float64)))
+    states = np.concatenate((states[keep], event_state.reshape(1, -1)), axis=0)
+    return times, states
+
+
+def _scipy_event_stats(event_spec: dict[str, Any] | None, solution: Any) -> dict[str, Any] | None:
+    if event_spec is None:
+        return None
+    triggered = bool(getattr(solution, "t_events", None) and len(solution.t_events[0]) > 0)
+    stats: dict[str, Any] = {"event_triggered": bool(triggered)}
+    if triggered:
+        stats["event_time"] = float(solution.t_events[0][0])
+        stats["event_index"] = 0
+        stats["event_name"] = event_spec.get("name", "event") if event_spec is not None else "event"
+    return stats
+
+
 def _solve_python_reference(
     prepared: PreparedLindbladProblem,
     packed_rho0: np.ndarray,
@@ -133,8 +165,10 @@ def _solve_python_reference(
     saveat: None | np.ndarray,
     save_start: bool,
     maxiters: int,
+    event_spec: dict[str, Any] | None,
 ) -> LindbladResult:
     rhs = reference_rhs if execution_mode == "reference" else structured_rhs
+    event = scipy_event_function(event_spec, packed_layout=prepared.layout)
     solution = solve_ivp(
         lambda t, y: rhs(prepared, y, t),
         t_span=t_span,
@@ -145,17 +179,24 @@ def _solve_python_reference(
         first_step=dt,
         t_eval=saveat,
         max_step=np.inf,
+        events=event,
     )
     if not solution.success:
         raise RuntimeError(solution.message)
     packed = np.asarray(solution.y.T, dtype=np.float64)
     times = np.asarray(solution.t, dtype=np.float64)
+    times, packed = _append_scipy_event_point(times, packed, solution)
     if saveat is None and not save_start and times.size > 0 and np.isclose(times[0], t_span[0]):
         times = times[1:]
         packed = packed[1:]
     if packed.shape[0] > maxiters + 1:
         raise RuntimeError("python reference solver exceeded maxiters budget")
-    return LindbladResult(t=times, packed_y=packed, layout=prepared.layout)
+    return LindbladResult(
+        t=times,
+        packed_y=packed,
+        layout=prepared.layout,
+        solver_stats=_scipy_event_stats(event_spec, solution),
+    )
 
 
 def _pack_matrix_snapshots(layout: Any, matrices: np.ndarray) -> np.ndarray:
@@ -218,6 +259,7 @@ def _solve_scipy_with_rust_matrix_rhs(
     saveat: None | np.ndarray,
     save_start: bool,
     maxiters: int,
+    event_spec: dict[str, Any] | None,
 ) -> LindbladMatrixResult:
     from ..centrex_tlf_rust import create_lindblad_rhs_evaluator_py
 
@@ -228,6 +270,7 @@ def _solve_scipy_with_rust_matrix_rhs(
         execution_mode,
     )
     y0 = _flatten_complex_matrix_state(rho0)
+    event = scipy_event_function(event_spec, packed_layout=prepared.layout, matrix_state=True)
     solution = solve_ivp(
         lambda t, y: np.asarray(evaluator.rhs_matrix_py(y, t), dtype=np.complex128),
         t_span=t_span,
@@ -238,18 +281,25 @@ def _solve_scipy_with_rust_matrix_rhs(
         first_step=dt,
         t_eval=saveat,
         max_step=np.inf,
+        events=event,
     )
     if not solution.success:
         raise RuntimeError(solution.message)
     times = np.asarray(solution.t, dtype=np.float64)
     flat_states = np.asarray(solution.y.T, dtype=np.complex128)
+    times, flat_states = _append_scipy_event_point(times, flat_states, solution)
     if saveat is None and not save_start and times.size > 0 and np.isclose(times[0], t_span[0]):
         times = times[1:]
         flat_states = flat_states[1:]
     if flat_states.shape[0] > maxiters + 1:
         raise RuntimeError("scipy rust solver exceeded maxiters budget")
     matrices = flat_states.reshape((-1, prepared.layout.n, prepared.layout.n))
-    return LindbladMatrixResult(t=times, matrix_y=matrices, layout=prepared.layout)
+    return LindbladMatrixResult(
+        t=times,
+        matrix_y=matrices,
+        layout=prepared.layout,
+        solver_stats=_scipy_event_stats(event_spec, solution),
+    )
 
 
 def _solve_scipy_with_rust_packed_rhs(
@@ -267,6 +317,7 @@ def _solve_scipy_with_rust_packed_rhs(
     maxiters: int,
     jacobian: str,
     jacobian_format: str,
+    event_spec: dict[str, Any] | None,
 ) -> LindbladResult:
     from ..centrex_tlf_rust import create_lindblad_rhs_evaluator_py
 
@@ -307,6 +358,7 @@ def _solve_scipy_with_rust_packed_rhs(
             jacobian_cache = matrix
         return matrix
 
+    event = scipy_event_function(event_spec, packed_layout=prepared.layout)
     solution = solve_ivp(
         rhs,
         t_span=t_span,
@@ -318,17 +370,24 @@ def _solve_scipy_with_rust_packed_rhs(
         t_eval=saveat,
         max_step=np.inf,
         jac=build_jacobian if jacobian == "exact" else None,
+        events=event,
     )
     if not solution.success:
         raise RuntimeError(solution.message)
     times = np.asarray(solution.t, dtype=np.float64)
     packed_states = np.asarray(solution.y.T, dtype=np.float64)
+    times, packed_states = _append_scipy_event_point(times, packed_states, solution)
     if saveat is None and not save_start and times.size > 0 and np.isclose(times[0], t_span[0]):
         times = times[1:]
         packed_states = packed_states[1:]
     if packed_states.shape[0] > maxiters + 1:
         raise RuntimeError("scipy stiff rust solver exceeded maxiters budget")
-    return LindbladResult(t=times, packed_y=packed_states, layout=prepared.layout)
+    return LindbladResult(
+        t=times,
+        packed_y=packed_states,
+        layout=prepared.layout,
+        solver_stats=_scipy_event_stats(event_spec, solution),
+    )
 
 
 def _solve_rust_native(
@@ -350,6 +409,7 @@ def _solve_rust_native(
     output_when: str,
     dense_output: bool,
     integral_weights: Sequence[tuple[int, float]] | None = None,
+    event_spec: dict[str, Any] | None = None,
 ) -> LindbladResult | LindbladObservableResult:
     from ..centrex_tlf_rust import solve_lindblad_ode_py
 
@@ -377,6 +437,7 @@ def _solve_rust_native(
         None if output_indices is None else list(output_indices),
         "saveat",
         None if integral_weights is None else list(integral_weights),
+        event_spec,
     )
     elapsed = time.perf_counter() - start
 
@@ -391,6 +452,10 @@ def _solve_rust_native(
         if collect_stats
         else None
     )
+    if stats_dict is not None:
+        stats_dict.setdefault("event_triggered", bool(solver_stats.get("event_triggered", False)))
+        if stats_dict["event_triggered"] and event_spec is not None:
+            stats_dict["event_name"] = event_spec.get("name", "event")
     if output == "full":
         return LindbladResult(
             t=times_array,
@@ -446,6 +511,7 @@ def solve_lindblad(
     output_when: str = "saveat",
     dense_output: bool = True,
     integral_weights: Sequence[tuple[int, float]] | None = None,
+    stop_event: Any | None = None,
 ) -> LindbladResult | LindbladMatrixResult | LindbladObservableResult:
     if solver is None:
         solver = "python_rk45" if backend == "python" else "dopri5"
@@ -498,6 +564,7 @@ def solve_lindblad(
     packed_rho0 = prepared.layout.pack(rho0_array)
     saveat_values = _normalize_saveat(saveat, t_span_tuple, save_start)
     _assert_dense_output_available(saveat_values, t_span_tuple, output_when, dense_output)
+    event_spec = normalize_stop_event(stop_event, prepared)
     if backend == "rust" and solver == "scipy_rk45":
         return _solve_scipy_with_rust_matrix_rhs(
             prepared,
@@ -510,6 +577,7 @@ def solve_lindblad(
             saveat=saveat_values,
             save_start=save_start,
             maxiters=maxiters,
+            event_spec=event_spec,
         )
     if backend == "rust" and solver in {"scipy_bdf", "scipy_radau"}:
         if jacobian not in {"exact", "none"}:
@@ -531,6 +599,7 @@ def solve_lindblad(
             maxiters=maxiters,
             jacobian=jacobian,
             jacobian_format=chosen_format,
+            event_spec=event_spec,
         )
     if backend == "rust" and solver in {"dopri5", "tsit5"} and prepared.rust_plan is not None:
         return _solve_rust_native(
@@ -551,6 +620,7 @@ def solve_lindblad(
             output_when=output_when,
             dense_output=dense_output,
             integral_weights=integral_weights,
+            event_spec=event_spec,
         )
     if backend == "rust" and solver == "python_rk45":
         raise NotImplementedError("solver='python_rk45' requires backend='python'")
@@ -570,4 +640,5 @@ def solve_lindblad(
         saveat=saveat_values,
         save_start=save_start,
         maxiters=maxiters,
+        event_spec=event_spec,
     )

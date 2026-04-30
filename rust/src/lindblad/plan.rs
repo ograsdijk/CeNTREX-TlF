@@ -790,7 +790,7 @@ fn parse_instruction(obj: &Bound<'_, PyAny>) -> PyResult<Instruction> {
     })
 }
 
-fn parse_expression(obj: &Bound<'_, PyAny>) -> PyResult<CompiledExpression> {
+pub fn parse_expression(obj: &Bound<'_, PyAny>) -> PyResult<CompiledExpression> {
     let dict: &Bound<'_, PyDict> = obj.cast()?;
     let instructions_any = required_item(dict, "instructions")?;
     let instructions_list: &Bound<'_, PyList> = instructions_any.cast()?;
