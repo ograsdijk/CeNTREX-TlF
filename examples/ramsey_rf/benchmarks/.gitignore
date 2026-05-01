@@ -1,0 +1,2 @@
+# Cached truth references (re-buildable via reference.py, ~10 min one-shot)
+_cache/

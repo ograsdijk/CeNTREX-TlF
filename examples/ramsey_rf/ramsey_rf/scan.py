@@ -3,11 +3,17 @@
 Each scan point deep-copies cfg, mutates one parameter, runs the simulator,
 and stacks the results. The simulator's basis QN and H_func are built once and
 reused across points (they don't depend on any scannable parameter).
+
+Set `n_workers > 1` on `run_scan` to parallelize across scan points using
+processes (uses cloudpickle to serialize the FieldStack closures across the
+process boundary). Each worker rebuilds QN and H_func locally — cheap (~ms).
 """
 
 from __future__ import annotations
 
 import copy
+import multiprocessing as mp
+import os
 from dataclasses import dataclass
 from typing import Literal, Optional
 
@@ -114,48 +120,143 @@ def _apply_axis(cfg: RamseyRFConfig, axis: ScanAxis, value: float) -> None:
         raise ValueError(f"unknown scan axis: {axis!r}")
 
 
+def _run_one_point(cfg: RamseyRFConfig, axis: ScanAxis, value: float,
+                   QN=None, H_func=None) -> dict:
+    """Mutate a config copy at one scan value, run the simulator, return a
+    pickleable dict of result arrays (no full RamseyRFResult — too heavy)."""
+    cfg_i = copy.deepcopy(cfg)
+    _apply_axis(cfg_i, axis, float(value))
+    sim = RamseyRFSimulator(cfg_i, QN=QN, H_func=H_func)
+    res = sim.run()
+    return {
+        "survival": res.survival,
+        "survival_weighted": res.survival_weighted,
+        "per_j": res.per_j,
+        "per_j_weighted": res.per_j_weighted,
+        "J_values": list(res.J_values),
+        "weights": res.weights,
+    }
+
+
+# -------- Worker for process-pool parallelism (cloudpickle round-trip) --------
+# A single cfg blob is serialized once via cloudpickle, sent to the pool worker,
+# deserialized, and reused across calls. Workers also limit BLAS to 1 thread so
+# each scan point gets one core (otherwise OpenBLAS oversubscribes).
+def _worker_init(cfg_blob: bytes) -> None:
+    """Pool initializer: stash the deserialized cfg as a module global, and
+    cap BLAS threads to 1 (we already have process-level parallelism)."""
+    # These env vars only take effect when set BEFORE numpy/scipy import inside
+    # the child interpreter. Spawn-mode children re-import everything, so this
+    # works on Windows too.
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+              "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ[k] = "1"
+    import cloudpickle  # local import — only needed in workers
+    global _CFG, _QN, _H_FUNC
+    _CFG = cloudpickle.loads(cfg_blob)
+    _QN = build_basis(_CFG.Jmax)
+    _H_FUNC = build_H_func(_QN)
+
+
+def _worker_run(payload: tuple) -> dict:
+    axis, value = payload
+    return _run_one_point(_CFG, axis, value, QN=_QN, H_func=_H_FUNC)
+
+
 def run_scan(
     cfg: RamseyRFConfig,
     spec: ScanSpec,
     *,
+    n_workers: Optional[int] = None,
     keep_individual_results: bool = False,
     progress: bool = False,
 ) -> ScanResult:
     """Run the simulator at each spec.values point, keeping per-point arrays.
 
-    Builds the basis and H_func once and passes them to each simulator instance.
-    Set `keep_individual_results=True` to retain the full RamseyRFResult per
-    point (memory-heavy if snapshots are stored).
+    Args:
+        cfg: baseline configuration. Each scan point deep-copies cfg and
+            mutates one parameter according to `spec`.
+        spec: scan axis + values.
+        n_workers: process-level parallelism. None or 1 → sequential (current
+            process). 2+ → spawn that many worker processes via cloudpickle,
+            with each worker capping its BLAS threads to 1. -1 → use
+            `os.cpu_count() - 1`. Workers receive a single cloudpickle blob of
+            cfg at startup and reuse it across calls.
+        keep_individual_results: retain the full RamseyRFResult per point.
+            Only supported with n_workers in {None, 1} (full results don't
+            survive the worker boundary cleanly).
+        progress: print one line per completed scan point.
     """
-    QN = build_basis(cfg.Jmax)
-    H_func = build_H_func(QN)
+    if n_workers is not None and n_workers == -1:
+        n_workers = max(1, (os.cpu_count() or 2) - 1)
 
     n_points = len(spec.values)
-    survival_per_init: list[np.ndarray] = []
-    survival_weighted = np.empty(n_points, dtype=np.float64)
-    per_j_list: list[np.ndarray] = []
-    per_j_weighted_list: list[np.ndarray] = []
-    individual: Optional[list[RamseyRFResult]] = [] if keep_individual_results else None
-    J_values: list[int] = []
-    weights: Optional[np.ndarray] = None
+    sequential = (n_workers is None or n_workers <= 1)
 
-    for i, v in enumerate(spec.values):
-        cfg_i = copy.deepcopy(cfg)
-        _apply_axis(cfg_i, spec.axis, float(v))
-        sim = RamseyRFSimulator(cfg_i, QN=QN, H_func=H_func)
-        res = sim.run()
-        survival_per_init.append(res.survival)
-        survival_weighted[i] = res.survival_weighted
-        per_j_list.append(res.per_j)
-        per_j_weighted_list.append(res.per_j_weighted)
-        if individual is not None:
-            individual.append(res)
-        if not J_values:
-            J_values = res.J_values
-            weights = res.weights
-        if progress:
-            print(f"[scan {spec.axis}] point {i + 1}/{n_points}: value={v:g}, "
-                  f"survival_weighted={res.survival_weighted:.6f}")
+    if not sequential and keep_individual_results:
+        raise ValueError(
+            "keep_individual_results=True is incompatible with n_workers>1; "
+            "the full RamseyRFResult is not returned across the process boundary"
+        )
+
+    if sequential:
+        QN = build_basis(cfg.Jmax)
+        H_func = build_H_func(QN)
+        results = []
+        individual: Optional[list[RamseyRFResult]] = [] if keep_individual_results else None
+        for i, v in enumerate(spec.values):
+            if individual is not None:
+                # need full RamseyRFResult — re-run inline, not via _run_one_point
+                cfg_i = copy.deepcopy(cfg)
+                _apply_axis(cfg_i, spec.axis, float(v))
+                sim = RamseyRFSimulator(cfg_i, QN=QN, H_func=H_func)
+                res = sim.run()
+                individual.append(res)
+                results.append({
+                    "survival": res.survival,
+                    "survival_weighted": res.survival_weighted,
+                    "per_j": res.per_j,
+                    "per_j_weighted": res.per_j_weighted,
+                    "J_values": list(res.J_values),
+                    "weights": res.weights,
+                })
+            else:
+                results.append(_run_one_point(cfg, spec.axis, float(v),
+                                              QN=QN, H_func=H_func))
+            if progress:
+                print(f"[scan {spec.axis}] point {i + 1}/{n_points}: "
+                      f"value={spec.values[i]:g}, "
+                      f"survival_weighted={results[-1]['survival_weighted']:.6f}")
+    else:
+        try:
+            import cloudpickle
+        except ImportError as e:
+            raise ImportError(
+                "n_workers > 1 requires cloudpickle for cross-process serialization "
+                "(`pip install cloudpickle`). Use n_workers=1 for sequential mode."
+            ) from e
+        cfg_blob = cloudpickle.dumps(cfg)
+        ctx = mp.get_context("spawn")
+        with ctx.Pool(processes=n_workers,
+                      initializer=_worker_init, initargs=(cfg_blob,)) as pool:
+            payload = [(spec.axis, float(v)) for v in spec.values]
+            results = []
+            individual = None
+            iterator = pool.imap(_worker_run, payload)
+            for i, r in enumerate(iterator):
+                results.append(r)
+                if progress:
+                    print(f"[scan {spec.axis} | worker] point {i + 1}/{n_points}: "
+                          f"value={spec.values[i]:g}, "
+                          f"survival_weighted={r['survival_weighted']:.6f}")
+
+    survival_per_init = [r["survival"] for r in results]
+    survival_weighted = np.array([r["survival_weighted"] for r in results],
+                                  dtype=np.float64)
+    per_j_list = [r["per_j"] for r in results]
+    per_j_weighted_list = [r["per_j_weighted"] for r in results]
+    J_values = results[0]["J_values"]
+    weights = results[0]["weights"]
 
     return ScanResult(
         spec=spec,

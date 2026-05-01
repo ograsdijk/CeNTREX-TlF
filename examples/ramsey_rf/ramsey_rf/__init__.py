@@ -14,6 +14,12 @@ from .propagator import (
     propagate_midpoint,
     step_eigh,
 )
+from .propagator_truncated import (
+    propagate_midpoint_truncated,
+    select_subspace_J_manifold,
+    select_subspace_by_overlap,
+    step_eigh_truncated,
+)
 from .scan import ScanResult, ScanSpec, run_scan
 from .simulator import RamseyRFConfig, RamseyRFResult, RamseyRFSimulator
 from .states import (
@@ -45,6 +51,10 @@ __all__ = [
     "step_eigh",
     "SegmentedGridReport",
     "build_segmented_t_grid",
+    "propagate_midpoint_truncated",
+    "step_eigh_truncated",
+    "select_subspace_by_overlap",
+    "select_subspace_J_manifold",
     "RamseyRFConfig",
     "RamseyRFResult",
     "RamseyRFSimulator",
