@@ -53,16 +53,47 @@ def _scale_envelope(envelope_z, factor: float):
     return wrapped
 
 
+def _all_rf_regions(cfg: RamseyRFConfig) -> list:
+    """Return all RF regions in cfg, electric first then magnetic, in a single
+    flat list. The scan axes 'phi1'/'phi2'/'omega_rf'/'rf_amp_*' apply uniformly
+    across this combined list — useful since a config typically uses one type."""
+    return list(cfg.fields.rf_regions) + list(cfg.fields.rf_regions_B)
+
+
+def _set_rf_phi(cfg: RamseyRFConfig, idx: int, value: float) -> None:
+    """Set the phase of the idx-th RF region (electric first, then magnetic)."""
+    n_e = len(cfg.fields.rf_regions)
+    if idx < n_e:
+        cfg.fields.rf_regions[idx].phi = float(value)
+    else:
+        cfg.fields.rf_regions_B[idx - n_e].phi = float(value)
+
+
+def _scale_rf_envelope(cfg: RamseyRFConfig, idx: int, value: float) -> None:
+    n_e = len(cfg.fields.rf_regions)
+    if idx < n_e:
+        region = cfg.fields.rf_regions[idx]
+    else:
+        region = cfg.fields.rf_regions_B[idx - n_e]
+    region.envelope_z = _scale_envelope(region.envelope_z, float(value))
+
+
 def _apply_axis(cfg: RamseyRFConfig, axis: ScanAxis, value: float) -> None:
     """Mutate cfg in place to apply one scan value. cfg is assumed pre-deepcopied."""
+    n_total_rf = len(cfg.fields.rf_regions) + len(cfg.fields.rf_regions_B)
+
     if axis == "phi1":
-        cfg.fields.rf_regions[0].phi = float(value)
+        if n_total_rf < 1:
+            raise ValueError("scan axis 'phi1' requires at least one RF region")
+        _set_rf_phi(cfg, 0, value)
     elif axis == "phi2":
-        if len(cfg.fields.rf_regions) < 2:
+        if n_total_rf < 2:
             raise ValueError("scan axis 'phi2' requires at least two RF regions")
-        cfg.fields.rf_regions[1].phi = float(value)
+        _set_rf_phi(cfg, 1, value)
     elif axis == "omega_rf":
         for region in cfg.fields.rf_regions:
+            region.omega = float(value)
+        for region in cfg.fields.rf_regions_B:
             region.omega = float(value)
     elif axis == "velocity":
         v = np.asarray(cfg.trajectory.v, dtype=np.float64)
@@ -72,13 +103,13 @@ def _apply_axis(cfg: RamseyRFConfig, axis: ScanAxis, value: float) -> None:
         v_hat = v / speed
         cfg.trajectory.v = v_hat * float(value)
     elif axis == "rf_amp_1":
-        region = cfg.fields.rf_regions[0]
-        region.envelope_z = _scale_envelope(region.envelope_z, float(value))
+        if n_total_rf < 1:
+            raise ValueError("scan axis 'rf_amp_1' requires at least one RF region")
+        _scale_rf_envelope(cfg, 0, value)
     elif axis == "rf_amp_2":
-        if len(cfg.fields.rf_regions) < 2:
+        if n_total_rf < 2:
             raise ValueError("scan axis 'rf_amp_2' requires at least two RF regions")
-        region = cfg.fields.rf_regions[1]
-        region.envelope_z = _scale_envelope(region.envelope_z, float(value))
+        _scale_rf_envelope(cfg, 1, value)
     else:
         raise ValueError(f"unknown scan axis: {axis!r}")
 

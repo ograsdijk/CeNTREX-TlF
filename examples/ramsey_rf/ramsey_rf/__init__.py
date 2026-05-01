@@ -4,7 +4,7 @@ Experimental, isolated from the main centrex_tlf code path. See the demo noteboo
 and validation script in the parent directory for usage.
 """
 
-from .fields import AnalyticDCField, AnalyticRFRegion, FieldStack
+from .fields import AnalyticDCField, AnalyticRFRegion, FieldStack, MagneticRFRegion
 from .hamiltonian import build_basis, build_H_func
 from .observables import per_j_populations, survival_probability
 from .propagator import (
@@ -28,6 +28,7 @@ from .trajectory import BallisticTrajectory
 __all__ = [
     "AnalyticDCField",
     "AnalyticRFRegion",
+    "MagneticRFRegion",
     "FieldStack",
     "BallisticTrajectory",
     "build_basis",

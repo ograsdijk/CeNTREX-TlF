@@ -27,9 +27,9 @@ from centrex_tlf.states import ElectronicState  # noqa: E402
 
 from ramsey_rf import (  # noqa: E402
     AnalyticDCField,
-    AnalyticRFRegion,
     BallisticTrajectory,
     FieldStack,
+    MagneticRFRegion,
     RamseyRFConfig,
     RamseyRFSimulator,
     ScanSpec,
@@ -41,6 +41,8 @@ from ramsey_rf.states import UncoupledSelector  # noqa: E402
 
 
 # -------- Small geometry used by the validation (NOT the demo geometry) --------
+# Compact geometry to keep validation under ~10 min total. RF is MAGNETIC in x
+# (units of Gauss), driving the same Tl nuclear-spin transition the demo uses.
 Z_RF1, Z_RF2 = -0.30, +0.30
 RF_WIDTH = 0.10
 RF_EDGE = 0.02
@@ -52,7 +54,10 @@ V_Z = 184.0
 Z_START, Z_FINAL = -0.6, +0.6
 JMAX_VALIDATE = 3      # basis size 64 for fast eigh
 DT_VALIDATE = 1.0e-6
-RF_AMPLITUDE = 50.0    # V/cm — chosen to give an observable but partial transfer
+# RF B-amplitude scaled for the validation geometry's shorter coils (10 cm vs
+# the demo's 30 cm) — pick something that gives observable partial transfer
+# without saturating. Calibrated empirically; see check_phi2_fringe below.
+RF_AMPLITUDE = 0.30    # Gauss
 
 
 def make_config(Jmax: int = JMAX_VALIDATE, rf_amp: float = RF_AMPLITUDE,
@@ -62,15 +67,15 @@ def make_config(Jmax: int = JMAX_VALIDATE, rf_amp: float = RF_AMPLITUDE,
         half_width=DC_HALF_WIDTH, ramp_length=DC_RAMP_LENGTH,
         direction=(0, 0, 1),
     )
-    rf1 = AnalyticRFRegion.rounded_rectangle(
+    rf1 = MagneticRFRegion.rounded_rectangle(
         z_center=Z_RF1, width=RF_WIDTH, edge_length=RF_EDGE,
         amplitude=rf_amp, omega=OMEGA_RF, phi=0.0, direction=(1, 0, 0),
     )
-    rf2 = AnalyticRFRegion.rounded_rectangle(
+    rf2 = MagneticRFRegion.rounded_rectangle(
         z_center=Z_RF2, width=RF_WIDTH, edge_length=RF_EDGE,
         amplitude=rf_amp, omega=OMEGA_RF, phi=phi2, direction=(1, 0, 0),
     )
-    fields = FieldStack(E_dc=dc, rf_regions=[rf1, rf2])
+    fields = FieldStack(E_dc=dc, rf_regions_B=[rf1, rf2])
     traj = BallisticTrajectory(r0=np.array([0, 0, Z_START]), v=np.array([0, 0, V_Z]))
     return RamseyRFConfig(
         fields=fields,
@@ -201,7 +206,7 @@ def main() -> int:
     print(f"  Jmax = {JMAX_VALIDATE} (validation geometry; smaller than the demo)")
     print(f"  trajectory: z = {Z_START} → {Z_FINAL} m at v_z = {V_Z} m/s")
     print(f"  RF coils at z = {Z_RF1}, {Z_RF2} m (width {RF_WIDTH} m, "
-          f"omega = 2π·120 kHz)")
+          f"omega = 2π·120 kHz, B-amplitude = {RF_AMPLITUDE} G in x)")
     print(f"  dt = {DT_VALIDATE*1e6:.2f} us")
     print("=" * 70)
 

@@ -146,7 +146,10 @@ class RamseyRFSimulator:
             self.init_overlap_probs = []
         else:
             R_start = cfg.trajectory(self.t_start)
-            H_start = self.H_func(cfg.fields.E_dc(R_start), [0.0, 0.0, 0.0])
+            B_start = (cfg.fields.B_dc(R_start)
+                       if cfg.fields.B_dc is not None
+                       else np.zeros(3, dtype=np.float64))
+            H_start = self.H_func(cfg.fields.E_dc(R_start), B_start)
             self.Psi0, self.eig_idx_init, self.init_overlap_probs = dressed_initial_states(
                 H_start, self.QN, cfg.initial_targets
             )
@@ -171,12 +174,12 @@ class RamseyRFSimulator:
         H_func = self.H_func
         traj = cfg.trajectory
         fields = cfg.fields
-        zero_B = np.zeros(3, dtype=np.float64)
 
         def H_at_t(t: float) -> npt.NDArray[np.complex128]:
             R = traj(t)
             E = fields.E_total(R, t)
-            return H_func(E, zero_B)
+            B = fields.B_total(R, t)
+            return H_func(E, B)
 
         return H_at_t
 
@@ -195,17 +198,17 @@ class RamseyRFSimulator:
         #   - Else if initial_targets given: same fallback (return-probability).
         #   - Else (initial_psi0 was used and no override): project onto Psi0
         #     itself — i.e. |<Psi0 | Psi_final>|^2 per column.
-        if cfg.detection_targets is not None:
+        if cfg.detection_targets is not None or cfg.initial_targets is not None:
             R_end = cfg.trajectory(self.t_end)
-            H_end = self.H_func(cfg.fields.E_dc(R_end), [0.0, 0.0, 0.0])
+            B_end = (cfg.fields.B_dc(R_end)
+                     if cfg.fields.B_dc is not None
+                     else np.zeros(3, dtype=np.float64))
+            H_end = self.H_func(cfg.fields.E_dc(R_end), B_end)
+            targets = (cfg.detection_targets
+                       if cfg.detection_targets is not None
+                       else cfg.initial_targets)
             survival, eig_idx_det = survival_probability(
-                prop.Psi_final, H_end, self.QN, cfg.detection_targets
-            )
-        elif cfg.initial_targets is not None:
-            R_end = cfg.trajectory(self.t_end)
-            H_end = self.H_func(cfg.fields.E_dc(R_end), [0.0, 0.0, 0.0])
-            survival, eig_idx_det = survival_probability(
-                prop.Psi_final, H_end, self.QN, cfg.initial_targets
+                prop.Psi_final, H_end, self.QN, targets
             )
         else:
             # initial_psi0 path with no detection override — project onto Psi0.

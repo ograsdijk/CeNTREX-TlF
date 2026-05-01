@@ -175,21 +175,33 @@ def build_segmented_t_grid(
     t_probes = np.linspace(t_start, t_end, n_probes)
     R_probes = trajectory(t_probes)  # broadcasts to (n_probes, 3)
 
-    # 2. DC field magnitudes
+    # 2. DC field magnitudes (E and optional B)
     E_dc_mags = np.array([np.linalg.norm(fields.E_dc(R)) for R in R_probes])
     E_dc_max = float(E_dc_mags.max()) if E_dc_mags.size else 1.0
     if E_dc_max == 0.0:
         E_dc_max = 1.0
-    # "DC active": local change exceeds threshold. Compare each point to its
-    # left and right neighbor.
     dE = np.abs(np.diff(E_dc_mags))
     dc_changing = np.zeros(n_probes, dtype=bool)
     dc_changing[:-1] |= dE > dc_threshold_rel * E_dc_max
     dc_changing[1:] |= dE > dc_threshold_rel * E_dc_max
 
-    # 3. RF envelopes per region
+    if fields.B_dc is not None:
+        B_dc_mags = np.array([np.linalg.norm(fields.B_dc(R)) for R in R_probes])
+        B_dc_max = float(B_dc_mags.max()) if B_dc_mags.size else 1.0
+        if B_dc_max > 0.0:
+            dB = np.abs(np.diff(B_dc_mags))
+            dc_changing[:-1] |= dB > dc_threshold_rel * B_dc_max
+            dc_changing[1:] |= dB > dc_threshold_rel * B_dc_max
+
+    # 3. RF envelopes per region (E-RF and B-RF lists)
     rf_active = np.zeros(n_probes, dtype=bool)
     for region in fields.rf_regions:
+        env = np.array([np.linalg.norm(region.envelope_vec(R)) for R in R_probes])
+        peak = float(env.max())
+        if peak <= 0.0:
+            continue
+        rf_active |= env > rf_threshold_rel * peak
+    for region in fields.rf_regions_B:
         env = np.array([np.linalg.norm(region.envelope_vec(R)) for R in R_probes])
         peak = float(env.max())
         if peak <= 0.0:

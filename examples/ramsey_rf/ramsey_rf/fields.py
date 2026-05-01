@@ -9,7 +9,7 @@ unit 3-vector or a callable R -> (3,) for spatially varying polarization.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Sequence, Union
+from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -190,14 +190,116 @@ class AnalyticRFRegion:
 
 
 @dataclass
+class MagneticRFRegion:
+    """One MAGNETIC RF interaction region: spatial envelope x cos(omega t + phi) x direction.
+
+    The total B-field at R, t is:
+        B_rf(R, t) = envelope_z(R[2]) * cos(omega t + phi) * direction(R)
+    Units: amplitude is in Gauss (matching centrex_tlf's H_func B convention).
+    Multiple regions are summed by `FieldStack.B_total`.
+
+    For the typical CeNTREX RF Ramsey geometry, RF is magnetic in x and drives
+    the Tl nuclear spin via g_Tl·μ_N·**B**·**I_Tl**. Use this class instead of
+    `AnalyticRFRegion` (which is for electric RF coupling via the molecular dipole).
+    """
+
+    direction: DirectionLike
+    envelope_z: Callable[[float], float]
+    omega: float
+    phi: float
+
+    def __post_init__(self) -> None:
+        self._direction_fn = _normalize_direction(self.direction)
+
+    def envelope_vec(self, R: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        z = float(R[2])
+        amp = float(self.envelope_z(z))
+        return amp * self._direction_fn(R)
+
+    @classmethod
+    def gaussian(
+        cls,
+        *,
+        z_center: float,
+        width: float,
+        amplitude: float,
+        omega: float,
+        phi: float,
+        direction: DirectionLike,
+    ) -> "MagneticRFRegion":
+        """Gaussian envelope with 1/e^2 half-width = `width`. amplitude in Gauss."""
+
+        def envelope(z: float) -> float:
+            return amplitude * np.exp(-2.0 * ((z - z_center) / width) ** 2)
+
+        return cls(direction=direction, envelope_z=envelope, omega=omega, phi=phi)
+
+    @classmethod
+    def sin2(
+        cls,
+        *,
+        z_center: float,
+        width: float,
+        amplitude: float,
+        omega: float,
+        phi: float,
+        direction: DirectionLike,
+    ) -> "MagneticRFRegion":
+        """sin^2 envelope of full width `width`, zero outside. amplitude in Gauss."""
+
+        def envelope(z: float) -> float:
+            zr = z - z_center
+            if abs(zr) > 0.5 * width:
+                return 0.0
+            return amplitude * np.cos(np.pi * zr / width) ** 2
+
+        return cls(direction=direction, envelope_z=envelope, omega=omega, phi=phi)
+
+    @classmethod
+    def rounded_rectangle(
+        cls,
+        *,
+        z_center: float,
+        width: float,
+        edge_length: float,
+        amplitude: float,
+        omega: float,
+        phi: float,
+        direction: DirectionLike,
+    ) -> "MagneticRFRegion":
+        """Flat-top of width `width` with smooth tanh edges. amplitude in Gauss."""
+
+        half = 0.5 * width
+
+        def envelope(z: float) -> float:
+            left = np.tanh((z - (z_center - half)) / edge_length)
+            right = np.tanh((z - (z_center + half)) / edge_length)
+            return amplitude * 0.5 * (left - right)
+
+        return cls(direction=direction, envelope_z=envelope, omega=omega, phi=phi)
+
+
+@dataclass
 class FieldStack:
-    """Container for the DC field plus a list of RF regions."""
+    """Container for the DC E-field, optional DC B-field, and RF regions of either type.
+
+    `rf_regions` is for electric RF (units V/cm), `rf_regions_B` is for magnetic
+    RF (units Gauss). Both add to the corresponding total at each (R, t).
+    """
 
     E_dc: AnalyticDCField
     rf_regions: list[AnalyticRFRegion] = field(default_factory=list)
+    B_dc: Optional[AnalyticDCField] = None
+    rf_regions_B: list[MagneticRFRegion] = field(default_factory=list)
 
     def E_total(self, R: npt.NDArray[np.float64], t: float) -> npt.NDArray[np.float64]:
         E = self.E_dc(R)
         for region in self.rf_regions:
             E = E + np.cos(region.omega * t + region.phi) * region.envelope_vec(R)
         return E
+
+    def B_total(self, R: npt.NDArray[np.float64], t: float) -> npt.NDArray[np.float64]:
+        B = self.B_dc(R) if self.B_dc is not None else np.zeros(3, dtype=np.float64)
+        for region in self.rf_regions_B:
+            B = B + np.cos(region.omega * t + region.phi) * region.envelope_vec(R)
+        return B
