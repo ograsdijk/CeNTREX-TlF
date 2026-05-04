@@ -7,9 +7,9 @@ Reference configuration matches the demo notebook's calibrated magnetic-RF setup
     - phi1 = 0, phi2 = +π/2  (Ramsey working point)
     - Trajectory v_z = 184 m/s, z = -2 → +2 m
     - Initial state: adiabatic ancestor of |J=1, mJ=-1, m1=-1/2, m2=-1/2⟩ at 30 kV/cm
-    - Jmax = 6, segmented grid with dt_fine = 0.5 µs
+    - Jmax = 6, segmented grid with dt_fine = 0.05 µs
 
-The reference is cached as `_cache/reference_jmax6_dt0p5us.npz` next to this file.
+The reference is cached as `_cache/reference_jmax6_dt50ns.npz` next to this file.
 Each entry in the cache:
     Psi_final    (N=196, K=1) complex128  — final state, the gold-standard target
     survival     ()           float       — return-prob to Psi0
@@ -19,9 +19,9 @@ Each entry in the cache:
 
 Re-running the script reuses the cache unless `--force` is passed.
 
-Single-trajectory at Jmax=6 takes ~9 min on this machine (basis 196, ~14k steps,
-~40 ms eigh per step in the segmented active region + 3 single-shot exact steps
-in the inactive region).
+Single-trajectory at Jmax=6 takes ~45 min on this machine with 50 ns timesteps
+(basis 196, ~138k steps, ~20 ms eigh per step in the segmented active region
++ 3 single-shot exact steps in the inactive region).
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ from ramsey_rf import (  # noqa: E402
 
 # -------- Reference configuration (same numbers as the demo notebook) --------
 JMAX = 6
-DT_FINE = 0.5e-6
+DT_FINE = 0.05e-6
 Z_RF1, Z_RF2 = -1.25, +1.25
 RF_WIDTH, RF_EDGE = 0.30, 0.05
 DC_HALF_WIDTH, DC_RAMP_LENGTH = 1.50, 0.05

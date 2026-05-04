@@ -11,17 +11,21 @@ Run as:
 
 Add `--variants v1 v2` to filter. `--scan` enables the 41-point scan benchmark
 (adds ~10–60 min depending on n_workers and variant).
+
+The full-basis V4 Krylov variant is registered but excluded from the default
+variant set because it is much slower than V1 for this Hamiltonian.
+The full-basis V7 CuPy variant is also excluded from the default set because
+it requires an optional CUDA/CuPy runtime.
 """
 
 from __future__ import annotations
 
 import argparse
-import copy
 import multiprocessing as mp
 import os
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -36,18 +40,20 @@ if str(PROJECT_ROOT) not in sys.path:
 from centrex_tlf.hamiltonian import generate_uncoupled_hamiltonian_X  # noqa: E402
 
 from ramsey_rf import (  # noqa: E402
-    RamseyRFConfig,
-    RamseyRFSimulator,
+    make_uniform_tracking_grid,
+    propagate_midpoint_krylov_hybrid,
+    propagate_midpoint_tracked_decomposed,
     ScanSpec,
     run_scan,
     select_subspace_by_overlap,
+    track_subspace_bases,
 )
 from ramsey_rf.propagator_truncated import (  # noqa: E402
     propagate_midpoint_truncated_decomposed,
 )
 
 from benchmarks.reference import (  # noqa: E402
-    F_RES, JMAX, ReferenceResult, build_reference_config, get_reference,
+    E_HIGH, E_LOW, F_RES, ReferenceResult, build_reference_config, get_reference,
 )
 
 
@@ -164,7 +170,7 @@ def _make_v3a_runner(K: int):
         ]
         traj = cfg.trajectory
         fields = cfg.fields
-        zeros3 = np.zeros(3)
+
         def coeffs_at_t(t: float) -> np.ndarray:
             R = traj(t)
             E = fields.E_total(R, t)
@@ -195,6 +201,95 @@ V3a_K16 = _make_v3a_runner(K=16)
 V3a_K24 = _make_v3a_runner(K=24)
 V3a_K32 = _make_v3a_runner(K=32)
 V3a_K48 = _make_v3a_runner(K=48)
+
+
+# -------- V3b: adiabatic-tracked truncated propagator ------------------------
+V3B_BASIS_DT = 50e-6
+
+
+def _raw_components(QN):
+    Hraw = generate_uncoupled_hamiltonian_X(QN)
+    return [Hraw.Hff, Hraw.HSx, Hraw.HSy, Hraw.HSz,
+            Hraw.HZx, Hraw.HZy, Hraw.HZz]
+
+
+def _high_field_j1_subspace(QN, H_func, K: int) -> np.ndarray:
+    H_high = H_func(np.array([0.0, 0.0, E_HIGH]), np.zeros(3))
+    bare_j1_idx = np.array([i for i, bs in enumerate(QN) if bs.J == 1])
+    bare_j1_targets = np.zeros((len(QN), bare_j1_idx.size), dtype=np.complex128)
+    for col, i in enumerate(bare_j1_idx):
+        bare_j1_targets[i, col] = 1.0
+    T_high, _idx = select_subspace_by_overlap(
+        H_high, K=K, target_vectors=bare_j1_targets
+    )
+    return T_high
+
+
+def _track_subspace_to_start(T_high: np.ndarray, H_func) -> np.ndarray:
+    e_path = np.linspace(E_HIGH, E_LOW, 81)
+
+    def H_at_e(e_z: float) -> np.ndarray:
+        return H_func(np.array([0.0, 0.0, e_z]), np.zeros(3))
+
+    bases = track_subspace_bases(e_path, H_at_e, T_high)
+    return bases[-1]
+
+
+def _make_v3b_runner(K: int, basis_dt: float = V3B_BASIS_DT):
+    """Factory: V3b tracked-basis Variant with subspace size K."""
+
+    def _v3b_traj() -> tuple[np.ndarray, float, int]:
+        cfg, Psi0, QN, H_func = build_reference_config()
+        T_high = _high_field_j1_subspace(QN, H_func, K)
+        T_start = _track_subspace_to_start(T_high, H_func)
+
+        traj = cfg.trajectory
+        fields = cfg.fields
+
+        def H_basis_at_t(t: float) -> np.ndarray:
+            R = traj(t)
+            B = (fields.B_dc(R) if fields.B_dc is not None else np.zeros(3))
+            return H_func(fields.E_dc(R), B)
+
+        track_times = make_uniform_tracking_grid(
+            float(cfg.t_grid[0]), float(cfg.t_grid[-1]), basis_dt
+        )
+        n_steps = cfg.t_grid.size - 1
+
+        t0 = time.perf_counter()
+        tracked_bases = track_subspace_bases(track_times, H_basis_at_t, T_start)
+
+        TWOPI = 2.0 * np.pi
+
+        def coeffs_at_t(t: float) -> np.ndarray:
+            R = traj(t)
+            E = fields.E_total(R, t)
+            B = fields.B_total(R, t)
+            return TWOPI * np.array([1.0, E[0], E[1], E[2], B[0], B[1], B[2]])
+
+        out = propagate_midpoint_tracked_decomposed(
+            Psi0,
+            cfg.t_grid,
+            _raw_components(QN),
+            coeffs_at_t,
+            track_times,
+            tracked_bases,
+            store_norm=False,
+        )
+        elapsed = time.perf_counter() - t0
+        return out.Psi_final, elapsed, n_steps
+
+    return Variant(
+        f"v3b_K{K}",
+        f"Tracked truncation with K={K} (basis_dt={basis_dt * 1e6:.0f} us)",
+        _v3b_traj,
+        run_scan=None,
+    )
+
+
+V3b_K24 = _make_v3b_runner(K=24)
+V3b_K32 = _make_v3b_runner(K=32)
+V3b_K48 = _make_v3b_runner(K=48)
 
 
 # -------- V3a + V2 combined (parallel scan of truncated trajectories) -------
@@ -306,9 +401,286 @@ V3a_K48_par8 = _make_v3a_parallel_runner(K=48, n_workers=8)
 V3a_K24_par8 = _make_v3a_parallel_runner(K=24, n_workers=8)
 
 
+# -------- V3b + V2 combined (parallel scan of tracked trajectories) ----------
+def _v3b_scan_worker_init(cfg_blob: bytes, K_arg: int, basis_dt: float) -> None:
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+              "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ[k] = "1"
+    import cloudpickle as _cp  # noqa: E402
+
+    global _V3B_CFG, _V3B_PSI0, _V3B_QN, _V3B_H_FUNC
+    global _V3B_COMPONENTS, _V3B_TRACK_TIMES, _V3B_TRACKED_BASES
+
+    _V3B_CFG = _cp.loads(cfg_blob)
+
+    from ramsey_rf import build_basis as _bb, build_H_func as _bhf  # noqa: E402
+
+    _V3B_QN = _bb(_V3B_CFG.Jmax)
+    _V3B_H_FUNC = _bhf(_V3B_QN)
+    if _V3B_CFG.initial_psi0 is None:
+        raise ValueError("V3b scan worker requires cfg.initial_psi0")
+    _V3B_PSI0 = np.asarray(_V3B_CFG.initial_psi0, dtype=np.complex128)
+    _V3B_COMPONENTS = _raw_components(_V3B_QN)
+
+    T_high = _high_field_j1_subspace(_V3B_QN, _V3B_H_FUNC, K_arg)
+    T_start = _track_subspace_to_start(T_high, _V3B_H_FUNC)
+
+    traj = _V3B_CFG.trajectory
+    fields = _V3B_CFG.fields
+
+    def H_basis_at_t(t: float) -> np.ndarray:
+        R = traj(t)
+        B = fields.B_dc(R) if fields.B_dc is not None else np.zeros(3)
+        return _V3B_H_FUNC(fields.E_dc(R), B)
+
+    _V3B_TRACK_TIMES = make_uniform_tracking_grid(
+        float(_V3B_CFG.t_grid[0]), float(_V3B_CFG.t_grid[-1]), basis_dt
+    )
+    _V3B_TRACKED_BASES = track_subspace_bases(
+        _V3B_TRACK_TIMES, H_basis_at_t, T_start
+    )
+
+
+def _v3b_scan_worker_run(payload: tuple) -> dict:
+    import copy as _copy
+
+    omega_value = payload[0]
+    cfg_i = _copy.deepcopy(_V3B_CFG)
+    for region in cfg_i.fields.rf_regions:
+        region.omega = float(omega_value)
+    for region in cfg_i.fields.rf_regions_B:
+        region.omega = float(omega_value)
+
+    TWOPI = 2.0 * np.pi
+    traj = cfg_i.trajectory
+    fields = cfg_i.fields
+
+    def coeffs_at_t(t: float) -> np.ndarray:
+        R = traj(t)
+        E = fields.E_total(R, t)
+        B = fields.B_total(R, t)
+        return TWOPI * np.array([1.0, E[0], E[1], E[2], B[0], B[1], B[2]])
+
+    out = propagate_midpoint_tracked_decomposed(
+        _V3B_PSI0,
+        cfg_i.t_grid,
+        _V3B_COMPONENTS,
+        coeffs_at_t,
+        _V3B_TRACK_TIMES,
+        _V3B_TRACKED_BASES,
+        store_norm=False,
+    )
+    surv = float(abs(np.vdot(_V3B_PSI0[:, 0], out.Psi_final[:, 0])) ** 2)
+    return {"survival_weighted": surv, "Psi_final": out.Psi_final}
+
+
+def _make_v3b_parallel_runner(
+    K: int,
+    n_workers: int,
+    basis_dt: float = V3B_BASIS_DT,
+):
+    base = _make_v3b_runner(K, basis_dt=basis_dt)
+
+    def _v3b_parallel_scan(_n_workers_arg: int) -> tuple[np.ndarray, float, int]:
+        cfg, _Psi0, _QN, _H_func = build_reference_config()
+        fringe_Hz = 184.0 / 2.5
+        n_points = 41
+        freqs = F_RES + np.linspace(-2 * fringe_Hz, +2 * fringe_Hz, n_points)
+        omegas = 2 * np.pi * freqs
+        cfg_blob = cloudpickle.dumps(cfg)
+        ctx = mp.get_context("spawn")
+        t0 = time.perf_counter()
+        with ctx.Pool(
+            processes=n_workers,
+            initializer=_v3b_scan_worker_init,
+            initargs=(cfg_blob, K, basis_dt),
+        ) as pool:
+            payload = [(float(o),) for o in omegas]
+            results = list(pool.imap(_v3b_scan_worker_run, payload))
+        elapsed = time.perf_counter() - t0
+        surv = np.array([r["survival_weighted"] for r in results])
+        return surv, elapsed, n_workers
+
+    return Variant(
+        f"v3b_K{K}_par{n_workers}",
+        f"V3b (K={K}, basis_dt={basis_dt * 1e6:.0f} us) + V2 "
+        f"(parallel scan, n_workers={n_workers})",
+        base.run_traj,
+        run_scan=_v3b_parallel_scan,
+    )
+
+
+V3b_K24_par8 = _make_v3b_parallel_runner(K=24, n_workers=8)
+V3b_K32_par8 = _make_v3b_parallel_runner(K=32, n_workers=8)
+
+
+# -------- V4: sparse Krylov on active steps, exact eigh on inactive steps -----
+def _v4_traj() -> tuple[np.ndarray, float, int]:
+    cfg, Psi0, QN, _H_func = build_reference_config()
+    traj = cfg.trajectory
+    fields = cfg.fields
+    TWOPI = 2.0 * np.pi
+
+    def coeffs_at_t(t: float) -> np.ndarray:
+        R = traj(t)
+        E = fields.E_total(R, t)
+        B = fields.B_total(R, t)
+        return TWOPI * np.array([1.0, E[0], E[1], E[2], B[0], B[1], B[2]])
+
+    n_steps = cfg.t_grid.size - 1
+    t0 = time.perf_counter()
+    out = propagate_midpoint_krylov_hybrid(
+        Psi0,
+        cfg.t_grid,
+        _raw_components(QN),
+        coeffs_at_t,
+        store_norm=False,
+    )
+    elapsed = time.perf_counter() - t0
+    print(
+        "  V4 steps: "
+        f"krylov={out.stats.n_krylov_steps}, eigh={out.stats.n_eigh_steps}, "
+        f"krylov_dt_max={out.stats.krylov_dt_max * 1e9:.1f} ns"
+    )
+    return out.Psi_final, elapsed, n_steps
+
+
+V4 = Variant(
+    "v4_krylov",
+    "Sparse Krylov active steps + exact eigh inactive steps (full basis)",
+    _v4_traj,
+    run_scan=None,
+)
+
+
+# -------- V5: numba JIT rotate/apply inner loop ------------------------------
+def _v5_traj() -> tuple[np.ndarray, float, int]:
+    from ramsey_rf.propagator_numba import propagate_midpoint_numba
+
+    cfg, Psi0, _QN, H_func = build_reference_config()
+    traj = cfg.trajectory
+    fields = cfg.fields
+
+    def H_at_t(t: float) -> np.ndarray:
+        R = traj(t)
+        return H_func(fields.E_total(R, t), fields.B_total(R, t))
+
+    n_steps = cfg.t_grid.size - 1
+    t0 = time.perf_counter()
+    out = propagate_midpoint_numba(
+        Psi0,
+        cfg.t_grid,
+        H_at_t,
+        store_norm=False,
+    )
+    elapsed = time.perf_counter() - t0
+    return out.Psi_final, elapsed, n_steps
+
+
+V5 = Variant(
+    "v5_numba",
+    "Dense full-basis propagator with Numba rotate/apply kernel",
+    _v5_traj,
+    run_scan=None,
+)
+
+
+# -------- V7: cupy GPU dense full-basis eigensolve ---------------------------
+def _run_cupy_cfg(
+    cfg,
+    Psi0: np.ndarray,
+    H_func,
+    *,
+    warm_up: bool = True,
+) -> tuple[np.ndarray, str]:
+    from ramsey_rf.propagator_cupy import propagate_midpoint_cupy
+
+    traj = cfg.trajectory
+    fields = cfg.fields
+
+    def H_at_t(t: float) -> np.ndarray:
+        R = traj(t)
+        return H_func(fields.E_total(R, t), fields.B_total(R, t))
+
+    out = propagate_midpoint_cupy(
+        Psi0,
+        cfg.t_grid,
+        H_at_t,
+        warm_up=warm_up,
+        store_norm=False,
+    )
+    device = out.device_info
+    device_note = (
+        f"device={device.name}, id={device.device_id}, "
+        f"cuda_runtime={device.runtime_version}"
+    )
+    return out.Psi_final, device_note
+
+
+def _v7_traj() -> tuple[np.ndarray, float, int]:
+    cfg, Psi0, _QN, H_func = build_reference_config()
+    n_steps = cfg.t_grid.size - 1
+    t0 = time.perf_counter()
+    psi_final, device_note = _run_cupy_cfg(cfg, Psi0, H_func)
+    elapsed = time.perf_counter() - t0
+    print(f"  V7 CuPy: {device_note}")
+    return psi_final, elapsed, n_steps
+
+
+def _v7_scan_seq(n_workers_unused: int) -> tuple[np.ndarray, float, int]:
+    import copy as _copy
+
+    cfg, Psi0, _QN, H_func = build_reference_config()
+    fringe_Hz = 184.0 / 2.5
+    n_points = 41
+    freqs = F_RES + np.linspace(-2 * fringe_Hz, +2 * fringe_Hz, n_points)
+    omegas = 2 * np.pi * freqs
+    survival = np.empty(n_points, dtype=np.float64)
+    device_note = None
+    t0 = time.perf_counter()
+    for i, omega in enumerate(omegas):
+        cfg_i = _copy.deepcopy(cfg)
+        for region in cfg_i.fields.rf_regions:
+            region.omega = float(omega)
+        for region in cfg_i.fields.rf_regions_B:
+            region.omega = float(omega)
+        psi_final, device_note = _run_cupy_cfg(cfg_i, Psi0, H_func, warm_up=(i == 0))
+        survival[i] = float(abs(np.vdot(Psi0[:, 0], psi_final[:, 0])) ** 2)
+        print(
+            f"  V7 scan point {i + 1}/{n_points}: "
+            f"freq={freqs[i]:.3f} Hz, survival={survival[i]:.6f}"
+        )
+    elapsed = time.perf_counter() - t0
+    if device_note is not None:
+        print(f"  V7 CuPy scan: {device_note}")
+    return survival, elapsed, 1
+
+
+V7 = Variant(
+    "v7_cupy",
+    "Dense full-basis propagator with CuPy GPU eigh",
+    _v7_traj,
+    run_scan=None,
+)
+
+V7_SCAN_SEQ = Variant(
+    "v7_cupy_scan_seq",
+    "Sequential 41-point omega_rf scan with CuPy GPU eigh",
+    _v7_traj,
+    run_scan=_v7_scan_seq,
+)
+
+
 # -------- Variant registry ----------------------------------------------------
-ALL_VARIANTS: list[Variant] = [V1, V2, V3a_K16, V3a_K24, V3a_K32, V3a_K48,
-                                V3a_K48_par8, V3a_K24_par8]
+DEFAULT_VARIANTS: list[Variant] = [
+    V1, V2,
+    V3a_K16, V3a_K24, V3a_K32, V3a_K48,
+    V3b_K24, V3b_K32, V3b_K48,
+    V3b_K24_par8, V3b_K32_par8,
+    V3a_K48_par8, V3a_K24_par8,
+]
+SLOW_VARIANTS: list[Variant] = [V4, V5, V7, V7_SCAN_SEQ]
+ALL_VARIANTS: list[Variant] = DEFAULT_VARIANTS + SLOW_VARIANTS
 
 
 # -------- Bench main ---------------------------------------------------------
@@ -377,7 +749,7 @@ def write_report(results: list[VariantResult], ref: ReferenceResult,
     lines.append("| Variant | Description | Trajectory time | Speedup vs V1 | "
                  "Fidelity | ‖ψ‖² | max\\|Δ\\|ψ\\|²\\| | Scan (41-pt) | n_workers |\n")
     lines.append("|---|---|---|---|---|---|---|---|---|\n")
-    v1_time = next((r.elapsed_traj_s for r in results if r.name == "v1"), None)
+    v1_time = next((r.elapsed_traj_s for r in results if r.name == "v1"), ref.elapsed_s)
     for r in results:
         traj_min = f"{r.elapsed_traj_s / 60:.2f} min"
         speedup = f"{v1_time / r.elapsed_traj_s:.2f}×" if v1_time else "—"
@@ -421,12 +793,12 @@ def main():
                         help="Path to write PERF_REPORT.md.")
     args = parser.parse_args()
 
-    print(f"Loading reference...")
+    print("Loading reference...")
     ref = get_reference(force=False)
     print(f"  reference loaded, survival = {ref.survival:.6f}, "
           f"elapsed at baseline = {ref.elapsed_s / 60:.2f} min")
 
-    selected = ALL_VARIANTS
+    selected = DEFAULT_VARIANTS
     if args.variants:
         names = set(args.variants)
         selected = [v for v in ALL_VARIANTS if v.name in names]

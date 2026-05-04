@@ -29,12 +29,12 @@ target. For a single Psi0 this gives a clean physical truncation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
 import numpy as np
 import numpy.typing as npt
 from scipy.linalg import eigh as _scipy_eigh
+from scipy.optimize import linear_sum_assignment
 
 from .propagator import HMidFn, PropagationResult, _diagonalize
 
@@ -101,6 +101,69 @@ def select_subspace_J_manifold(
     idx_sorted = np.sort(idx)
     T = V[:, idx_sorted].astype(np.complex128, copy=True)
     return T, idx_sorted
+
+
+def track_subspace_bases(
+    points: Sequence[float],
+    H_at_point: Callable[[float], npt.NDArray[np.complex128]],
+    T_initial: npt.NDArray[np.complex128],
+) -> npt.NDArray[np.complex128]:
+    """Track a K-dimensional eigenspace across a sequence of Hamiltonians.
+
+    `T_initial` must be an orthonormal basis for the eigenspace at
+    `points[0]`. For each later point, the full Hamiltonian is diagonalized and
+    K eigenvectors are assigned to the previous basis vectors by maximum total
+    overlap. Each selected vector is phase-aligned to the previous vector.
+
+    Returns:
+        bases: `(n_points, N, K)` complex array.
+    """
+    point_arr = np.asarray(points, dtype=np.float64)
+    if point_arr.ndim != 1 or point_arr.size == 0:
+        raise ValueError("points must be a non-empty 1-D sequence")
+    if T_initial.ndim != 2:
+        raise ValueError(f"T_initial must be 2-D; got {T_initial.shape}")
+
+    N, K = T_initial.shape
+    bases = np.empty((point_arr.size, N, K), dtype=np.complex128)
+    bases[0] = np.asarray(T_initial, dtype=np.complex128)
+
+    prev = bases[0]
+    for i in range(1, point_arr.size):
+        H = H_at_point(float(point_arr[i]))
+        _D, V = _scipy_eigh(H, driver="evr")
+        if V.shape[0] != N:
+            raise ValueError(
+                f"H_at_point returned basis size {V.shape[0]}, expected {N}"
+            )
+        overlaps = np.abs(prev.conj().T @ V) ** 2
+        row_ind, col_ind = linear_sum_assignment(-overlaps)
+        order = col_ind[np.argsort(row_ind)]
+        tracked = V[:, order].astype(np.complex128, copy=True)
+
+        for k in range(K):
+            phase = np.vdot(prev[:, k], tracked[:, k])
+            if abs(phase) > 0.0:
+                tracked[:, k] *= np.conj(phase) / abs(phase)
+
+        bases[i] = tracked
+        prev = tracked
+
+    return bases
+
+
+def make_uniform_tracking_grid(
+    t_start: float,
+    t_end: float,
+    basis_dt: float,
+) -> npt.NDArray[np.float64]:
+    """Uniform tracking times including both endpoints."""
+    if t_end <= t_start:
+        raise ValueError("t_end must be > t_start")
+    if basis_dt <= 0.0:
+        raise ValueError("basis_dt must be positive")
+    n_intervals = max(1, int(np.ceil((t_end - t_start) / basis_dt)))
+    return np.linspace(t_start, t_end, n_intervals + 1, dtype=np.float64)
 
 
 def step_eigh_truncated(
@@ -197,6 +260,119 @@ def propagate_midpoint_truncated_decomposed(
             snapshots[k + 1] = T @ c
 
     Psi_final = T @ c
+    return PropagationResult(
+        Psi_final=Psi_final,
+        norm_trace=norm_trace,
+        snapshots=snapshots,
+        t_grid=np.asarray(t_grid, dtype=np.float64),
+    )
+
+
+def _nearest_basis_indices(
+    t_mid: npt.NDArray[np.float64],
+    track_times: npt.NDArray[np.float64],
+) -> npt.NDArray[np.intp]:
+    right = np.searchsorted(track_times, t_mid, side="left")
+    right = np.clip(right, 0, track_times.size - 1)
+    left = np.clip(right - 1, 0, track_times.size - 1)
+    use_right = np.abs(track_times[right] - t_mid) < np.abs(t_mid - track_times[left])
+    return np.where(use_right, right, left).astype(np.intp)
+
+
+def propagate_midpoint_tracked_decomposed(
+    Psi0: npt.NDArray[np.complex128],
+    t_grid: npt.NDArray[np.float64],
+    components: Sequence[npt.NDArray[np.complex128]],
+    coeffs_at_t: Callable[[float], npt.NDArray[np.float64]],
+    track_times: npt.NDArray[np.float64],
+    tracked_bases: npt.NDArray[np.complex128],
+    *,
+    store_norm: bool = True,
+    store_snapshots: bool = False,
+) -> PropagationResult:
+    """Midpoint propagation in an adiabatically tracked truncated subspace.
+
+    `tracked_bases[j]` is the full-basis `(N, K)` truncation matrix at
+    `track_times[j]`. Each timestep uses the nearest tracked basis to the
+    midpoint time. When the selected basis changes, the coefficient vector is
+    projected from the old tracked basis to the new one before propagation.
+
+    This is the V3b benchmark path. It keeps the Hamiltonian component
+    decomposition used by V3a, but reprojects the components whenever the
+    tracked basis changes.
+    """
+    if t_grid.shape[0] < 2:
+        raise ValueError("t_grid must have at least 2 points")
+    if track_times.ndim != 1 or track_times.size == 0:
+        raise ValueError("track_times must be a non-empty 1-D array")
+    if tracked_bases.ndim != 3:
+        raise ValueError(
+            f"tracked_bases must have shape (n_basis, N, K); got {tracked_bases.shape}"
+        )
+    if tracked_bases.shape[0] != track_times.size:
+        raise ValueError("tracked_bases and track_times disagree on n_basis")
+    if tracked_bases.shape[1] != Psi0.shape[0]:
+        raise ValueError(
+            f"tracked basis N={tracked_bases.shape[1]} does not match Psi0 N={Psi0.shape[0]}"
+        )
+
+    T_current = np.asarray(tracked_bases[0], dtype=np.complex128)
+    c = (T_current.conj().T @ np.asarray(Psi0, dtype=np.complex128)).copy()
+    if c.ndim == 1:
+        c = c.reshape(-1, 1)
+
+    n_times = t_grid.shape[0]
+    K_in = c.shape[1]
+    K_dim = T_current.shape[1]
+
+    norm_trace: Optional[npt.NDArray[np.float64]] = None
+    snapshots: Optional[npt.NDArray[np.complex128]] = None
+    if store_norm:
+        norm_trace = np.empty((n_times, K_in), dtype=np.float64)
+        norm_trace[0, :] = np.sum(np.abs(c) ** 2, axis=0)
+    if store_snapshots:
+        snapshots = np.empty((n_times, T_current.shape[0], K_in), dtype=np.complex128)
+        snapshots[0] = T_current @ c
+
+    def project_components(T: npt.NDArray[np.complex128]) -> list[np.ndarray]:
+        Tdag = T.conj().T
+        return [Tdag @ comp @ T for comp in components]
+
+    proj_components = project_components(T_current)
+    current_idx = 0
+
+    mids = 0.5 * (t_grid[:-1] + t_grid[1:])
+    basis_indices = _nearest_basis_indices(mids, track_times)
+    H_proj = np.empty((K_dim, K_dim), dtype=np.complex128)
+
+    for k in range(n_times - 1):
+        basis_idx = int(basis_indices[k])
+        if basis_idx != current_idx:
+            T_next = np.asarray(tracked_bases[basis_idx], dtype=np.complex128)
+            Tdag_next = T_next.conj().T
+            c = (Tdag_next @ T_current) @ c
+            T_current = T_next
+            proj_components = project_components(T_current)
+            current_idx = basis_idx
+
+        t_mid = float(mids[k])
+        dt = float(t_grid[k + 1] - t_grid[k])
+        coeffs = coeffs_at_t(t_mid)
+        H_proj.fill(0.0)
+        for alpha, w in enumerate(coeffs):
+            if w != 0.0:
+                H_proj += w * proj_components[alpha]
+        D, V = _diagonalize(H_proj)
+        tmp = V.conj().T @ c
+        tmp *= np.exp(-1j * D * dt)[:, None]
+        c = V @ tmp
+
+        if norm_trace is not None:
+            norm_trace[k + 1, :] = np.sum(np.abs(c) ** 2, axis=0)
+        if snapshots is not None:
+            snapshots[k + 1] = T_current @ c
+
+    Psi_final = T_current @ c
     return PropagationResult(
         Psi_final=Psi_final,
         norm_trace=norm_trace,
