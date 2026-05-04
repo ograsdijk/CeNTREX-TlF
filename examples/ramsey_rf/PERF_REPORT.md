@@ -1,169 +1,320 @@
-# RF Ramsey simulator — Phase A perf report
+# RF Ramsey simulator - Phase A + V3b/V4/V5/V7 perf report
 
-**Goal**: bring a 41-point ω_rf scan at Jmax=6 from the projected ~7.3 hours
-sequential baseline down to a useful interactive time so parameter scans
-become feasible.
+**Goal**: benchmark the Jmax=6 RF Ramsey scan on this PC with a smaller
+segmented-grid fine timestep, `dt_fine = 0.05 us` (50 ns), and update the
+recommended fast path.
 
-**Result**: with the recommended stack (V3a K=48 + V2 8-worker parallel),
-the same scan runs in **3.04 min** — a ~145× speedup at fidelity 0.998 vs
-the cached Jmax=6 truth reference. K=24 trades fidelity 0.916 for an even
-faster **1.60 min** scan if you only need the gross fringe shape.
+**Result**: V3b fixes the V3a static-projection fidelity problem. A follow-up
+`basis_dt` convergence sweep improves the recommended scan setting to
+**V3b K=24, basis_dt=10 us, 8 workers**: the 41-point omega_rf scan runs in
+**4.49 min**, with single-trajectory fidelity **0.999864** and five-point
+full-basis anchor max survival error **1.90e-05**.
 
 ## Reference configuration
 
 | Parameter | Value |
 |---|---|
 | Jmax | 6 (basis size 196) |
-| dt_fine (segmented grid) | 0.5 µs |
-| n_steps (per trajectory) | 13 837 |
-| Trajectory | z = -2 → +2 m at v_z = 184 m/s |
-| DC E-field | symmetric plateau 2 → 30 → 2 kV/cm, ramps at z = ±1.5 m |
-| RF coils | magnetic, in x, at z = ±1.25 m, B = 0.113 G (calibrated π/2) |
-| RF carrier | 119.64 kHz (Tl spin-flip resonance), φ₁ = 0, φ₂ = +π/2 |
-| Initial state | adiabatic ancestor of \|J=1, mJ=-1, m1=-1/2, m2=-1/2⟩ at 30 kV/cm |
-| Cached reference elapsed | **10.68 min / trajectory** |
+| dt_fine (segmented grid) | 0.05 us |
+| n_steps (per trajectory) | 138,335 |
+| Trajectory | z = -2 -> +2 m at v_z = 184 m/s |
+| DC E-field | symmetric plateau 2 -> 30 -> 2 kV/cm, ramps at z = +/-1.5 m |
+| RF coils | magnetic, in x, at z = +/-1.25 m, B = 0.113 G (calibrated pi/2) |
+| RF carrier | 119.64 kHz (Tl spin-flip resonance), phi1 = 0, phi2 = +pi/2 |
+| Initial state | adiabatic ancestor of \|J=1, mJ=-1, m1=-1/2, m2=-1/2> at 30 kV/cm |
+| Cached reference elapsed | **44.47 min / trajectory** |
+| Reference survival | 0.027722 |
 
-The reference Psi_final lives in [`benchmarks/_cache/reference_jmax6_dt500ns.npz`](benchmarks/_cache/reference_jmax6_dt500ns.npz).
+The reference `Psi_final` lives in
+[`benchmarks/_cache/reference_jmax6_dt50ns.npz`](benchmarks/_cache/reference_jmax6_dt50ns.npz).
 
 ## Variants benchmarked
 
 Each variant runs the same trajectory; the parallel variants additionally run
-a 41-point ω_rf scan over ±2 fringe spacings (±147 Hz) around the resonance.
+a 41-point omega_rf scan over +/-2 fringe spacings (+/-147 Hz) around the
+resonance.
 
-| Variant | Trajectory | Speedup vs V1 | Fidelity | ‖ψ‖² | max\|Δ\|ψ\|²\| | 41-pt scan | Scan speedup |
-|---|---|---|---|---|---|---|---|
-| **v1** baseline (full N=196) | 10.68 min | 1.00× | 1.000000 | 1.0000 | 0.0e+00 | ~7.3 h (est.) | 1.00× |
-| v3a_K16 (truncated, K=16) | 3.2 s | **200×** | 0.395 | 0.661 | 5.8e-01 | — | — |
-| v3a_K24 (truncated, K=24) | 9.7 s | **66×** | 0.916 | 0.963 | 1.1e-01 | — | — |
-| v3a_K32 (truncated, K=32) | 16.5 s | **39×** | 0.729 | 0.963 | 1.2e-01 | — | — |
-| v3a_K48 (truncated, K=48) | 19.7 s | **33×** | 0.998 | 0.999 | 5.5e-03 | — | — |
-| **v3a_K24_par8** (rec. fast) | 9.3 s | **69×** | 0.916 | 0.963 | 1.1e-01 | **1.60 min** | **~270×** |
-| **v3a_K48_par8** (rec. accurate) | 19.0 s | **34×** | 0.998 | 0.999 | 5.5e-03 | **3.04 min** | **~144×** |
+| Variant | Trajectory | Speedup vs V1 | Fidelity | norm^2 | max population error | 41-pt scan | Scan speedup |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **v1** baseline (full N=196) | 44.47 min | 1.00x | 1.000000 | 1.0000 | 0.00e+00 | ~30.4 h (est.) | 1.00x |
+| v3a_K16 (truncated, K=16) | 10.5 s | **254.79x** | 0.401140 | 0.6607 | 5.78e-01 | - | - |
+| v3a_K24 (truncated, K=24) | 31.9 s | **83.66x** | 0.916004 | 0.9631 | 1.06e-01 | - | - |
+| v3a_K32 (truncated, K=32) | 60.2 s | **44.30x** | 0.735672 | 0.9631 | 1.18e-01 | - | - |
+| v3a_K48 (truncated, K=48) | 80.8 s | **33.03x** | 0.997835 | 0.9992 | 5.73e-03 | - | - |
+| **v3a_K24_par8** (rec. fast) | 31.5 s | **84.7x** | 0.916004 | 0.9631 | 1.06e-01 | **3.89 min** | **~469x** |
+| **v3a_K48_par8** (rec. accurate) | 79.1 s | **33.7x** | 0.997835 | 0.9992 | 5.73e-03 | **9.10 min** | **~200x** |
+| v3b_K24 (tracked, K=24) | 43.6 s | **61.2x** | 0.999505 | 0.9998 | 2.17e-03 | - | - |
+| v3b_K32 (tracked, K=32) | 72.6 s | **36.7x** | 0.996949 | 0.9999 | 1.44e-03 | - | - |
+| v3b_K48 (tracked, K=48) | 90.6 s | **29.4x** | 0.980180 | 1.0000 | 1.31e-03 | - | - |
+| **v3b_K24_par8** (rec. accurate) | 43.9 s | **60.8x** | 0.999505 | 0.9998 | 2.17e-03 | **4.17 min** | **~437x** |
+| **v3b_K24_basis10_par8** (rec. converged scan) | 1.36 min | **32.7x** | 0.999864 | 1.0000 | 6.40e-04 | **4.49 min** | **~406x** |
+| v3b_K48_basis1 (high-accuracy single trajectory) | 8.74 min | **5.09x** | 0.999999 | 1.0000 | 1.54e-05 | 16.84 min | **~108x** |
+| v4_krylov (full basis) | timed out >60 min | slower than V1 | - | - | - | not run | - |
+| v5_numba (full basis) | 40.20 min | **1.11x** | 1.000000 | 1.0000 | 4.55e-12 | not run | - |
+| v7_cupy (full basis GPU) | 14.24 min | **3.13x** | 1.000000 | 1.0000 | 4.94e-07 | not run; ~9.7 h projected | - |
 
 Notes:
-- **Fidelity** = \|⟨ref\|test⟩\|² (phase-insensitive). 1.0 = perfect.
-- **‖ψ‖²** = norm of the test final state. < 1 means amplitude leaked
-  outside the truncated K-dim subspace.
-- **max \|Δ\|ψ\|²\|** = largest single-component bare-basis population error.
-- The "Scan speedup" compares against the ~7.3 h estimated sequential
-  baseline (= 41 × 10.68 min); we did not actually run V1's full scan.
+- **Fidelity** = squared phase-insensitive overlap with the truth `Psi_final`.
+  1.0 means a perfect match up to global phase.
+- **norm^2** is the norm of the test final state. Values below 1 indicate
+  amplitude leaked outside the truncated K-dimensional subspace.
+- **max population error** is the largest single-component bare-basis
+  population error.
+- The "Scan speedup" compares against the estimated sequential full-basis
+  baseline: `41 * 44.47 min = 30.4 h`. I did not run V1's full 41-point scan.
 
 ## Variant details
 
-### V1 — Baseline (full propagator, segmented grid, sequential)
-The current production code: `propagate_midpoint` on the full N=196 basis,
-segmented adaptive `t_grid` with single-shot exact unitaries across the
-constant-H stretches. ~40 ms per `eigh(196)` × 13 837 steps. This is the
-truth reference; everything else is measured against it.
+### V1 - Baseline (full propagator, segmented grid, sequential)
 
-### V2 — Process-parallel scan (cloudpickle + spawn)
-Wraps `scan.run_scan(..., n_workers=N)` to spawn N worker processes via
-`multiprocessing.spawn` (Windows-friendly), serializing the `RamseyRFConfig`
-(including all closures inside `FieldStack`) once via cloudpickle. Each
-worker pins BLAS to 1 thread (5 env vars set in the pool initializer) so
-8 workers actually use 8 cores instead of fighting over OpenBLAS threads.
+The current production code uses `propagate_midpoint` on the full N=196 basis,
+with a segmented adaptive `t_grid` and single-shot exact unitaries across the
+constant-H stretches. With `dt_fine = 0.05 us`, the segmented grid has 138,335
+steps and the full reference trajectory took 44.47 min on this PC.
 
-Adds zero accuracy impact (per-point physics unchanged) and gives ~4×
-wall-clock speedup on 8 cores for our ~19 s/trajectory workload — sub-linear
-because process spawn + cfg deserialization eats ~2 s constant overhead per
-worker (irrelevant for longer runs).
+### V2 - Process-parallel scan (cloudpickle + spawn)
 
-### V3a — Static truncated propagator
-Pre-projects the Hamiltonian onto a K-dim subspace built once at simulator
-init from `H_high` (the 30 kV/cm plateau), picking the K eigenvectors with
-largest summed overlap to the bare J=1 sublevels. The propagator
+`scan.run_scan(..., n_workers=N)` spawns worker processes via
+`multiprocessing.spawn`, serializing the `RamseyRFConfig` once with
+cloudpickle. Each worker pins BLAS to 1 thread so multiple workers can use
+separate cores. V2 has no single-trajectory speedup, but it is what makes the
+41-point scan practical when combined with the truncated propagator.
+
+### V3a - Static truncated propagator
+
+V3a pre-projects the Hamiltonian onto a K-dimensional subspace built once from
+`H_high` on the 30 kV/cm plateau, selecting eigenvectors with largest summed
+overlap to the bare J=1 sublevels. The decomposed truncated propagator
 [`propagator_truncated.propagate_midpoint_truncated_decomposed`](ramsey_rf/propagator_truncated.py)
-exploits the linear structure of `H(t) = 2π·(Hff + Σ E_α·HS_α + Σ B_α·HZ_α)`:
-each of the 7 sub-matrices is pre-projected once (`T†·H_α·T`, K×K), and
-each timestep just rebuilds `H_proj(t)` as a weighted sum (O(K²·7)) before
-the `eigh(K)` and the K-dim midpoint exponential.
-
-Per-step cost drops from O(N³) ≈ 7.5M flops to O(K²·7 + K³) ≈ 7K + 32K =
-40K flops at K=32 — the **theoretical** speedup is ~190× per step;
-realised speedup is 30–200× (Python overhead + the trajectory/field
-evaluations now dominate at small K).
+pre-projects the 7 Hamiltonian components once, then each timestep rebuilds
+the KxK Hamiltonian as a weighted sum before `eigh(K)`.
 
 #### Convergence vs K
 
-K is the dimension of the truncated subspace. The dressed J=1 manifold spans
-16 states by definition; at the 30 kV/cm plateau each is heavily Stark-mixed
-(56% bare J=1, 14% J=0, 27% J=2, 3% J=3) — so the relevant subspace must
-include the strongly-mixed J=0/2/3 dressed sublevels too.
+| K | Norm preserved | Fidelity |
+|---:|---:|---:|
+| 16 | 66.1% | 0.401 |
+| 24 | 96.3% | 0.916 |
+| 32 | 96.3% | 0.736 |
+| 48 | 99.9% | 0.998 |
 
-| K | Subspace coverage | Norm preserved | Fidelity |
-|---|---|---|---|
-| 16 | bare-J=1-dominant only | 66.1% | 0.395 |
-| 24 | + ~half of J=0/2 admixture | 96.3% | 0.916 |
-| 32 | + remaining J=0/2 + some J=3 | 96.3% | 0.729 ⚠ |
-| 48 | + most of J=3, some J=4 | 99.9% | 0.998 |
+The K=32 fidelity dip remains present at 50 ns. K=48 is still the accurate
+static truncation choice; K=24 is useful only for fast survey scans.
 
-The K=32 fidelity dip (0.73 vs 0.92 at K=24, even though norm is the same)
-is a real artifact of the static-projection scheme: the 8 extra eigenvectors
-added between K=24 and K=32 have eigenvalues whose accumulated relative
-phases over the 22 ms trajectory mix the in-subspace amplitudes in a way
-that destructively interferes with the relevant components. K=48 adds enough
-degrees of freedom to "wash out" this resonance and recover high fidelity.
-**Don't use K=32 for production**; pick K=24 (cheap, amplitude-OK) or K=48
-(clean, very accurate).
+### V3b - Adiabatic-tracked truncated propagator
 
-This non-monotonicity is the main weakness of static truncation. Phase B's
-V3b (adiabatic-tracked truncation) is expected to fix it cleanly, since the
-basis would follow the physical eigenstate ordering.
+V3b tracks the relevant K-dimensional dressed subspace along the trajectory.
+The implementation uses the high-field J=1-overlap subspace as the physical
+seed, tracks it down to the low-field entrance, then follows the DC-field
+dressed basis on a coarse `basis_dt = 50 us` grid. During propagation, the
+coefficient vector is transferred between neighboring tracked bases and the
+decomposed Hamiltonian components are reprojected only when the active tracked
+basis changes.
 
-### V2 + V3a stacks (recommended production options)
+This removes the V3a K=32 pathology and makes a smaller subspace viable:
 
-Combining V3a with V2 multiplies the wins:
+| K | Norm preserved | Fidelity | max population error |
+|---:|---:|---:|---:|
+| 24 | 99.98% | 0.999505 | 2.17e-03 |
+| 32 | 99.99% | 0.996949 | 1.44e-03 |
+| 48 | 100.00% | 0.980180 | 1.31e-03 |
 
-- **v3a_K48_par8 (high fidelity)**: 41-pt scan in 3.04 min, fidelity 0.998 —
-  recommended for any production run where you care about fringe shape and
-  absolute amplitude.
-- **v3a_K24_par8 (fast survey)**: 41-pt scan in 1.60 min, fidelity 0.916 —
-  recommended for a quick fringe-position scan or coarse parameter sweeps
-  where you'll re-run with K=48 at the interesting points.
+The initial K=48 tracked result had low population error but worse full-state
+fidelity, consistent with phase error from the coarse moving-basis
+approximation. The `basis_dt` convergence sweep confirms that this is mostly
+a basis-tracking resolution issue:
+
+| K | basis_dt | Trajectory | Fidelity | max population error | survival error |
+|---:|---:|---:|---:|---:|---:|
+| 24 | 50 us | 0.75 min | 0.999505 | 2.17e-03 | 1.02e-05 |
+| 24 | 10 us | 1.36 min | 0.999864 | 6.40e-04 | 3.23e-07 |
+| 32 | 1 us | 8.35 min | 0.999788 | 1.39e-04 | 1.34e-04 |
+| 48 | 10 us | 2.09 min | 0.999962 | 1.23e-04 | 5.58e-05 |
+| 48 | 1 us | 8.74 min | 0.999999 | 1.54e-05 | 5.45e-08 |
+
+Five exact V7/CuPy full-basis anchors were also built at
+`F_RES + [-2, -1, 0, +1, +2] * 73.6 Hz`. Scan confirmation against those
+anchors gave:
+
+| Setting | 41-pt scan | Max anchor survival error | RMS anchor survival error |
+|---|---:|---:|---:|
+| K=24, basis_dt=10 us | 4.49 min | 1.90e-05 | 1.27e-05 |
+| K=24, basis_dt=50 us | 3.51 min | 1.79e-04 | 8.89e-05 |
+| K=32, basis_dt=1 us | 14.84 min | 5.80e-04 | 3.17e-04 |
+| K=48, basis_dt=1 us | 16.84 min | 2.97e-06 | 1.51e-06 |
+
+For production scans, K=24 with `basis_dt=10 us` is the best current
+speed/accuracy point. K=48 with `basis_dt=1 us` is the best reduced-basis
+agreement with the full trajectory, but its 41-point scan misses the 15 min
+scan-practicality target.
+
+### V4 - Sparse Krylov hybrid
+
+V4 is implemented as
+[`propagator_krylov.propagate_midpoint_krylov_hybrid`](ramsey_rf/propagator_krylov.py):
+short active steps use sparse `scipy.sparse.linalg.expm_multiply`, while long
+inactive steps stay on the exact dense `eigh` path. This is the intended
+hybrid from the original plan, but it is not viable for this Hamiltonian at
+50 ns timesteps.
+
+The full `v4_krylov` trajectory did not finish within a 60 min timeout. A
+prefix benchmark on this PC gave:
+
+| Prefix steps | Elapsed | Per step | Krylov steps | Dense eigensolves |
+|---:|---:|---:|---:|---:|
+| 10 | 26.7 s | 2.67 s | 9 | 1 |
+| 50 | 145.7 s | 2.91 s | 49 | 1 |
+| 100 | 294.9 s | 2.95 s | 99 | 1 |
+
+At ~2.95 s per fine Krylov step, the 138,335-step trajectory projects to
+well over 100 hours. The likely cause is the large spectral width of the
+full molecular Hamiltonian: even at 50 ns, `expm_multiply` must resolve fast
+field-free phases. V4 should not be used as a full-basis replacement here
+without moving to an interaction-picture formulation or combining it with a
+reduced basis.
+
+### V5 - Numba rotate/apply kernel
+
+V5 is implemented as
+[`propagator_numba.propagate_midpoint_numba`](ramsey_rf/propagator_numba.py).
+It keeps the same dense full-basis SciPy `eigh` as V1, but replaces the
+per-step eigenbasis rotation
+`V.conj().T @ Psi -> phase multiply -> V @ tmp` with a Numba-compiled loop.
+Numba is optional; the benchmark was run with `uv run --with numba`.
+
+The result is accurate but only modestly faster:
+
+| Variant | Trajectory | Speedup vs V1 | Fidelity | max population error |
+|---|---:|---:|---:|---:|
+| v1 baseline | 44.47 min | 1.00x | 1.000000 | 0.00e+00 |
+| v5_numba | 40.20 min | 1.11x | 1.000000 | 4.55e-12 |
+
+This confirms the original expectation: at N=196 and 138,335 steps, dense
+eigensolve time dominates. V5 is a small full-basis improvement, but it does
+not change the production recommendation relative to V3b.
+
+### V7 - CuPy GPU dense eigensolve
+
+V7 is implemented as
+[`propagator_cupy.propagate_midpoint_cupy`](ramsey_rf/propagator_cupy.py).
+It keeps the same full-basis midpoint algorithm as V1: assemble dense `H(t)`,
+diagonalize with `cupy.linalg.eigh`, rotate/apply on the GPU, and copy
+`Psi_final` back to NumPy only at the end. CuPy is optional and is not added
+to the project dependencies or `uv.lock`.
+
+The CUDA workstation test used:
+
+| Item | Value |
+|---|---|
+| GPU | NVIDIA GeForce RTX 5070 Ti |
+| Driver CUDA | 13.1 (`nvidia-smi`), CuPy reports driver 13010 |
+| CuPy package | `cupy-cuda13x[ctk]` via `uv run --with` |
+| CuPy version | 14.0.1 |
+| CUDA runtime | 13000 linked to CuPy, 13010 locally installed |
+| Device compute capability | 12.0 |
+
+The first CuPy smoke test with bare `cupy-cuda13x` failed because the
+optional CUDA component DLLs (`nvrtc`/`nvJitLink`) were not present. Running
+with `cupy-cuda13x[ctk]` fixed that, but on Windows with `uv --with` the
+NVIDIA component wheels live in a transient overlay path. The V7 module adds
+those `nvidia/cu13/bin/x86_64` DLL directories before importing CuPy so
+`cupy.show_config()` and a 32x32 Hermitian `cupy.linalg.eigh` smoke test pass.
+
+Measured result:
+
+| Variant | Trajectory | Speedup vs V1 | Speedup vs V5 | Fidelity | norm^2 | max population error |
+|---|---:|---:|---:|---:|---:|---:|
+| v7_cupy | 14.24 min | 3.13x | 2.82x | 1.000000 | 1.000000 | 4.94e-07 |
+
+The 41-point sequential GPU scan was not run. The plan allowed the scan if
+single-trajectory V7 beat V5 by at least 2x, which it did, but one full-basis
+V7 trajectory already takes 14.24 min, while the complete V3b K=24 41-point
+CPU scan takes 4.17 min. A literal sequential V7 scan would therefore project
+to `41 * 14.24 min = 9.7 h`, so it is dominated for scan work.
 
 ## Recommendation
 
-For the 41-point ω_rf scan that motivated this investigation:
+For the 41-point omega_rf scan at `dt_fine = 0.05 us`:
 
-> Use **`v3a_K48_par8`**: fidelity 0.998, **3.04 min** instead of the
-> projected 7.3 h. ~145× speedup with negligible loss of physical accuracy.
+> Use **V3b K=24, `basis_dt=10 us`, `n_workers=8`**: fidelity 0.999864,
+> max population error 6.40e-04, five-anchor max survival error 1.90e-05,
+> and **4.49 min** instead of the estimated 30.4 h full-basis sequential scan.
 
-For coarser exploratory scans, K=24 buys another 2× wall-clock at fidelity
-0.92 (good enough to read fringe positions and amplitudes).
+The old static fallback, **`v3a_K48_par8`**, remains usable but is now slower
+and less accurate for the tested trajectory: 9.10 min at fidelity 0.997835.
 
-## What's NOT in Phase A (deferred to Phase B/C/D)
+The previous V3b default, **K=24, `basis_dt=50 us`**, remains a good fast
+fallback at 3.51-4.17 min per scan, but the 10 us setting is the better
+production recommendation because it improves both state fidelity and
+full-basis scan-anchor agreement at only a small scan-time cost.
+
+For full-basis truth/reference runs on the CUDA workstation, **`v7_cupy`** is
+now the fastest exact path tested: 14.24 min vs 40.20 min for V5 and 44.47 min
+for V1. It should not replace V3b for scans unless a future batched GPU scan
+shares Hamiltonian work across frequencies.
+
+## What's not in Phase A
 
 | ID | Variant | Status | Expected gain |
 |---|---|---|---|
-| V3b | Adiabatic-tracked truncation | not yet | Should fix the K=32 dip; better fidelity at small K |
-| V4 | Sparse + Krylov `expm_multiply` | not yet | 2–5× for active segments only |
-| V5 | Numba JIT inner loop | not yet | 5–15% (eigh dominates) |
-| V6 | complex64 reduction | not yet | 1.5–2× per eigh, ~10⁻³ accuracy cost |
-| V7 | GPU `cupy.linalg.eigh` (batched) | requires GPU machine | 5–50× if batched across scan points |
+| V6 | complex64 reduction | not yet | 1.5-2x per eigh, with accuracy cost to quantify |
+| V7b | Batched GPU scan | not yet | Only worth revisiting if the scan can run points concurrently or reuse Hamiltonian assembly |
 
-Given the Phase A result (3 min for the headline scan), Phase B/C/D are
-mostly optional. The cleanest next investments would be **V3b** (to fix
-the K=32 dip and let us safely use smaller K with confidence) and **V7**
-(if even larger Jmax or much longer scans become needed — GPU batched
-eigh would be a big win for 100+ point sweeps).
+Given the 4.49 min V3b K=24, `basis_dt=10 us` scan at 50 ns, the cleanest
+next investment is promoting the tracked propagator behind a simulator config
+flag with an explicit `basis_dt` control.
 
 ## Reproducing these numbers
 
-```bash
-# 1. Build / reuse the cached reference (10.68 min one-shot, then cached)
-.venv/Scripts/python.exe examples/ramsey_rf/benchmarks/reference.py
+PowerShell on this PC needed UTF-8 console output for the benchmark script's
+Unicode prints:
 
-# 2. Run V1 + V3a single-trajectory variants (~1 min total, V1 cached)
-.venv/Scripts/python.exe -u examples/ramsey_rf/benchmarks/perf_bench.py \
-    --variants v1 v3a_K16 v3a_K24 v3a_K32 v3a_K48
+```powershell
+$env:PYTHONIOENCODING='utf-8'
 
-# 3. Run the parallel-scan headline numbers (~5 min total)
-.venv/Scripts/python.exe -u examples/ramsey_rf/benchmarks/perf_bench.py \
-    --variants v3a_K48_par8 --scan --n-workers 8
-.venv/Scripts/python.exe -u examples/ramsey_rf/benchmarks/perf_bench.py \
-    --variants v3a_K24_par8 --scan --n-workers 8
+# 1. Build the 50 ns cached reference (44.47 min on this run)
+uv run python examples\ramsey_rf\benchmarks\reference.py --force
+
+# 2. Run V1 + V3a single-trajectory variants
+uv run python examples\ramsey_rf\benchmarks\perf_bench.py `
+    --variants v1 v2 v3a_K16 v3a_K24 v3a_K32 v3a_K48 `
+    --report examples\ramsey_rf\benchmarks\_cache\perf_50ns_single.md
+
+# 3. Run the parallel-scan headline numbers
+uv run python examples\ramsey_rf\benchmarks\perf_bench.py `
+    --variants v3b_K24_par8 --scan --n-workers 8 `
+    --report examples\ramsey_rf\benchmarks\_cache\perf_50ns_v3b_k24_scan.md
+uv run python examples\ramsey_rf\benchmarks\perf_bench.py `
+    --variants v3a_K48_par8 --scan --n-workers 8 `
+    --report examples\ramsey_rf\benchmarks\_cache\perf_50ns_k48_scan.md
+uv run python examples\ramsey_rf\benchmarks\perf_bench.py `
+    --variants v3a_K24_par8 --scan --n-workers 8 `
+    --report examples\ramsey_rf\benchmarks\_cache\perf_50ns_k24_scan.md
+
+# 4. Run V5 with optional Numba
+uv run --with numba python examples\ramsey_rf\benchmarks\perf_bench.py `
+    --variants v5_numba `
+    --report examples\ramsey_rf\benchmarks\_cache\perf_50ns_v5_numba.md
+
+# 5. Run V7 with optional CuPy on the CUDA workstation
+uv run --with 'cupy-cuda13x[ctk]' python examples\ramsey_rf\benchmarks\perf_bench.py `
+    --variants v7_cupy `
+    --report examples\ramsey_rf\benchmarks\_cache\perf_50ns_v7_cupy.md
+
+# 6. Run V3b basis_dt convergence and scan-anchor confirmation
+uv run python examples\ramsey_rf\benchmarks\v3b_basis_dt_sweep.py `
+    --k 24 32 48 `
+    --basis-dt-us 100 50 25 10 5 2.5 1 `
+    --report examples\ramsey_rf\benchmarks\_cache\v3b_basis_dt_convergence.md `
+    --csv examples\ramsey_rf\benchmarks\_cache\v3b_basis_dt_convergence.csv
+uv run --with 'cupy-cuda13x[ctk]' python examples\ramsey_rf\benchmarks\v3b_basis_dt_sweep.py `
+    --build-v7-anchors `
+    --anchor-cache examples\ramsey_rf\benchmarks\_cache\v7_scan_anchors_50ns.npz
+uv run python examples\ramsey_rf\benchmarks\v3b_basis_dt_sweep.py `
+    --scan-selected --n-workers 8 `
+    --csv examples\ramsey_rf\benchmarks\_cache\v3b_basis_dt_convergence.csv `
+    --anchor-cache examples\ramsey_rf\benchmarks\_cache\v7_scan_anchors_50ns.npz
 ```
 
-Hardware: this PC, 8+ CPU cores, no CUDA. Times will scale with core count
-for the parallel variants (sub-linear by ~50% for 8-core due to spawn
-overhead) and with single-thread BLAS speed for V3a.
+CPU hardware: this PC, 8+ CPU cores. V7 hardware: CUDA workstation with RTX
+5070 Ti, driver CUDA 13.1.
