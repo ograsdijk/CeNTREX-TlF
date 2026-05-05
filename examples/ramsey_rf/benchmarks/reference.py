@@ -49,6 +49,7 @@ from ramsey_rf import (  # noqa: E402
     MagneticRFRegion,
     RamseyRFConfig,
     RamseyRFSimulator,
+    adiabatic_branch_to_field,
     adiabatic_dressed_initial_states,
     build_basis,
     build_H_func,
@@ -63,13 +64,49 @@ Z_RF1, Z_RF2 = -1.25, +1.25
 RF_WIDTH, RF_EDGE = 0.30, 0.05
 DC_HALF_WIDTH, DC_RAMP_LENGTH = 1.50, 0.05
 E_LOW, E_HIGH = 2e3, 30e3
-F_RES = 119.64e3
-OMEGA_RF = 2 * np.pi * F_RES
 RF_AMPLITUDE = 0.113   # Gauss
 PHI1 = 0.0
 PHI2 = +np.pi / 2
 V_Z = 184.0
 Z_START, Z_FINAL = -2.0, +2.0
+
+
+def _compute_F_RES(Jmax: int = JMAX, *, E_anchor: float = E_LOW,
+                    E_final: float = E_HIGH) -> float:
+    """Robust F_RES: the Tl-spin transition energy at E_final between the dressed
+    eigenstates that adiabatically connect to bare |J=1, mJ=-1, m1=∓1/2, m2=-1/2>
+    at low field.
+
+    This avoids the `find_closest_vector_idx(bare, V_high)` trap when the
+    polarized dressed state at E_HIGH is heavily Stark-mixed and bare-J=1
+    weight is spread across multiple eigenstates. Anchoring at the simulator's
+    E_LOW (where the dressed states are nearly pure bare) and walking up
+    converges to ~119.514 kHz across Jmax 4-7."""
+    from centrex_tlf.states import ElectronicState, UncoupledBasisState
+
+    QN = build_basis(Jmax=Jmax)
+    H_func = build_H_func(QN)
+    init_bare = UncoupledBasisState(
+        J=1, mJ=-1, I1=0.5, m1=-0.5, I2=0.5, m2=-0.5,
+        Omega=0, P=-1, electronic_state=ElectronicState.X,
+    )
+    partner_bare = UncoupledBasisState(
+        J=1, mJ=-1, I1=0.5, m1=+0.5, I2=0.5, m2=-0.5,
+        Omega=0, P=-1, electronic_state=ElectronicState.X,
+    )
+    _branches, idx, _ = adiabatic_branch_to_field(
+        H_func, [init_bare, partner_bare], QN,
+        E_anchor=(0.0, 0.0, E_anchor),
+        E_final=(0.0, 0.0, E_final),
+        n_steps=120,
+    )
+    H_final = H_func(np.array([0.0, 0.0, E_final]), np.zeros(3))
+    D, _V = np.linalg.eigh(H_final)
+    return float(abs(D[idx[1]] - D[idx[0]]) / (2 * np.pi))
+
+
+F_RES = _compute_F_RES()
+OMEGA_RF = 2 * np.pi * F_RES
 
 CACHE_DIR = HERE / "_cache"
 CACHE_FILE = CACHE_DIR / f"reference_jmax{JMAX}_dt{int(DT_FINE * 1e9)}ns.npz"

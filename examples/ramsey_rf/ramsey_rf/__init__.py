@@ -31,6 +31,7 @@ from .propagator_truncated import (
 from .scan import ScanResult, ScanSpec, run_scan
 from .simulator import RamseyRFConfig, RamseyRFResult, RamseyRFSimulator
 from .states import (
+    adiabatic_branch_to_field,
     adiabatic_dressed_initial_states,
     dressed_initial_states,
     j_manifold_indices,
@@ -49,6 +50,7 @@ __all__ = [
     "build_H_func",
     "dressed_initial_states",
     "adiabatic_dressed_initial_states",
+    "adiabatic_branch_to_field",
     "j_manifold_indices",
     "select_uncoupled",
     "targets_to_state_vectors",

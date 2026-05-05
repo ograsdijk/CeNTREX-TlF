@@ -245,6 +245,92 @@ def adiabatic_dressed_initial_states(
     return current_vectors, init_indices, overlap_probs
 
 
+def adiabatic_branch_to_field(
+    H_func: Callable[..., npt.NDArray[np.complex128]],
+    targets: TargetSpec,
+    QN: npt.NDArray,
+    *,
+    E_anchor: Sequence[float] | npt.NDArray[np.float64] = (0.0, 0.0, 0.0),
+    E_final: Sequence[float] | npt.NDArray[np.float64],
+    n_steps: int = 80,
+    B: Sequence[float] | npt.NDArray[np.float64] = (0.0, 0.0, 0.0),
+) -> tuple[npt.NDArray[np.complex128], list[int], list[float]]:
+    """Identify the dressed eigenstate at `E_final` that adiabatically connects
+    to a bare state at the (low-field) `E_anchor`.
+
+    Mirror of `adiabatic_dressed_initial_states` but walking ANCHOR → FINAL
+    instead of TARGET → INIT. Use this when the bare state matches reliably
+    at low/zero field but is heavily mixed at the final (high) field — the
+    common case for polarized molecules at strong DC Stark fields, where
+    `find_closest_vector_idx(bare_target, V_high)` is unreliable because the
+    bare-state weight is spread across multiple polarized eigenstates.
+
+    The function:
+      1. Picks the eigenvector at E_anchor with maximum overlap to the target
+         (reliable because the dressed states are nearly bare there).
+      2. Walks E linearly from E_anchor to E_final in `n_steps` interior
+         steps, picking the eigenvector with maximum overlap to the previous
+         step's eigenvector at each step (continuous-branch tracking with
+         phase-alignment).
+      3. The final eigenvector at E_final is the polarized branch.
+
+    Returns (branches of shape (N, K) at E_final, indices into the eigenvalue
+    ordering of H(E_final), overlap probabilities at E_anchor).
+    """
+    _states, target_vecs = targets_to_state_vectors(targets, QN)
+    K = target_vecs.shape[1]
+    E_anchor_arr = np.asarray(E_anchor, dtype=np.float64).reshape(3)
+    E_final_arr = np.asarray(E_final, dtype=np.float64).reshape(3)
+    B_arr = np.asarray(B, dtype=np.float64).reshape(3)
+
+    if n_steps < 1:
+        raise ValueError("n_steps must be >= 1")
+
+    # Step 1: pick eigenvectors at E_anchor (reliable max-overlap-to-bare).
+    H_anchor = H_func(E_anchor_arr, B_arr)
+    _D_anchor, V_anchor = _scipy_eigh(H_anchor, driver="evr")
+
+    used: set[int] = set()
+    current_vectors = np.empty((V_anchor.shape[0], K), dtype=np.complex128)
+    overlap_probs: list[float] = []
+    for k in range(K):
+        cand_mask = np.array([i not in used for i in range(V_anchor.shape[1])])
+        cand = V_anchor[:, cand_mask]
+        rel = find_closest_vector_idx(target_vecs[:, k], cand)
+        abs_idx = int(np.flatnonzero(cand_mask)[rel])
+        used.add(abs_idx)
+        current_vectors[:, k] = V_anchor[:, abs_idx]
+        overlap_probs.append(
+            float(np.abs(target_vecs[:, k].conj() @ V_anchor[:, abs_idx]) ** 2)
+        )
+
+    # Step 2: walk anchor → final, tracking each column independently.
+    fractions = np.linspace(0.0, 1.0, n_steps + 1)[1:]  # skip s=0 (already done)
+    for s in fractions:
+        E_step = E_anchor_arr + s * (E_final_arr - E_anchor_arr)
+        H_step = H_func(E_step, B_arr)
+        _D_step, V_step = _scipy_eigh(H_step, driver="evr")
+        new_vectors = np.empty_like(current_vectors)
+        for k in range(K):
+            idx = find_closest_vector_idx(current_vectors[:, k], V_step)
+            v = V_step[:, idx]
+            phase = np.vdot(current_vectors[:, k], v)
+            if abs(phase) > 0:
+                v = v * np.conj(phase) / abs(phase)
+            new_vectors[:, k] = v
+        current_vectors = new_vectors
+
+    # Diagnostic: which eigenvector index of H(E_final) does each branch correspond to?
+    H_final = H_func(E_final_arr, B_arr)
+    _D_final, V_final = _scipy_eigh(H_final, driver="evr")
+    final_indices: list[int] = []
+    for k in range(K):
+        idx = find_closest_vector_idx(current_vectors[:, k], V_final)
+        final_indices.append(int(idx))
+
+    return current_vectors, final_indices, overlap_probs
+
+
 def j_manifold_indices(QN: npt.NDArray) -> dict[int, npt.NDArray[np.int_]]:
     """Return {J: indices in QN with that J value} for all J present."""
     out: dict[int, list[int]] = {}
