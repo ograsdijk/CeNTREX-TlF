@@ -235,6 +235,13 @@ def run_scan(
                 "n_workers > 1 requires cloudpickle for cross-process serialization "
                 "(`pip install cloudpickle`). Use n_workers=1 for sequential mode."
             ) from e
+        # Cap BLAS threads in the parent env so spawn children inherit it at
+        # startup (before numpy is imported). The same cap in `_worker_init` is
+        # too late on the worker side; setting it here is the only place that
+        # actually prevents oversubscription (n_workers * n_blas_threads >> ncores).
+        for _key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                     "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+            os.environ.setdefault(_key, "1")
         cfg_blob = cloudpickle.dumps(cfg)
         ctx = mp.get_context("spawn")
         with ctx.Pool(processes=n_workers,
