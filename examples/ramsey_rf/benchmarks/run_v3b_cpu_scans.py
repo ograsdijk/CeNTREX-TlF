@@ -183,6 +183,55 @@ def _worker_run(omega: float) -> float:
     return float(abs(np.vdot(_PSI0[:, 0], out.Psi_final[:, 0])) ** 2)
 
 
+def _worker_run_phi2(phi2: float) -> float:
+    """Variant of `_worker_run` that varies the second RF region's phase
+    while leaving omega and phi1 at the values baked into the cfg blob.
+
+    Module-level so spawn workers can find it via re-import.
+    """
+    cfg_i = copy.deepcopy(_CFG)
+    n_e = len(cfg_i.fields.rf_regions)
+    n_b = len(cfg_i.fields.rf_regions_B)
+    if n_e + n_b < 2:
+        raise RuntimeError("phi2 scan requires at least 2 RF regions")
+    if n_e >= 2:
+        cfg_i.fields.rf_regions[1].phi = float(phi2)
+    elif n_e == 1:
+        cfg_i.fields.rf_regions_B[0].phi = float(phi2)
+    else:
+        cfg_i.fields.rf_regions_B[1].phi = float(phi2)
+    out = propagate_midpoint_tracked_decomposed(
+        _PSI0,
+        cfg_i.t_grid,
+        _COMPONENTS,
+        _coeffs_builder(cfg_i),
+        _TRACK_TIMES,
+        _TRACKED_BASES,
+        store_norm=False,
+    )
+    return float(abs(np.vdot(_PSI0[:, 0], out.Psi_final[:, 0])) ** 2)
+
+
+_BLAS_ENV_KEYS = (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+)
+
+
+def _force_single_thread_blas_in_children() -> None:
+    """Set BLAS thread caps in the PARENT environment so spawn child processes
+    inherit them at startup (before numpy is imported by the child). The same
+    keys are also set in `_worker_init`, but that's too late on the worker side
+    because numpy gets re-imported during spawn before the initializer runs;
+    setting them here in the parent is the only place that takes effect.
+    """
+    for key in _BLAS_ENV_KEYS:
+        os.environ.setdefault(key, "1")
+
+
 def run_frequency_scan(
     freqs: np.ndarray,
     *,
@@ -193,6 +242,7 @@ def run_frequency_scan(
 ) -> tuple[np.ndarray, float, int]:
     cfg, _Psi0, _QN, _H_func = build_reference_config()
     _set_velocity(cfg, velocity)
+    _force_single_thread_blas_in_children()
     ctx = mp.get_context("spawn")
     t0 = time.perf_counter()
     with ctx.Pool(
@@ -202,6 +252,46 @@ def run_frequency_scan(
     ) as pool:
         survival = np.array(
             list(pool.imap(_worker_run, [float(TWOPI * f) for f in freqs])),
+            dtype=np.float64,
+        )
+    elapsed_s = time.perf_counter() - t0
+    return survival, elapsed_s, int(cfg.t_grid.size - 1)
+
+
+def run_phi2_scan_at_frequency(
+    phi2_grid: np.ndarray,
+    *,
+    frequency: float,
+    velocity: float,
+    phi1: float = 0.0,
+    K: int,
+    basis_dt_us: float,
+    n_workers: int,
+) -> tuple[np.ndarray, float, int]:
+    """Parallel scan over the second-coil RF phase at fixed carrier frequency.
+
+    Bakes omega = 2π·frequency and phi1 into the cfg blob shipped to workers;
+    each worker varies only phi2 via `_worker_run_phi2`.
+    """
+    cfg, _Psi0, _QN, _H_func = build_reference_config()
+    _set_velocity(cfg, velocity)
+    omega = float(TWOPI * frequency)
+    _set_rf_omega(cfg, omega)
+    n_e = len(cfg.fields.rf_regions)
+    if n_e >= 1:
+        cfg.fields.rf_regions[0].phi = float(phi1)
+    elif cfg.fields.rf_regions_B:
+        cfg.fields.rf_regions_B[0].phi = float(phi1)
+    _force_single_thread_blas_in_children()
+    ctx = mp.get_context("spawn")
+    t0 = time.perf_counter()
+    with ctx.Pool(
+        processes=n_workers,
+        initializer=_worker_init,
+        initargs=(cloudpickle.dumps(cfg), K, basis_dt_us),
+    ) as pool:
+        survival = np.array(
+            list(pool.imap(_worker_run_phi2, [float(p) for p in phi2_grid])),
             dtype=np.float64,
         )
     elapsed_s = time.perf_counter() - t0
