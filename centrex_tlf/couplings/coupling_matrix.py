@@ -117,6 +117,30 @@ def _generate_coupling_matrix_python(
     return H
 
 
+def _generate_coupling_matrix_python_with_indices(
+    QN: Sequence[states.CoupledState],
+    ground_states: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
+    ground_indices: Sequence[int],
+    excited_indices: Sequence[int],
+    pol_vec: npt.NDArray[np.complex128],
+    reduced: bool = False,
+) -> npt.NDArray[np.complex128]:
+    H = np.zeros((len(QN), len(QN)), dtype=complex)
+    for i, ground_state in zip(ground_indices, ground_states):
+        for j, excited_state in zip(excited_indices, excited_states):
+            H[i, j] = hamiltonian.generate_ED_ME_mixed_state(
+                excited_state,
+                ground_state,
+                pol_vec=pol_vec,
+                reduced=reduced,
+                normalize_pol=False,
+            )
+            if H[i, j] != 0:
+                H[j, i] = np.conj(H[i, j])
+    return H
+
+
 def generate_coupling_matrix(
     QN: Sequence[states.CoupledState],
     ground_states: Sequence[states.CoupledState],
@@ -163,7 +187,15 @@ def generate_coupling_matrix(
     if normalize_pol:
         pol_vec = pol_vec / np.linalg.norm(pol_vec)
 
+    ground_indices: list[int] | None = None
+    excited_indices: list[int] | None = None
     if excited_states[0].largest.basis is states.Basis.CoupledP:
+        # Preserve the original state indices before transforming to Ω basis. Opposite
+        # parity partners can have the same largest Ω-basis component, so an index map
+        # built after the transform may collapse distinct retained levels.
+        QN_original = list(QN)
+        ground_indices = [QN_original.index(gs) for gs in ground_states]
+        excited_indices = [QN_original.index(es) for es in excited_states]
         QN = [
             qn.transform_to_omega_basis()
             if qn.largest.basis is states.Basis.CoupledP
@@ -173,11 +205,22 @@ def generate_coupling_matrix(
         excited_states = [qn.transform_to_omega_basis() for qn in excited_states]
 
     if HAS_RUST and _generate_coupling_matrix_rust is not None:
-        idx_map = {s.largest: i for i, s in enumerate(QN)}
-        ground_indices = [idx_map[gs.largest] for gs in ground_states]
-        excited_indices = [idx_map[es.largest] for es in excited_states]
+        if ground_indices is None or excited_indices is None:
+            idx_map = {s.largest: i for i, s in enumerate(QN)}
+            ground_indices = [idx_map[gs.largest] for gs in ground_states]
+            excited_indices = [idx_map[es.largest] for es in excited_states]
         return _generate_coupling_matrix_rust(
             QN,
+            ground_indices,
+            excited_indices,
+            pol_vec,
+            reduced,
+        )
+    elif ground_indices is not None and excited_indices is not None:
+        return _generate_coupling_matrix_python_with_indices(
+            QN,
+            ground_states,
+            excited_states,
             ground_indices,
             excited_indices,
             pol_vec,
