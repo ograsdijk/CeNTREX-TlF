@@ -1,12 +1,17 @@
 use num_complex::Complex64;
-use std::ffi::{c_char, c_void, CString};
+use std::ffi::c_void;
+#[cfg(windows)]
+use std::ffi::{c_char, CString};
+#[cfg(windows)]
 use std::iter;
+#[cfg(windows)]
 use std::sync::OnceLock;
 
 const CBLAS_ROW_MAJOR: i32 = 101;
 const CBLAS_UPPER: i32 = 121;
 const CBLAS_NO_TRANS: i32 = 111;
 
+#[cfg(windows)]
 type Hmodule = *mut c_void;
 type Zher2kFn = unsafe extern "C" fn(
     layout: i32,
@@ -24,6 +29,7 @@ type Zher2kFn = unsafe extern "C" fn(
     ldc: i64,
 );
 
+#[cfg(windows)]
 unsafe extern "system" {
     fn LoadLibraryW(lp_lib_file_name: *const u16) -> Hmodule;
     fn GetProcAddress(h_module: Hmodule, lp_proc_name: *const c_char) -> *mut c_void;
@@ -40,8 +46,10 @@ struct LoadedHer2k {
     function: Zher2kFn,
 }
 
+#[cfg(windows)]
 static ZHER2K: OnceLock<Result<LoadedHer2k, String>> = OnceLock::new();
 
+#[cfg(windows)]
 fn load_zher2k(config: &BlasConfig) -> Result<&'static LoadedHer2k, String> {
     let loaded = ZHER2K.get_or_init(|| unsafe {
         let wide_path: Vec<u16> = config
@@ -78,6 +86,11 @@ fn load_zher2k(config: &BlasConfig) -> Result<&'static LoadedHer2k, String> {
         ));
     }
     Ok(loaded)
+}
+
+#[cfg(not(windows))]
+fn load_zher2k(_config: &BlasConfig) -> Result<&'static LoadedHer2k, String> {
+    Err("structured BLAS execution mode is only supported on Windows".to_string())
 }
 
 pub fn commutator_her2k(

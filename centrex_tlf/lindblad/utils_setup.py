@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, List, Optional, Sequence, Union, cast
 
 import numpy as np
@@ -97,6 +97,30 @@ def _normalize_decay_channels(
         f"decay_channels is type {type(decay_channels)}; supply a list, tuple"
         " or np.ndarray"
     )
+
+
+def _retain_opposite_parity_transition_selectors(
+    transitions: Sequence[Union[OpticalTransition, MicrowaveTransition]],
+    transition_selectors: Sequence[couplings_tlf.TransitionSelector],
+) -> List[couplings_tlf.TransitionSelector]:
+    if len(transitions) != len(transition_selectors):
+        raise ValueError(
+            "transitions and transition_selectors must have the same length"
+        )
+
+    expanded: List[couplings_tlf.TransitionSelector] = []
+    for transition, selector in zip(transitions, transition_selectors):
+        if not isinstance(transition, OpticalTransition):
+            expanded.append(selector)
+            continue
+
+        parity = transition.P_excited
+        excited_selector = replace(transition.qn_select_excited, P=[parity, -parity])
+        excited_states = [
+            1 * state for state in states.generate_coupled_states_B(excited_selector)
+        ]
+        expanded.append(replace(selector, excited=excited_states))
+    return expanded
 
 
 def _generate_couplings(
@@ -437,6 +461,7 @@ def generate_OBE_system_transitions(
     H_func_B: Optional[Callable] = None,
     verbose: bool = False,
     normalize_pol: bool = False,
+    retain_opposite_parity_levels: bool = False,
     method: str = "expanded",
 ) -> OBESystem:
     """Convenience function for generating the symbolic OBE system of equations.
@@ -448,6 +473,10 @@ def generate_OBE_system_transitions(
                                         select based on the quantum numbers
         decay_channels (DecayChannel): dataclass specifying the decay channel to
                                         add
+        retain_opposite_parity_levels: For optical transitions, retain the
+                                        excited-state dressed levels connected to
+                                        the opposite bare parity partner in the
+                                        reduced OBE system. Defaults to False.
         verbose (bool, optional): Log progress to INFO. Defaults to False.
 
     Returns:
@@ -479,6 +508,7 @@ def generate_OBE_system_transitions(
         Xconstants=X_constants,
         Bconstants=B_constants,
         nuclear_spins=nuclear_spins,
+        retain_opposite_parity_levels=retain_opposite_parity_levels,
     )
 
     if H_reduced.QN_basis is None:
@@ -496,9 +526,16 @@ def generate_OBE_system_transitions(
     QN = H_reduced.QN
     H_int = H_reduced.H_int
     V_ref_int = H_reduced.V_ref_int
+    _transition_selectors = (
+        _retain_opposite_parity_transition_selectors(
+            transitions, transition_selectors
+        )
+        if retain_opposite_parity_levels
+        else transition_selectors
+    )
 
     return _build_obe_system(
-        transition_selectors=transition_selectors,
+        transition_selectors=_transition_selectors,
         QN_basis=H_reduced.QN_basis,
         ground_states=ground_states,
         excited_states=excited_states,
@@ -617,6 +654,7 @@ def setup_OBE_system_transitions(
     verbose: bool = False,
     normalize_pol: bool = False,
     Γ: float = hamiltonian.Γ,
+    retain_opposite_parity_levels: bool = False,
     method: str = "expanded",
 ) -> OBESystem:
     """Convenience function for generating the OBE system
@@ -635,6 +673,10 @@ def setup_OBE_system_transitions(
                                         Defaults to False.
         decay_channels (DecayChannel): dataclass specifying the decay channel to
                                         add
+        retain_opposite_parity_levels: For optical transitions, retain the
+                                        excited-state dressed levels connected to
+                                        the opposite bare parity partner in the
+                                        reduced OBE system. Defaults to False.
         verbose (bool, optional): Log progress to INFO. Defaults to False.
 
     Returns:
@@ -665,6 +707,7 @@ def setup_OBE_system_transitions(
         H_func_B=H_func_B,
         verbose=verbose,
         normalize_pol=normalize_pol,
+        retain_opposite_parity_levels=retain_opposite_parity_levels,
         method=method,
     )
 
