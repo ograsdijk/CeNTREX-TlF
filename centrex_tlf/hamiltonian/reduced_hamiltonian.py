@@ -1,5 +1,5 @@
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Iterator, List, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
@@ -44,6 +44,28 @@ __all__ = [
     "generate_total_reduced_hamiltonian",
     "generate_reduced_hamiltonian_transitions",
 ]
+
+
+def _retain_opposite_parity_levels(
+    selector: QuantumSelector,
+) -> QuantumSelector:
+    """Return a selector that retains both parity partners when parity is fixed."""
+    parity = selector.P
+    if isinstance(parity, (int, np.integer)):
+        p = int(parity)
+        if p in (-1, 1):
+            return replace(selector, P=[p, -p])
+    if isinstance(parity, (list, tuple, np.ndarray)):
+        values: list[int] = []
+        for value in parity:
+            if isinstance(value, (int, np.integer)) and int(value) in (-1, 1):
+                for p in (int(value), -int(value)):
+                    if p not in values:
+                        values.append(p)
+            elif value not in values:
+                values.append(value)
+        return replace(selector, P=values)
+    return selector
 
 
 @dataclass
@@ -555,6 +577,7 @@ def generate_reduced_hamiltonian_transitions(
     nuclear_spins: TlFNuclearSpins = TlFNuclearSpins(),
     minimum_amplitude: float = 5e-3,
     minimum_coupling: float = 1e-3,
+    retain_opposite_parity_levels: bool = False,
     use_omega_basis: bool = True,
 ) -> ReducedHamiltonianTotal:
     """Generate reduced Hamiltonian automatically from transition definitions.
@@ -586,6 +609,12 @@ def generate_reduced_hamiltonian_transitions(
             5e-3.
         minimum_coupling: Minimum electric dipole coupling strength to include ground
             states. Defaults to 1e-3.
+        retain_opposite_parity_levels: For optical transitions, retain the
+            excited-state dressed levels connected to the opposite bare parity partner
+            of the selected transition. Opposite parity may already be present in the
+            Hamiltonian construction used for field mixing; this option controls
+            whether those additional dressed levels are kept as explicit levels in the
+            reduced OBE system. Defaults to False.
         use_omega_basis: Use Ω basis for B state calculation (faster). Defaults to
             True.
 
@@ -599,6 +628,10 @@ def generate_reduced_hamiltonian_transitions(
     for transition in transitions:
         if isinstance(transition, OpticalTransition):
             excited_states_approx_qn_select = transition.qn_select_excited
+            if retain_opposite_parity_levels:
+                excited_states_approx_qn_select = _retain_opposite_parity_levels(
+                    excited_states_approx_qn_select
+                )
             excited_states_approx = list(
                 generate_coupled_states_B(excited_states_approx_qn_select)
             )

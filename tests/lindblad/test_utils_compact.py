@@ -54,3 +54,74 @@ def test_generate_obe_system_transitions_with_compact_selector_over_multiple_js(
     assert system.QN_original is not None
     assert len(system.QN) < len(system.QN_original)
     assert any(state.largest.F1 is None for state in system.QN)
+
+
+def test_generate_obe_system_transitions_retains_opposite_parity_levels():
+    trans = transitions.Q1_F1_1o2_F0
+    transition_selectors = couplings.generate_transition_selectors(
+        transitions=[trans],
+        polarizations=[[couplings.polarization_X]],
+    )
+
+    default = lindblad.generate_OBE_system_transitions(
+        [trans],
+        transition_selectors,
+        E=np.array([0.0, 0.0, 200.0]),
+        method="matrix",
+    )
+    retained = lindblad.generate_OBE_system_transitions(
+        [trans],
+        transition_selectors,
+        E=np.array([0.0, 0.0, 200.0]),
+        retain_opposite_parity_levels=True,
+        method="matrix",
+    )
+    retained_from_setup = lindblad.setup_OBE_system_transitions(
+        [trans],
+        transition_selectors,
+        E=np.array([0.0, 0.0, 200.0]),
+        retain_opposite_parity_levels=True,
+        method="matrix",
+    )
+
+    default_parities = {
+        state.largest.P
+        for state in default.excited
+        if state.largest.J == trans.J_excited
+        and state.largest.F1 == trans.F1_excited
+        and state.largest.F == trans.F_excited
+    }
+    retained_parities = {
+        state.largest.P
+        for state in retained.excited
+        if state.largest.J == trans.J_excited
+        and state.largest.F1 == trans.F1_excited
+        and state.largest.F == trans.F_excited
+    }
+    initial_idx = min(
+        [
+            idx
+            for idx, state in enumerate(retained.QN)
+            if state.largest.electronic_state == states.ElectronicState.X
+            and state.largest.J == trans.J_ground
+            and state.largest.F == 1
+            and state.largest.mF == 1
+        ],
+        key=lambda idx: np.real(retained.H_int[idx, idx]),
+    )
+    addressed_idx = next(
+        idx
+        for idx, state in enumerate(retained.QN)
+        if state.largest.electronic_state == states.ElectronicState.B
+        and state.largest.J == trans.J_excited
+        and state.largest.F1 == trans.F1_excited
+        and state.largest.F == trans.F_excited
+        and state.largest.mF == 0
+        and state.largest.P == trans.P_excited
+    )
+
+    assert default_parities == {trans.P_excited}
+    assert retained_parities == {trans.P_excited, -trans.P_excited}
+    assert len(retained.excited) == len(default.excited) + 1
+    assert len(retained_from_setup.excited) == len(retained.excited)
+    assert abs(retained.couplings[0].fields[0].field[initial_idx, addressed_idx]) > 0.1
