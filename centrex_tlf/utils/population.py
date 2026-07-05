@@ -20,9 +20,11 @@ __all__ = [
     "generate_uniform_population_states",
     "generate_thermal_population_states",
     "get_diagonal_indices_flattened",
+    "generate_uniform_population_state_indices",
 ]
 
-# Define a TypeVar that can be either an int or a numpy array of ints
+# Define a TypeVar that can be either an int or a n
+# umpy array of ints
 JType = TypeVar("JType", int, npt.NDArray[np.int_])
 
 
@@ -51,9 +53,7 @@ def J_levels(J: JType) -> Union[int, npt.NDArray[np.int_]]:
 
 
 @overload
-def thermal_population(
-    J: int, T: float, B: float = 6.66733e9, n: int = 100
-) -> float: ...
+def thermal_population(J: int, T: float, B: float = 6.66733e9, n: int = 100) -> float: ...
 
 
 @overload
@@ -198,9 +198,7 @@ def generate_uniform_population_states(
     if isinstance(selected_states, states.QuantumSelector):
         indices = selected_states.get_indices(QN)
     else:
-        indices = np.unique(
-            np.concatenate([ss.get_indices(QN) for ss in selected_states])
-        )
+        indices = np.unique(np.concatenate([ss.get_indices(QN) for ss in selected_states]))
 
     for idx in indices:
         ρ[idx, idx] = 1
@@ -256,9 +254,7 @@ def generate_thermal_population_states(
     j_levels = np.unique([qn.largest.J for qn in QN])
 
     # Compute relative thermal population fractions
-    population = {
-        j: p for j, p in zip(j_levels, thermal_population(j_levels, temperature))
-    }
+    population = {j: p for j, p in zip(j_levels, thermal_population(j_levels, temperature))}
 
     # Get quantum numbers of the ground state
     quantum_numbers = [
@@ -330,3 +326,69 @@ def get_diagonal_indices_flattened(
         return indices
     else:
         raise ValueError("`mode` must be 'python' or 'julia'.")
+
+
+def generate_uniform_population_state_indices(
+    state_indices: Sequence[int],
+    levels: int,
+    weights: Optional[Sequence[float]] = None,
+) -> npt.NDArray[np.complex128]:
+    """Create population density matrix over specified state indices.
+
+    Generates a diagonal density matrix with equal population distributed across
+    the given states if weights is None, otherwise uses the supplied relative
+    weights. The density matrix is normalized so Tr(ρ) = 1.
+
+    Args:
+        state_indices (Sequence[int]): State indices to populate (0-indexed). Must be
+            in range [0, levels).
+        levels (int): Total dimension of the Hilbert space (total number of states).
+        weights (Optional[Sequence[float]]): Relative weights for each state index.
+            If None, all selected states are weighted equally.
+
+    Returns:
+        npt.NDArray[np.complex128]: Normalized density matrix of shape (levels, levels).
+            Diagonal elements sum to 1.
+
+    Raises:
+        ValueError: If levels is non-positive, state_indices is empty, any index is out
+            of bounds, weights has the wrong length, weights contains negative/non-finite
+            values, or the total weight is zero.
+    """
+    if levels <= 0:
+        raise ValueError(f"levels must be positive, got {levels}")
+
+    state_indices_array = np.asarray(state_indices, dtype=np.int_)
+    if state_indices_array.ndim != 1:
+        raise ValueError("state_indices must be a 1D sequence")
+    if state_indices_array.size == 0:
+        raise ValueError("state_indices cannot be empty")
+
+    if np.any(state_indices_array < 0) or np.any(state_indices_array >= levels):
+        raise ValueError(
+            f"All indices must be in range [0, {levels}), "
+            f"got min={state_indices_array.min()}, max={state_indices_array.max()}"
+        )
+
+    if weights is None:
+        weights_array = np.ones_like(state_indices_array, dtype=float)
+    else:
+        weights_array = np.asarray(weights, dtype=float)
+        if weights_array.ndim != 1:
+            raise ValueError("weights must be a 1D sequence")
+        if weights_array.size != state_indices_array.size:
+            raise ValueError(
+                "weights must have the same length as state_indices, "
+                f"got {weights_array.size} and {state_indices_array.size}"
+            )
+        if not np.all(np.isfinite(weights_array)):
+            raise ValueError("weights must all be finite")
+        if np.any(weights_array < 0):
+            raise ValueError("weights must be non-negative")
+        if np.sum(weights_array) <= 0:
+            raise ValueError("sum of weights must be positive")
+
+    ρ = np.zeros([levels, levels], dtype=complex)
+    np.add.at(ρ, (state_indices_array, state_indices_array), weights_array)
+
+    return ρ / np.trace(ρ)
