@@ -3,12 +3,12 @@ use crate::lindblad::plan::{parse_expression, parse_plan_payload, PreparedLindbl
 use crate::lindblad::rhs::{
     build_packed_jacobian_sparse, build_split_jacobian_sparse, rhs_matrix_into,
     rhs_matrix_into_with_profile, rhs_packed, rhs_packed_into_with_profile,
-    rhs_split_into_with_profile, ExecutionMode, RhsProfileStats, RhsWorkspace,
+    rhs_split_into_with_profile, ExecutionMode, RhsOptions, RhsProfileStats, RhsWorkspace,
 };
 use crate::ode::batch::{solve_single, OdeSolver};
 use crate::ode::output::{
     FullOutput, OdeOutputValues, PopulationsOutput, SelectedExtraction, SelectedOutput,
-    WeightedIntegralOutput,
+    WeightedIntegralOutput, WeightedRateOutput,
 };
 use num_complex::Complex64;
 use numpy::{
@@ -23,6 +23,7 @@ use std::cell::{Cell, RefCell};
 pub struct LindbladRhsEvaluator {
     plan: PreparedLindbladPlan,
     mode: ExecutionMode,
+    rhs_options: RhsOptions,
     workspace: RefCell<RhsWorkspace>,
     profiling_enabled: Cell<bool>,
     profile: RefCell<RhsProfileStats>,
@@ -78,6 +79,7 @@ impl LindbladRhsEvaluator {
                 state,
                 t,
                 self.mode,
+                self.rhs_options,
                 &mut workspace,
                 out.as_mut_slice(),
                 Some(&mut profile),
@@ -89,6 +91,7 @@ impl LindbladRhsEvaluator {
                 state,
                 t,
                 self.mode,
+                self.rhs_options,
                 &mut workspace,
                 out.as_mut_slice(),
                 None,
@@ -220,7 +223,14 @@ impl LindbladRhsEvaluator {
     )> {
         let mut workspace = self.workspace.borrow_mut();
         let (rows, cols, values) =
-            build_packed_jacobian_sparse(&self.plan, t, self.mode, &mut workspace, tol)
+            build_packed_jacobian_sparse(
+                &self.plan,
+                t,
+                self.mode,
+                self.rhs_options,
+                &mut workspace,
+                tol,
+            )
                 .map_err(PyValueError::new_err)?;
         Ok((
             PyArray1::from_vec(py, rows),
@@ -235,28 +245,33 @@ pub fn prepare_lindblad_problem_py(payload: &Bound<'_, PyAny>) -> PyResult<Prepa
     parse_plan_payload(payload)
 }
 
-#[pyfunction(signature = (plan, mode = "structured"))]
+#[pyfunction(signature = (plan, mode = "structured", use_split_input_rhs = true))]
 pub fn create_lindblad_rhs_evaluator_py(
     plan: PyRef<'_, PreparedLindbladPlan>,
     mode: &str,
+    use_split_input_rhs: bool,
 ) -> PyResult<LindbladRhsEvaluator> {
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     Ok(LindbladRhsEvaluator {
         plan: plan.clone(),
         mode: execution_mode,
+        rhs_options: RhsOptions {
+            use_split_input_rhs,
+        },
         workspace: RefCell::new(RhsWorkspace::new(&plan)),
         profiling_enabled: Cell::new(false),
         profile: RefCell::new(RhsProfileStats::default()),
     })
 }
 
-#[pyfunction(signature = (plan, packed_state, t, mode = "structured"))]
+#[pyfunction(signature = (plan, packed_state, t, mode = "structured", use_split_input_rhs = true))]
 pub fn lindblad_rhs_py<'py>(
     py: Python<'py>,
     plan: PyRef<'py, PreparedLindbladPlan>,
     packed_state: PyReadonlyArray1<'py, f64>,
     t: f64,
     mode: &str,
+    use_split_input_rhs: bool,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     let rhs = rhs_packed(
@@ -264,18 +279,22 @@ pub fn lindblad_rhs_py<'py>(
         packed_state.as_slice().map_err(PyValueError::new_err)?,
         t,
         execution_mode,
+        RhsOptions {
+            use_split_input_rhs,
+        },
     )
     .map_err(PyValueError::new_err)?;
     Ok(PyArray1::from_vec(py, rhs))
 }
 
-#[pyfunction(signature = (plan, packed_vector, t, mode = "structured"))]
+#[pyfunction(signature = (plan, packed_vector, t, mode = "structured", use_split_input_rhs = true))]
 pub fn lindblad_jvp_py<'py>(
     py: Python<'py>,
     plan: PyRef<'py, PreparedLindbladPlan>,
     packed_vector: PyReadonlyArray1<'py, f64>,
     t: f64,
     mode: &str,
+    use_split_input_rhs: bool,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     let jvp = rhs_packed(
@@ -283,6 +302,9 @@ pub fn lindblad_jvp_py<'py>(
         packed_vector.as_slice().map_err(PyValueError::new_err)?,
         t,
         execution_mode,
+        RhsOptions {
+            use_split_input_rhs,
+        },
     )
     .map_err(PyValueError::new_err)?;
     Ok(PyArray1::from_vec(py, jvp))
@@ -350,7 +372,10 @@ fn parse_stop_event(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<LindbladS
                 .get_item("threshold")?
                 .ok_or_else(|| PyValueError::new_err("population stop_event missing threshold"))?
                 .extract()?;
-            Ok(Some(LindbladStopEvent::PopulationThreshold { indices, threshold }))
+            Ok(Some(LindbladStopEvent::PopulationThreshold {
+                indices,
+                threshold,
+            }))
         }
         "runtime_expression" => {
             let expression_obj = dict
@@ -360,11 +385,13 @@ fn parse_stop_event(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<LindbladS
                 expression: parse_expression(&expression_obj)?,
             }))
         }
-        other => Err(PyValueError::new_err(format!("unknown stop_event kind {other:?}"))),
+        other => Err(PyValueError::new_err(format!(
+            "unknown stop_event kind {other:?}"
+        ))),
     }
 }
 
-#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat", integral_weights = None, stop_event = None))]
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat", integral_weights = None, stop_event = None, use_split_input_rhs = true))]
 pub fn solve_lindblad_ode_py<'py>(
     py: Python<'py>,
     plan: PyRef<'py, PreparedLindbladPlan>,
@@ -384,6 +411,7 @@ pub fn solve_lindblad_ode_py<'py>(
     output_when: &str,
     integral_weights: Option<Vec<(usize, f64)>>,
     stop_event: Option<&Bound<'py, PyAny>>,
+    use_split_input_rhs: bool,
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Py<PyAny>, usize, Py<PyDict>)> {
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
@@ -404,7 +432,11 @@ pub fn solve_lindblad_ode_py<'py>(
         saveat: saveat_vec,
     };
     let event = parse_stop_event(stop_event)?;
-    let mut rhs = LindbladRhs::new(&plan, execution_mode).with_stop_event(event);
+    let rhs_options = RhsOptions {
+        use_split_input_rhs,
+    };
+    let mut rhs =
+        LindbladRhs::new_with_rhs_options(&plan, execution_mode, rhs_options).with_stop_event(event);
     let result = match output {
         "populations" => {
             let mut out = PopulationsOutput::new((0..n).collect(), capacity);
@@ -425,7 +457,17 @@ pub fn solve_lindblad_ode_py<'py>(
             let weights = integral_weights.ok_or_else(|| {
                 PyValueError::new_err(format!("output='{output}' requires integral_weights"))
             })?;
-            let mut out = WeightedIntegralOutput::new(weights);
+            let mut out =
+                WeightedIntegralOutput::new_with_trace(weights, output_when == "saveat", capacity);
+            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
+                .map_err(PyValueError::new_err)?;
+            (out.finish(), s)
+        }
+        "weighted_rate" | "photon_rate" | "excited_population_rate" => {
+            let weights = integral_weights.ok_or_else(|| {
+                PyValueError::new_err(format!("output='{output}' requires integral_weights"))
+            })?;
+            let mut out = WeightedRateOutput::new(weights, capacity);
             let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
                 .map_err(PyValueError::new_err)?;
             (out.finish(), s)
@@ -457,7 +499,7 @@ pub fn solve_lindblad_ode_py<'py>(
     Ok((times_array, values, r.width, d.unbind()))
 }
 
-#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None, stop_event = None))]
+#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None, stop_event = None, use_split_input_rhs = true))]
 #[allow(clippy::too_many_arguments)]
 pub fn solve_lindblad_batch_ode_py<'py>(
     py: Python<'py>,
@@ -482,6 +524,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     parallel: bool,
     threads: Option<usize>,
     stop_event: Option<&Bound<'py, PyAny>>,
+    use_split_input_rhs: bool,
 ) -> PyResult<(
     Bound<'py, PyArray1<f64>>,
     Py<PyAny>,
@@ -491,6 +534,9 @@ pub fn solve_lindblad_batch_ode_py<'py>(
 )> {
     use crate::lindblad::ode_batch::solve_batch_ode;
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
+    let rhs_options = RhsOptions {
+        use_split_input_rhs,
+    };
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
     let rho0_shape = packed_rho0_batch.shape();
     if rho0_shape.len() != 2 {
@@ -512,7 +558,12 @@ pub fn solve_lindblad_batch_ode_py<'py>(
         .map(|a| a.as_slice().map(|s| s.to_vec()))
         .transpose()
         .map_err(PyValueError::new_err)?;
-    if output_when == "final" {
+    let final_integral = output_when == "final"
+        && matches!(
+            output,
+            "weighted_integral" | "photon_integral" | "excited_population"
+        );
+    if output_when == "final" && !final_integral {
         saveat_vec = Some(vec![t1]);
     }
     let slot_indices = parameter_slot_indices.unwrap_or_default();
@@ -533,7 +584,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
         reltol,
         dt,
         maxiters,
-        save_start: output_when != "final" && save_start,
+        save_start: (output_when != "final" || final_integral) && save_start,
         saveat: saveat_vec,
     };
     let result = py
@@ -547,7 +598,9 @@ pub fn solve_lindblad_batch_ode_py<'py>(
                 t1,
                 &options,
                 execution_mode,
+                rhs_options,
                 output,
+                output_when,
                 output_indices.as_deref(),
                 integral_weights.as_deref(),
                 &slot_indices,
@@ -575,7 +628,11 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     d.set_item("accepted_steps", result.stats.accepted_steps)?;
     d.set_item("rejected_steps", result.stats.rejected_steps)?;
     d.set_item("rhs_calls", result.stats.rhs_calls)?;
-    let event_count = result.event_triggered.iter().filter(|&&triggered| triggered).count();
+    let event_count = result
+        .event_triggered
+        .iter()
+        .filter(|&&triggered| triggered)
+        .count();
     d.set_item("event_triggered", result.stats.event_triggered)?;
     d.set_item("event_triggered_by_trajectory", result.event_triggered)?;
     d.set_item("event_times", result.event_times)?;
@@ -583,7 +640,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     Ok((times, values, result.width, result.time_count, d.unbind()))
 }
 
-#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parallel = true, threads = None, stop_event = None))]
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parallel = true, threads = None, stop_event = None, use_split_input_rhs = true))]
 #[allow(clippy::too_many_arguments)]
 pub fn solve_lindblad_grid_ode_py<'py>(
     py: Python<'py>,
@@ -609,6 +666,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
     parallel: bool,
     threads: Option<usize>,
     stop_event: Option<&Bound<'py, PyAny>>,
+    use_split_input_rhs: bool,
 ) -> PyResult<(
     Bound<'py, PyArray1<f64>>,
     Py<PyAny>,
@@ -618,6 +676,9 @@ pub fn solve_lindblad_grid_ode_py<'py>(
 )> {
     use crate::lindblad::ode_batch::solve_grid_ode;
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
+    let rhs_options = RhsOptions {
+        use_split_input_rhs,
+    };
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
     let y0 = packed_rho0
         .as_slice()
@@ -631,7 +692,12 @@ pub fn solve_lindblad_grid_ode_py<'py>(
         .map(|a| a.as_slice().map(|s| s.to_vec()))
         .transpose()
         .map_err(PyValueError::new_err)?;
-    if output_when == "final" {
+    let final_integral = output_when == "final"
+        && matches!(
+            output,
+            "weighted_integral" | "photon_integral" | "excited_population"
+        );
+    if output_when == "final" && !final_integral {
         saveat_vec = Some(vec![t1]);
     }
     let mut axis_offsets = Vec::with_capacity(parameter_axis_lengths.len());
@@ -647,7 +713,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
         reltol,
         dt,
         maxiters,
-        save_start: output_when != "final" && save_start,
+        save_start: (output_when != "final" || final_integral) && save_start,
         saveat: saveat_vec,
     };
     let result = py
@@ -660,7 +726,9 @@ pub fn solve_lindblad_grid_ode_py<'py>(
                 t1,
                 &options,
                 execution_mode,
+                rhs_options,
                 output,
+                output_when,
                 output_indices.as_deref(),
                 integral_weights.as_deref(),
                 &parameter_slot_indices,
@@ -690,7 +758,11 @@ pub fn solve_lindblad_grid_ode_py<'py>(
     d.set_item("accepted_steps", result.stats.accepted_steps)?;
     d.set_item("rejected_steps", result.stats.rejected_steps)?;
     d.set_item("rhs_calls", result.stats.rhs_calls)?;
-    let event_count = result.event_triggered.iter().filter(|&&triggered| triggered).count();
+    let event_count = result
+        .event_triggered
+        .iter()
+        .filter(|&&triggered| triggered)
+        .count();
     d.set_item("event_triggered", result.stats.event_triggered)?;
     d.set_item("event_triggered_by_trajectory", result.event_triggered)?;
     d.set_item("event_times", result.event_times)?;

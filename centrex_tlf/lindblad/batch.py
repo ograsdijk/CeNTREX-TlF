@@ -149,6 +149,7 @@ def solve_lindblad_batch(
     parameter_slots: Sequence[ParameterSlot] | None = None,
     solver: str = "dopri5",
     execution_mode: str = "expanded_sparse",
+    use_split_input_rhs: bool = True,
     abstol: float = 1e-7,
     reltol: float = 1e-4,
     dt: float = 1e-8,
@@ -168,29 +169,38 @@ def solve_lindblad_batch(
 ) -> LindbladBatchResult:
     if prepared.rust_plan is None:
         raise RuntimeError("solve_lindblad_batch requires a Rust prepared plan")
-    if solver not in {"dopri5", "tsit5"}:
-        raise NotImplementedError("batch solving currently supports 'dopri5' and 'tsit5'")
+    rust_solvers = {"dopri5", "tsit5", "fixed_dopri5", "fixed_rk2", "fixed_rk4"}
+    if solver not in rust_solvers:
+        raise NotImplementedError(
+            "batch solving currently supports 'dopri5', 'tsit5', 'fixed_dopri5', "
+            "'fixed_rk2', and 'fixed_rk4'"
+        )
     integral_outputs = {"weighted_integral", "photon_integral", "excited_population"}
-    if output not in {"populations", "selected", *integral_outputs}:
+    rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
+    weighted_outputs = integral_outputs | rate_outputs
+    if output not in {"populations", "selected", *weighted_outputs}:
         raise NotImplementedError(
             "batch solving currently supports output='populations', 'selected', "
-            "'weighted_integral', 'photon_integral', or 'excited_population'"
+            "'weighted_integral', 'photon_integral', 'excited_population', "
+            "'weighted_rate', 'photon_rate', or 'excited_population_rate'"
         )
     if output == "selected" and output_indices is None:
         raise ValueError("output='selected' requires output_indices")
     if output != "selected" and output_indices is not None:
         raise ValueError("output_indices is only valid with output='selected'")
-    if output in integral_outputs and integral_weights is None:
+    if output in weighted_outputs and integral_weights is None:
         raise ValueError(f"output={output!r} requires integral_weights")
-    if output not in integral_outputs and integral_weights is not None:
-        raise ValueError("integral_weights are only valid with integral output modes")
+    if output not in weighted_outputs and integral_weights is not None:
+        raise ValueError("integral_weights are only valid with weighted output modes")
     if output_when not in {"final", "saveat"}:
         raise ValueError("output_when must be 'final' or 'saveat'")
     if output_when == "saveat" and saveat is None:
         raise ValueError("batch output_when='saveat' requires explicit saveat values")
     if stop_event is not None and output_when != "final":
         raise ValueError("batch stop_event is only supported with output_when='final'")
-    if output in integral_outputs and saveat is None:
+    if output in rate_outputs and output_when != "saveat":
+        raise ValueError(f"output={output!r} requires output_when='saveat'")
+    if output in rate_outputs and saveat is None:
         raise ValueError(f"output={output!r} requires explicit saveat values")
     if threads is not None and threads <= 0:
         raise ValueError("threads must be positive when provided")
@@ -246,10 +256,11 @@ def solve_lindblad_batch(
         bool(parallel),
         threads,
         event_spec,
+        bool(use_split_input_rhs),
     )
     elapsed = time.perf_counter() - start
 
-    dtype = np.float64 if output in {"populations", *integral_outputs} else np.complex128
+    dtype = np.float64 if output in {"populations", *weighted_outputs} else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
     if output_when == "final":
         values = values.reshape((trajectory_count, int(width)))
@@ -361,6 +372,7 @@ def grid_scan(
     saveat_values = _normalize_saveat(kwargs.pop("saveat", None), t_span_tuple, save_start)
     solver = kwargs.pop("solver", "dopri5")
     execution_mode = kwargs.pop("execution_mode", "expanded_sparse")
+    use_split_input_rhs = bool(kwargs.pop("use_split_input_rhs", True))
     abstol = float(kwargs.pop("abstol", 1e-7))
     reltol = float(kwargs.pop("reltol", 1e-4))
     dt = float(kwargs.pop("dt", 1e-8))
@@ -380,27 +392,38 @@ def grid_scan(
         raise TypeError(f"unexpected grid_scan keyword argument(s): {unknown}")
     if prepared.rust_plan is None:
         raise RuntimeError("grid_scan requires a Rust prepared plan")
-    if solver not in {"dopri5", "tsit5"}:
-        raise NotImplementedError("grid_scan currently supports 'dopri5' and 'tsit5'")
+    rust_solvers = {"dopri5", "tsit5", "fixed_dopri5", "fixed_rk2", "fixed_rk4"}
+    if solver not in rust_solvers:
+        raise NotImplementedError(
+            "grid_scan currently supports 'dopri5', 'tsit5', 'fixed_dopri5', 'fixed_rk2', "
+            "and 'fixed_rk4'"
+        )
     integral_outputs = {"weighted_integral", "photon_integral", "excited_population"}
-    if output not in {"populations", "selected", *integral_outputs}:
+    rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
+    weighted_outputs = integral_outputs | rate_outputs
+    if output not in {"populations", "selected", *weighted_outputs}:
         raise NotImplementedError(
             "grid_scan currently supports output='populations', 'selected', "
-            "'weighted_integral', 'photon_integral', or 'excited_population'"
+            "'weighted_integral', 'photon_integral', 'excited_population', "
+            "'weighted_rate', 'photon_rate', or 'excited_population_rate'"
         )
     if output == "selected" and output_indices is None:
         raise ValueError("output='selected' requires output_indices")
     if output != "selected" and output_indices is not None:
         raise ValueError("output_indices is only valid with output='selected'")
-    if output in integral_outputs and integral_weights is None:
+    if output in weighted_outputs and integral_weights is None:
         raise ValueError(f"output={output!r} requires integral_weights")
-    if output not in integral_outputs and integral_weights is not None:
-        raise ValueError("integral_weights are only valid with integral output modes")
+    if output not in weighted_outputs and integral_weights is not None:
+        raise ValueError("integral_weights are only valid with weighted output modes")
     if output_when == "saveat" and saveat_values is None:
         raise ValueError("grid_scan output_when='saveat' requires explicit saveat values")
+    if output_when not in {"final", "saveat"}:
+        raise ValueError("output_when must be 'final' or 'saveat'")
     if stop_event is not None and output_when != "final":
         raise ValueError("grid_scan stop_event is only supported with output_when='final'")
-    if output in integral_outputs and saveat_values is None:
+    if output in rate_outputs and output_when != "saveat":
+        raise ValueError(f"output={output!r} requires output_when='saveat'")
+    if output in rate_outputs and saveat_values is None:
         raise ValueError(f"output={output!r} requires explicit saveat values")
     if not dense_output and output_when == "saveat" and saveat_values is not None:
         raise ValueError("dense_output=False is only supported with output_when='final'")
@@ -439,10 +462,11 @@ def grid_scan(
             parallel,
             threads,
             event_spec,
+            use_split_input_rhs,
         )
     )
     elapsed = time.perf_counter() - start
-    dtype = np.float64 if output in {"populations", *integral_outputs} else np.complex128
+    dtype = np.float64 if output in {"populations", *weighted_outputs} else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
     if output_when == "final":
         values = values.reshape((trajectory_count, int(width)))

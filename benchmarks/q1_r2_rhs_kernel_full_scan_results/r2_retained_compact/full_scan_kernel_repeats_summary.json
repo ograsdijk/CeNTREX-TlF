@@ -1,0 +1,49 @@
+{
+  "system": "r2_retained_compact",
+  "baseline_packed": {
+    "n": 4,
+    "wall_mean_seconds": 35.36351612501312,
+    "wall_std_seconds": 0.24688333471421067,
+    "stats_total_mean_seconds": 35.36281237498042,
+    "stats_total_std_seconds": 0.24689586570466254,
+    "rhs_calls_unique": [
+      33836645
+    ],
+    "accepted_steps_unique": [
+      5639233
+    ],
+    "peak_detuning_unique": [
+      1.0
+    ]
+  },
+  "current_split_inputs": {
+    "n": 4,
+    "wall_mean_seconds": 32.7097582250135,
+    "wall_std_seconds": 0.15238238236447899,
+    "stats_total_mean_seconds": 32.70910162499058,
+    "stats_total_std_seconds": 0.15237894361684684,
+    "rhs_calls_unique": [
+      33836645
+    ],
+    "accepted_steps_unique": [
+      5639233
+    ],
+    "peak_detuning_unique": [
+      1.0
+    ]
+  },
+  "paired_speedup_baseline_over_current": {
+    "values": [
+      1.0800820923411776,
+      1.0782546370131934,
+      1.076059788382231,
+      1.0901350706071655
+    ],
+    "mean": 1.0811328970859417,
+    "std": 0.006222650337915654
+  },
+  "validation": {
+    "max_abs_photon_diff_first_comparison": 7.771561172376096e-15,
+    "max_rel_photon_diff_first_comparison": 6.40478165746816e-15
+  }
+}

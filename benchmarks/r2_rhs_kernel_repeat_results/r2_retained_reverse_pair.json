@@ -1,0 +1,25 @@
+{
+  "current": {
+    "label": "current_split_inputs",
+    "mode": "expanded_sparse",
+    "wall_seconds": 312.85910900007,
+    "stats_total_seconds": 312.8476187000051,
+    "rhs_calls": 33698285,
+    "accepted_steps": 5616245,
+    "peak_detuning_MHz": 1.0,
+    "peak_photons": 1.2133998475409054
+  },
+  "baseline": {
+    "label": "baseline_packed",
+    "mode": "experimental_expanded_sparse_baseline_packed",
+    "wall_seconds": 318.98203700000886,
+    "stats_total_seconds": 318.96910069999285,
+    "rhs_calls": 33698285,
+    "accepted_steps": 5616245,
+    "peak_detuning_MHz": 1.0,
+    "peak_photons": 1.213399847540904
+  },
+  "speedup_baseline_over_current": 1.019570879746824,
+  "max_abs_photon_diff": 7.993605777301127e-15,
+  "max_rel_photon_diff": 6.587775491731847e-15
+}

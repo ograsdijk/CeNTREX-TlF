@@ -253,6 +253,7 @@ def _solve_scipy_with_rust_matrix_rhs(
     t_span: tuple[float, float],
     *,
     execution_mode: str,
+    use_split_input_rhs: bool,
     abstol: float,
     reltol: float,
     dt: float,
@@ -268,6 +269,7 @@ def _solve_scipy_with_rust_matrix_rhs(
     evaluator = create_lindblad_rhs_evaluator_py(
         prepared.rust_plan,
         execution_mode,
+        use_split_input_rhs,
     )
     y0 = _flatten_complex_matrix_state(rho0)
     event = scipy_event_function(event_spec, packed_layout=prepared.layout, matrix_state=True)
@@ -308,6 +310,7 @@ def _solve_scipy_with_rust_packed_rhs(
     t_span: tuple[float, float],
     *,
     execution_mode: str,
+    use_split_input_rhs: bool,
     method: str,
     abstol: float,
     reltol: float,
@@ -326,6 +329,7 @@ def _solve_scipy_with_rust_packed_rhs(
     evaluator = create_lindblad_rhs_evaluator_py(
         prepared.rust_plan,
         execution_mode,
+        use_split_input_rhs,
     )
     y0 = np.asarray(packed_rho0, dtype=np.float64)
     is_time_dependent = _plan_is_time_dependent(prepared)
@@ -397,6 +401,7 @@ def _solve_rust_native(
     *,
     solver: str,
     execution_mode: str,
+    use_split_input_rhs: bool,
     abstol: float,
     reltol: float,
     dt: float,
@@ -413,9 +418,13 @@ def _solve_rust_native(
 ) -> LindbladResult | LindbladObservableResult:
     from ..centrex_tlf_rust import solve_lindblad_ode_py
 
+    integral_outputs = {"weighted_integral", "photon_integral", "excited_population"}
+    rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
+    weighted_outputs = integral_outputs | rate_outputs
     effective_saveat = saveat
     effective_save_start = save_start
-    if output_when == "final":
+    final_integral = output in integral_outputs
+    if output_when == "final" and not final_integral:
         effective_saveat = np.array([t_span[1]], dtype=np.float64)
         effective_save_start = False
 
@@ -435,9 +444,10 @@ def _solve_rust_native(
         solver,
         output,
         None if output_indices is None else list(output_indices),
-        "saveat",
+        output_when,
         None if integral_weights is None else list(integral_weights),
         event_spec,
+        bool(use_split_input_rhs),
     )
     elapsed = time.perf_counter() - start
 
@@ -463,10 +473,13 @@ def _solve_rust_native(
             layout=prepared.layout,
             solver_stats=stats_dict,
         )
-    if output in ("weighted_integral", "photon_integral", "excited_population"):
+    if output in weighted_outputs:
+        values_array = np.asarray(values, dtype=np.float64)
+        if output_when == "saveat" and times_array.size > 0:
+            values_array = values_array.reshape((times_array.size, int(width)))
         return LindbladObservableResult(
             t=times_array,
-            values=np.asarray(values, dtype=np.float64),
+            values=values_array,
             output=output,
             output_indices=None,
             solver_stats=stats_dict,
@@ -503,6 +516,7 @@ def solve_lindblad(
     save_start: bool = True,
     maxiters: int = 100_000,
     execution_mode: str = "expanded_sparse",
+    use_split_input_rhs: bool = True,
     jacobian: str = "exact",
     jacobian_format: str = "auto",
     collect_stats: bool = False,
@@ -518,31 +532,48 @@ def solve_lindblad(
     if solver not in {
         "dopri5",
         "tsit5",
+        "fixed_dopri5",
+        "fixed_rk2",
+        "fixed_rk4",
         "scipy_rk45",
         "scipy_bdf",
         "scipy_radau",
         "python_rk45",
     }:
         raise NotImplementedError(
-            "supported solvers are 'dopri5', 'tsit5', 'scipy_rk45', "
-            "'scipy_bdf', 'scipy_radau', and 'python_rk45'"
+            "supported solvers are 'dopri5', 'tsit5', 'fixed_dopri5', "
+            "'fixed_rk2', 'fixed_rk4', 'scipy_rk45', 'scipy_bdf', "
+            "'scipy_radau', and 'python_rk45'"
         )
     if execution_mode not in {"reference", "structured", "structured_upper", "expanded_sparse"}:
         raise NotImplementedError(
             "supported execution_mode values are 'reference', 'structured', 'structured_upper', "
             "and 'expanded_sparse'"
         )
-    if output not in {"full", "populations", "selected", "weighted_integral", "photon_integral", "excited_population"}:
+    integral_outputs = {"weighted_integral", "photon_integral", "excited_population"}
+    rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
+    weighted_outputs = integral_outputs | rate_outputs
+    if output not in {"full", "populations", "selected", *weighted_outputs}:
         raise NotImplementedError(
             "output must be 'full', 'populations', 'selected', 'weighted_integral', "
-            "'photon_integral', or 'excited_population'"
+            "'photon_integral', 'excited_population', 'weighted_rate', 'photon_rate', "
+            "or 'excited_population_rate'"
         )
     if output_when not in {"saveat", "final"}:
         raise NotImplementedError("output_when must be 'saveat' or 'final'")
-    if (output not in {"full"} or output_when != "saveat" or not dense_output or integral_weights is not None) and solver not in {
+    rust_reduced_output_solvers = {
         "dopri5",
         "tsit5",
-    }:
+        "fixed_dopri5",
+        "fixed_rk2",
+        "fixed_rk4",
+    }
+    if (
+        output not in {"full"}
+        or output_when != "saveat"
+        or not dense_output
+        or integral_weights is not None
+    ) and solver not in rust_reduced_output_solvers:
         raise NotImplementedError(
             "reduced output, final-only output, integral output, and dense_output control are "
             "currently only supported with Rust solvers"
@@ -551,6 +582,14 @@ def solve_lindblad(
         raise ValueError("output='selected' requires output_indices")
     if output != "selected" and output_indices is not None:
         raise ValueError("output_indices is only valid with output='selected'")
+    if output in weighted_outputs and integral_weights is None:
+        raise ValueError(f"output={output!r} requires integral_weights")
+    if output not in weighted_outputs and integral_weights is not None:
+        raise ValueError("integral_weights are only valid with weighted output modes")
+    if output in rate_outputs and output_when != "saveat":
+        raise ValueError(f"output={output!r} requires output_when='saveat'")
+    if output in rate_outputs and saveat is None:
+        raise ValueError(f"output={output!r} requires explicit saveat values")
     if len(t_span) != 2:
         raise ValueError("t_span must contain exactly two values")
     t_span_tuple = (float(t_span[0]), float(t_span[1]))
@@ -571,6 +610,7 @@ def solve_lindblad(
             rho0_array,
             t_span_tuple,
             execution_mode=execution_mode,
+            use_split_input_rhs=use_split_input_rhs,
             abstol=abstol,
             reltol=reltol,
             dt=dt,
@@ -590,6 +630,7 @@ def solve_lindblad(
             packed_rho0,
             t_span_tuple,
             execution_mode=execution_mode,
+            use_split_input_rhs=use_split_input_rhs,
             method="BDF" if solver == "scipy_bdf" else "Radau",
             abstol=abstol,
             reltol=reltol,
@@ -601,13 +642,18 @@ def solve_lindblad(
             jacobian_format=chosen_format,
             event_spec=event_spec,
         )
-    if backend == "rust" and solver in {"dopri5", "tsit5"} and prepared.rust_plan is not None:
+    if (
+        backend == "rust"
+        and solver in rust_reduced_output_solvers
+        and prepared.rust_plan is not None
+    ):
         return _solve_rust_native(
             prepared,
             packed_rho0,
             t_span_tuple,
             solver=solver,
             execution_mode=execution_mode,
+            use_split_input_rhs=use_split_input_rhs,
             abstol=abstol,
             reltol=reltol,
             dt=dt,

@@ -41,6 +41,19 @@ impl FullOutput {
             width: self.dim,
         }
     }
+
+    pub fn reset(&mut self) {
+        self.times.clear();
+        self.values.clear();
+    }
+
+    pub fn snapshot(&self) -> OdeOutputResult {
+        OdeOutputResult {
+            times: self.times.clone(),
+            values: OdeOutputValues::Full(self.values.clone()),
+            width: self.dim,
+        }
+    }
 }
 
 impl OdeOutput for FullOutput {
@@ -74,6 +87,19 @@ impl PopulationsOutput {
         OdeOutputResult {
             times: self.times,
             values: OdeOutputValues::Real(self.values),
+            width: self.indices.len(),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.times.clear();
+        self.values.clear();
+    }
+
+    pub fn snapshot(&self) -> OdeOutputResult {
+        OdeOutputResult {
+            times: self.times.clone(),
+            values: OdeOutputValues::Real(self.values.clone()),
             width: self.indices.len(),
         }
     }
@@ -119,6 +145,19 @@ impl SelectedOutput {
         OdeOutputResult {
             times: self.times,
             values: OdeOutputValues::Complex(self.values),
+            width: self.extractions.len(),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.times.clear();
+        self.values.clear();
+    }
+
+    pub fn snapshot(&self) -> OdeOutputResult {
+        OdeOutputResult {
+            times: self.times.clone(),
+            values: OdeOutputValues::Complex(self.values.clone()),
             width: self.extractions.len(),
         }
     }
@@ -176,6 +215,25 @@ impl FinalOnlyOutput {
             width: self.dim,
         }
     }
+
+    pub fn reset(&mut self) {
+        self.time = None;
+        self.state.fill(0.0);
+    }
+
+    pub fn snapshot(&self) -> OdeOutputResult {
+        let mut times = Vec::new();
+        let mut values = Vec::new();
+        if let Some(t) = self.time {
+            times.push(t);
+            values.extend_from_slice(&self.state);
+        }
+        OdeOutputResult {
+            times,
+            values: OdeOutputValues::Full(values),
+            width: self.dim,
+        }
+    }
 }
 
 impl OdeOutput for FinalOnlyOutput {
@@ -198,23 +256,56 @@ pub struct WeightedIntegralOutput {
     last_t: f64,
     last_value: f64,
     times: Vec<f64>,
+    values: Vec<f64>,
+    store_trace: bool,
 }
 
 impl WeightedIntegralOutput {
     pub fn new(weights: Vec<(usize, f64)>) -> Self {
+        Self::new_with_trace(weights, false, 1)
+    }
+
+    pub fn new_with_trace(weights: Vec<(usize, f64)>, store_trace: bool, capacity: usize) -> Self {
         Self {
             weights,
             integral: 0.0,
             last_t: f64::NAN,
             last_value: 0.0,
-            times: Vec::new(),
+            times: Vec::with_capacity(if store_trace { capacity } else { 1 }),
+            values: Vec::with_capacity(if store_trace { capacity } else { 1 }),
+            store_trace,
         }
     }
 
-    pub fn finish(self) -> OdeOutputResult {
+    pub fn finish(mut self) -> OdeOutputResult {
+        if !self.store_trace {
+            self.values.clear();
+            self.values.push(self.integral);
+        }
         OdeOutputResult {
             times: self.times,
-            values: OdeOutputValues::Real(vec![self.integral]),
+            values: OdeOutputValues::Real(self.values),
+            width: 1,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.integral = 0.0;
+        self.last_t = f64::NAN;
+        self.last_value = 0.0;
+        self.times.clear();
+        self.values.clear();
+    }
+
+    pub fn snapshot(&self) -> OdeOutputResult {
+        let values = if self.store_trace {
+            self.values.clone()
+        } else {
+            vec![self.integral]
+        };
+        OdeOutputResult {
+            times: self.times.clone(),
+            values: OdeOutputValues::Real(values),
             width: 1,
         }
     }
@@ -228,11 +319,63 @@ impl OdeOutput for WeightedIntegralOutput {
         }
         self.last_t = t;
         self.last_value = value;
-        if self.times.is_empty() {
+        if self.store_trace {
+            self.times.push(t);
+            self.values.push(self.integral);
+        } else if self.times.is_empty() {
             self.times.push(t);
         } else {
             self.times[0] = t;
         }
+    }
+
+    fn times(&self) -> &[f64] {
+        &self.times
+    }
+}
+
+pub struct WeightedRateOutput {
+    weights: Vec<(usize, f64)>,
+    times: Vec<f64>,
+    values: Vec<f64>,
+}
+
+impl WeightedRateOutput {
+    pub fn new(weights: Vec<(usize, f64)>, capacity: usize) -> Self {
+        Self {
+            weights,
+            times: Vec::with_capacity(capacity),
+            values: Vec::with_capacity(capacity),
+        }
+    }
+
+    pub fn finish(self) -> OdeOutputResult {
+        OdeOutputResult {
+            times: self.times,
+            values: OdeOutputValues::Real(self.values),
+            width: 1,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.times.clear();
+        self.values.clear();
+    }
+
+    pub fn snapshot(&self) -> OdeOutputResult {
+        OdeOutputResult {
+            times: self.times.clone(),
+            values: OdeOutputValues::Real(self.values.clone()),
+            width: 1,
+        }
+    }
+}
+
+impl OdeOutput for WeightedRateOutput {
+    fn push(&mut self, t: f64, y: &[f64]) {
+        let value: f64 = self.weights.iter().map(|&(i, w)| w * y[i]).sum();
+        self.times.push(t);
+        self.values.push(value);
     }
 
     fn times(&self) -> &[f64] {

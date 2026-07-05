@@ -1,0 +1,3 @@
+model,wall_seconds,photons,accepted_steps,rejected_steps,rhs_calls,solver_elapsed_seconds,rhs_calls_per_second
+per_J_sinks,1.998336200020276,1.177180443122054,28568,0,171409.0,,85775.85693451423
+single_decay_sink,1.8394881000276653,1.17718044818165,28567,0,171403.0,,93179.72755432458
