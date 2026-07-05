@@ -1,0 +1,3 @@
+model,n_states,rho_entries,H_nnz,C_ops,C_nnz,rabi_MHz,prep_seconds_not_timed
+per_J_sinks,38,1444,189,168,168,0.30622782552328554,10.55859429994598
+single_decay_sink,35,1225,186,126,126,0.30622782552328554,9.539174699981231

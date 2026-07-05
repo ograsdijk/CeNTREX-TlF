@@ -381,6 +381,120 @@ def test_expanded_sparse_rhs_matches_structured_upper(
     np.testing.assert_allclose(rhs_expanded, rhs_upper, atol=1e-11, rtol=1e-11)
 
 
+def test_expanded_sparse_split_input_flag_matches_default_rhs() -> None:
+    system = _make_two_level_system()
+    parameters = {
+        str(system.coupling_symbols[0]): 0.9,
+        str(system.coupling_symbols[1]): 0.2,
+    }
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="python",
+        hamiltonian_representation="decomposed",
+    )
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    packed = prepared.layout.pack(
+        np.array([[0.8, 0.05 + 0.04j], [0.05 - 0.04j, 0.2]], dtype=np.complex128)
+    )
+
+    rhs_default = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, 0.31, "expanded_sparse"),
+        dtype=np.float64,
+    )
+    rhs_without_split_inputs = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, 0.31, "expanded_sparse", False),
+        dtype=np.float64,
+    )
+    np.testing.assert_allclose(rhs_without_split_inputs, rhs_default, atol=1e-11, rtol=1e-11)
+
+
+def test_expanded_sparse_split_input_flag_single_batch_and_grid() -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(
+        system,
+        {omega: 0.6, delta: 0.0},
+        backend="rust",
+        hamiltonian_representation="decomposed",
+    )
+    rho0 = _ground_state_density()
+    saveat = np.linspace(0.0, 0.5, 6)
+    solve_kwargs = dict(
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="saveat",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+    )
+
+    single_default = solve_lindblad(prepared, rho0, (0.0, 0.5), **solve_kwargs)
+    single_without_split_inputs = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        use_split_input_rhs=False,
+        **solve_kwargs,
+    )
+    np.testing.assert_allclose(
+        single_without_split_inputs.values,
+        single_default.values,
+        atol=1e-11,
+        rtol=1e-11,
+    )
+
+    rho0_batch = np.repeat(prepared.layout.pack(rho0).reshape(1, -1), 2, axis=0)
+    batch_default = solve_lindblad_batch(
+        prepared,
+        rho0_batch,
+        (0.0, 0.5),
+        parallel=False,
+        **solve_kwargs,
+    )
+    batch_without_split_inputs = solve_lindblad_batch(
+        prepared,
+        rho0_batch,
+        (0.0, 0.5),
+        use_split_input_rhs=False,
+        parallel=False,
+        **solve_kwargs,
+    )
+    np.testing.assert_allclose(
+        batch_without_split_inputs.values,
+        batch_default.values,
+        atol=1e-11,
+        rtol=1e-11,
+    )
+
+    grid_default = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan={omega: np.array([0.4, 0.7]), delta: np.array([-0.1, 0.2])},
+        parallel=False,
+        **solve_kwargs,
+    )
+    grid_without_split_inputs = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan={omega: np.array([0.4, 0.7]), delta: np.array([-0.1, 0.2])},
+        use_split_input_rhs=False,
+        parallel=False,
+        **solve_kwargs,
+    )
+    np.testing.assert_allclose(
+        grid_without_split_inputs.values,
+        grid_default.values,
+        atol=1e-11,
+        rtol=1e-11,
+    )
+
+
 def test_expanded_sparse_matrix_evaluator_matches_packed_rhs() -> None:
     system = _make_two_level_system()
     parameters = {
@@ -935,6 +1049,102 @@ def test_rust_tsit5_reduced_outputs_match_full() -> None:
     np.testing.assert_allclose(final.values, expected, atol=1e-12, rtol=1e-10)
 
 
+def test_rust_fixed_rk4_matches_adaptive_for_single_trajectory() -> None:
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    rho0 = _ground_state_density()
+    adaptive = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-10,
+        abstol=1e-12,
+    )
+    fixed = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        solver="fixed_rk4",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        collect_stats=True,
+    )
+    np.testing.assert_allclose(fixed.values, adaptive.values, atol=2e-8, rtol=2e-8)
+    assert fixed.solver_stats is not None
+    assert fixed.solver_stats["solver"] == "fixed_rk4"
+    assert fixed.solver_stats["rejected_steps"] == 0
+    assert fixed.solver_stats["rhs_calls"] == 4 * fixed.solver_stats["accepted_steps"]
+
+
+def test_rust_fixed_dopri5_matches_adaptive_for_single_trajectory() -> None:
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    rho0 = _ground_state_density()
+    adaptive = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-10,
+        abstol=1e-12,
+    )
+    fixed = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        solver="fixed_dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        collect_stats=True,
+    )
+    np.testing.assert_allclose(fixed.values, adaptive.values, atol=2e-8, rtol=2e-8)
+    assert fixed.solver_stats is not None
+    assert fixed.solver_stats["solver"] == "fixed_dopri5"
+    assert fixed.solver_stats["rejected_steps"] == 0
+    assert fixed.solver_stats["rhs_calls"] == 6 * fixed.solver_stats["accepted_steps"]
+
+
+def test_rust_fixed_rk2_runs_with_expected_stage_count() -> None:
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    result = solve_lindblad(
+        prepared,
+        _ground_state_density(),
+        (0.0, 0.5),
+        solver="fixed_rk2",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=5e-4,
+        collect_stats=True,
+    )
+    assert result.solver_stats is not None
+    assert result.solver_stats["solver"] == "fixed_rk2"
+    assert result.solver_stats["rhs_calls"] == 2 * result.solver_stats["accepted_steps"]
+    assert np.isfinite(result.values).all()
+
+
 def test_rust_batch_initial_conditions_match_repeated_solves() -> None:
     system = _make_two_level_system()
     parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
@@ -1084,6 +1294,330 @@ def test_rust_batch_parameter_grid_matches_repeated_solves() -> None:
     np.testing.assert_allclose(batch.values, np.asarray(expected), atol=1e-12, rtol=1e-10)
     assert batch.metadata["scan_kind"] == "grid"
     assert batch.metadata["grid_shape"] == (2, 2)
+
+
+def test_rust_fixed_rk4_grid_matches_repeated_solves() -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(system, {omega: 0.6, delta: 0.0}, backend="rust")
+    rho0 = _ground_state_density()
+    scan = {
+        omega: np.array([0.4, 0.7]),
+        delta: np.array([-0.1, 0.2]),
+    }
+    grid = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        solver="fixed_rk4",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        parallel=True,
+        threads=2,
+        collect_stats=True,
+    )
+    expected = []
+    for omega_value in scan[omega]:
+        for delta_value in scan[delta]:
+            result = solve_lindblad(
+                system,
+                rho0,
+                (0.0, 0.5),
+                parameters={omega: omega_value, delta: delta_value},
+                backend="rust",
+                solver="fixed_rk4",
+                execution_mode="expanded_sparse",
+                output="populations",
+                output_when="final",
+                dense_output=False,
+                dt=1e-3,
+            )
+            expected.append(result.values)
+    np.testing.assert_allclose(grid.values, np.asarray(expected), atol=1e-12, rtol=1e-10)
+    assert grid.solver_stats is not None
+    assert grid.solver_stats["solver"] == "fixed_rk4"
+    assert grid.solver_stats["rejected_steps"] == 0
+
+
+def test_batch_and_grid_integral_final_allow_saveat_none() -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(system, {omega: 0.6, delta: 0.0}, backend="rust")
+    weights = [(1, 0.3)]
+    rho0_a = _ground_state_density()
+    rho0_b = np.array([[0.25, 0.0], [0.0, 0.75]], dtype=np.complex128)
+
+    batch = solve_lindblad_batch(
+        prepared,
+        np.stack([rho0_a, rho0_b]),
+        (0.0, 0.5),
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="photon_integral",
+        integral_weights=weights,
+        output_when="final",
+        saveat=None,
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    assert batch.values.shape == (2, 1)
+    assert batch.t.shape == (1,)
+    assert np.all(batch.values >= 0.0)
+
+    grid = grid_scan(
+        prepared,
+        rho0_a,
+        (0.0, 0.5),
+        scan={omega: np.array([0.4, 0.7]), delta: np.array([-0.1, 0.2])},
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="photon_integral",
+        integral_weights=weights,
+        output_when="final",
+        saveat=None,
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    assert grid.values.shape == (4, 1)
+    assert grid.t.shape == (1,)
+    assert np.all(grid.values >= 0.0)
+
+
+def test_batch_integral_trace_and_rate_trace_match_populations() -> None:
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0}
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    weights = [(1, 0.3)]
+    saveat = np.linspace(0.0, 0.5, 11)
+    rho0_batch = np.stack(
+        [
+            _ground_state_density(),
+            np.array([[0.25, 0.0], [0.0, 0.75]], dtype=np.complex128),
+        ]
+    )
+
+    populations = solve_lindblad_batch(
+        prepared,
+        rho0_batch,
+        (0.0, 0.5),
+        solver="tsit5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="saveat",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    rate = solve_lindblad_batch(
+        prepared,
+        rho0_batch,
+        (0.0, 0.5),
+        solver="tsit5",
+        execution_mode="expanded_sparse",
+        output="photon_rate",
+        integral_weights=weights,
+        output_when="saveat",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    trace = solve_lindblad_batch(
+        prepared,
+        rho0_batch,
+        (0.0, 0.5),
+        solver="tsit5",
+        execution_mode="expanded_sparse",
+        output="photon_integral",
+        integral_weights=weights,
+        output_when="saveat",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    final_from_same_grid = solve_lindblad_batch(
+        prepared,
+        rho0_batch,
+        (0.0, 0.5),
+        solver="tsit5",
+        execution_mode="expanded_sparse",
+        output="photon_integral",
+        integral_weights=weights,
+        output_when="final",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+
+    np.testing.assert_allclose(rate.t, saveat, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(trace.t, saveat, atol=1e-13, rtol=0.0)
+    assert rate.values.shape == (2, saveat.size, 1)
+    assert trace.values.shape == (2, saveat.size, 1)
+    np.testing.assert_allclose(rate.values[..., 0], 0.3 * populations.values[..., 1])
+    np.testing.assert_allclose(trace.values[:, -1, :], final_from_same_grid.values)
+
+
+def test_grid_integral_trace_shape_and_rate_validation() -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(system, {omega: 0.6, delta: 0.0}, backend="rust")
+    saveat = np.linspace(0.0, 0.5, 6)
+    weights = [(1, 0.3)]
+
+    trace = grid_scan(
+        prepared,
+        _ground_state_density(),
+        (0.0, 0.5),
+        scan={omega: np.array([0.4, 0.7]), delta: np.array([-0.1, 0.2])},
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="weighted_integral",
+        integral_weights=weights,
+        output_when="saveat",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    assert trace.values.shape == (4, saveat.size, 1)
+    np.testing.assert_allclose(trace.t, saveat, atol=1e-13, rtol=0.0)
+
+    with pytest.raises(ValueError, match="requires output_when='saveat'"):
+        grid_scan(
+            prepared,
+            _ground_state_density(),
+            (0.0, 0.5),
+            scan={omega: np.array([0.4])},
+            output="weighted_rate",
+            integral_weights=weights,
+            output_when="final",
+        )
+    with pytest.raises(ValueError, match="requires explicit saveat"):
+        solve_lindblad_batch(
+            prepared,
+            np.stack([_ground_state_density()]),
+            (0.0, 0.5),
+            output="weighted_rate",
+            integral_weights=weights,
+            output_when="saveat",
+        )
+
+
+def test_grid_direct_collation_parallel_matches_serial_for_final_and_saveat() -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(system, {omega: 0.6, delta: 0.0}, backend="rust")
+    rho0 = _ground_state_density()
+    scan = {
+        omega: np.array([0.35, 0.6, 0.85]),
+        delta: np.array([-0.15, 0.0, 0.25]),
+    }
+
+    serial_final = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    parallel_final = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        solver="dopri5",
+        execution_mode="expanded_sparse",
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=True,
+        threads=2,
+    )
+    assert serial_final.values.shape == (9, 2)
+    np.testing.assert_allclose(parallel_final.t, serial_final.t, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(
+        parallel_final.values,
+        serial_final.values,
+        atol=1e-12,
+        rtol=1e-10,
+    )
+
+    saveat = np.array([0.0, 0.07, 0.2, 0.5], dtype=np.float64)
+    selected_indices = [(0, 0), (0, 1), (1, 0)]
+    serial_selected = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        solver="tsit5",
+        execution_mode="expanded_sparse",
+        output="selected",
+        output_indices=selected_indices,
+        output_when="saveat",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=False,
+    )
+    parallel_selected = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        solver="tsit5",
+        execution_mode="expanded_sparse",
+        output="selected",
+        output_indices=selected_indices,
+        output_when="saveat",
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-8,
+        abstol=1e-10,
+        parallel=True,
+        threads=2,
+    )
+    assert serial_selected.values.shape == (9, saveat.size, len(selected_indices))
+    np.testing.assert_allclose(parallel_selected.t, saveat, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(
+        parallel_selected.values,
+        serial_selected.values,
+        atol=1e-12,
+        rtol=1e-10,
+    )
 
 
 def test_batch_terminal_event_final_only_times() -> None:

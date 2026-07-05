@@ -1,6 +1,7 @@
 pub mod batch;
 pub mod common;
 pub mod dopri5;
+pub mod fixed;
 pub mod output;
 pub mod tsit5;
 

@@ -287,9 +287,7 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
                         event_hit = Some((x, yn.clone()));
                     } else {
                         fill_dense_rcont4(h, &k, &mut r4);
-                        fill_dense_coeffs(
-                            &y, &yn, h, &k, dim, &mut r0, &mut r1, &mut r2, &mut r3,
-                        );
+                        fill_dense_coeffs(&y, &yn, h, &k, dim, &mut r0, &mut r1, &mut r2, &mut r3);
                         let mut lo = 0.0;
                         let mut hi = 1.0;
                         let mut glo = g0;

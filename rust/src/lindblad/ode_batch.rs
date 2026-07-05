@@ -1,10 +1,11 @@
 use crate::lindblad::ode_impl::{LindbladRhs, LindbladStopEvent};
 use crate::lindblad::plan::PreparedLindbladPlan;
-use crate::lindblad::rhs::ExecutionMode;
+use crate::lindblad::rhs::{ExecutionMode, RhsOptions};
 use crate::ode::batch::{solve_single, OdeSolver};
+use crate::ode::common::build_save_plan;
 use crate::ode::output::{
     FullOutput, OdeOutputResult, OdeOutputValues, PopulationsOutput, SelectedExtraction,
-    SelectedOutput, WeightedIntegralOutput,
+    SelectedOutput, WeightedIntegralOutput, WeightedRateOutput,
 };
 use crate::ode::{OdeOptions, OdeRhs, OdeStats};
 use num_complex::Complex64;
@@ -46,9 +47,20 @@ enum ConcreteOutput {
     Selected(SelectedOutput),
     Full(FullOutput),
     WeightedIntegral(WeightedIntegralOutput),
+    WeightedRate(WeightedRateOutput),
 }
 
 impl ConcreteOutput {
+    fn reset(&mut self) {
+        match self {
+            Self::Populations(o) => o.reset(),
+            Self::Selected(o) => o.reset(),
+            Self::Full(o) => o.reset(),
+            Self::WeightedIntegral(o) => o.reset(),
+            Self::WeightedRate(o) => o.reset(),
+        }
+    }
+
     fn solve<R: OdeRhs>(
         &mut self,
         rhs: &mut R,
@@ -63,6 +75,17 @@ impl ConcreteOutput {
             Self::Selected(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
             Self::Full(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
             Self::WeightedIntegral(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
+            Self::WeightedRate(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
+        }
+    }
+
+    fn snapshot(&self) -> OdeOutputResult {
+        match self {
+            Self::Populations(o) => o.snapshot(),
+            Self::Selected(o) => o.snapshot(),
+            Self::Full(o) => o.snapshot(),
+            Self::WeightedIntegral(o) => o.snapshot(),
+            Self::WeightedRate(o) => o.snapshot(),
         }
     }
 
@@ -72,6 +95,7 @@ impl ConcreteOutput {
             Self::Selected(o) => o.finish(),
             Self::Full(o) => o.finish(),
             Self::WeightedIntegral(o) => o.finish(),
+            Self::WeightedRate(o) => o.finish(),
         }
     }
 }
@@ -89,6 +113,10 @@ enum OutputSpec {
     },
     WeightedIntegral {
         weights: Vec<(usize, f64)>,
+        store_trace: bool,
+    },
+    WeightedRate {
+        weights: Vec<(usize, f64)>,
     },
 }
 
@@ -102,10 +130,35 @@ impl OutputSpec {
                 ConcreteOutput::Selected(SelectedOutput::new(extractions.clone(), capacity))
             }
             Self::Full { dim } => ConcreteOutput::Full(FullOutput::new(*dim, capacity)),
-            Self::WeightedIntegral { weights } => {
-                ConcreteOutput::WeightedIntegral(WeightedIntegralOutput::new(weights.clone()))
+            Self::WeightedIntegral {
+                weights,
+                store_trace,
+            } => ConcreteOutput::WeightedIntegral(WeightedIntegralOutput::new_with_trace(
+                weights.clone(),
+                *store_trace,
+                capacity,
+            )),
+            Self::WeightedRate { weights } => {
+                ConcreteOutput::WeightedRate(WeightedRateOutput::new(weights.clone(), capacity))
             }
         }
+    }
+
+    fn width(&self) -> usize {
+        match self {
+            Self::Populations { indices } => indices.len(),
+            Self::Selected { extractions } => extractions.len(),
+            Self::Full { dim } => *dim,
+            Self::WeightedIntegral { .. } | Self::WeightedRate { .. } => 1,
+        }
+    }
+
+    fn is_complex(&self) -> bool {
+        matches!(self, Self::Selected { .. })
+    }
+
+    fn is_full(&self) -> bool {
+        matches!(self, Self::Full { .. })
     }
 }
 
@@ -129,7 +182,9 @@ pub fn solve_batch_ode(
     t1: f64,
     options: &OdeOptions,
     execution_mode: ExecutionMode,
+    rhs_options: RhsOptions,
     output_mode: &str,
+    output_when: &str,
     output_indices: Option<&[(usize, usize)]>,
     integral_weights: Option<&[(usize, f64)]>,
     parameter_slot_indices: &[usize],
@@ -169,6 +224,14 @@ pub fn solve_batch_ode(
                 .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
             OutputSpec::WeightedIntegral {
                 weights: weights.to_vec(),
+                store_trace: output_when == "saveat",
+            }
+        }
+        "weighted_rate" | "photon_rate" | "excited_population_rate" => {
+            let weights = integral_weights
+                .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+            OutputSpec::WeightedRate {
+                weights: weights.to_vec(),
             }
         }
         other => return Err(format!("unknown output mode: {other:?}")),
@@ -181,15 +244,17 @@ pub fn solve_batch_ode(
             let batch = parameter_batch.unwrap();
             let start = trajectory * parameter_width;
             let param_values = &batch[start..start + parameter_width];
-            LindbladRhs::new_with_overrides_and_event(
+            LindbladRhs::new_with_options_overrides_and_event(
                 plan,
                 execution_mode,
+                rhs_options,
                 parameter_slot_indices,
                 param_values,
                 stop_event.clone(),
             )?
         } else {
-            LindbladRhs::new(plan, execution_mode).with_stop_event(stop_event.clone())
+            LindbladRhs::new_with_rhs_options(plan, execution_mode, rhs_options)
+                .with_stop_event(stop_event.clone())
         };
         let mut output = output_spec.create(capacity);
         let stats = output.solve(&mut rhs, y0, t0, t1, options, solver)?;
@@ -312,6 +377,432 @@ pub fn fill_grid_parameter_values(
     }
 }
 
+fn aggregate_stats(stats: impl IntoIterator<Item = OdeStats>) -> OdeStats {
+    let mut total = OdeStats::default();
+    for stats in stats {
+        total.accepted_steps += stats.accepted_steps;
+        total.rejected_steps += stats.rejected_steps;
+        total.rhs_calls += stats.rhs_calls;
+        if stats.event_triggered {
+            total.event_triggered = true;
+        }
+    }
+    total
+}
+
+fn fixed_output_times(
+    output_when: &str,
+    t0: f64,
+    t1: f64,
+    options: &OdeOptions,
+) -> Result<Option<Vec<f64>>, String> {
+    if output_when == "final" {
+        return Ok(Some(vec![t1]));
+    }
+    let Some(_) = &options.saveat else {
+        return Ok(None);
+    };
+    Ok(Some(
+        build_save_plan(options.saveat.as_deref(), t0, t1, options.save_start)?
+            .map_or_else(Vec::new, |plan| plan.times),
+    ))
+}
+
+fn copy_real_output(
+    trajectory: usize,
+    expected_len: usize,
+    result: OdeOutputResult,
+    out: &mut [f64],
+) -> Result<(), String> {
+    match result.values {
+        OdeOutputValues::Real(values) | OdeOutputValues::Full(values) => {
+            if values.len() != expected_len {
+                return Err(format!(
+                    "trajectory {trajectory}: expected {} real output values, got {}",
+                    expected_len,
+                    values.len()
+                ));
+            }
+            out.copy_from_slice(&values);
+            Ok(())
+        }
+        OdeOutputValues::Complex(_) => Err(format!(
+            "trajectory {trajectory}: expected real output values, got complex values"
+        )),
+    }
+}
+
+fn copy_complex_output(
+    trajectory: usize,
+    expected_len: usize,
+    result: OdeOutputResult,
+    out: &mut [Complex64],
+) -> Result<(), String> {
+    match result.values {
+        OdeOutputValues::Complex(values) => {
+            if values.len() != expected_len {
+                return Err(format!(
+                    "trajectory {trajectory}: expected {} complex output values, got {}",
+                    expected_len,
+                    values.len()
+                ));
+            }
+            out.copy_from_slice(&values);
+            Ok(())
+        }
+        OdeOutputValues::Real(_) | OdeOutputValues::Full(_) => Err(format!(
+            "trajectory {trajectory}: expected complex output values, got real values"
+        )),
+    }
+}
+
+struct GridWorker<'a> {
+    rhs: LindbladRhs<'a>,
+    output: ConcreteOutput,
+    param_values: Vec<Complex64>,
+}
+
+impl<'a> GridWorker<'a> {
+    fn new(
+        plan: &'a PreparedLindbladPlan,
+        execution_mode: ExecutionMode,
+        rhs_options: RhsOptions,
+        output_spec: &OutputSpec,
+        capacity: usize,
+        parameter_width: usize,
+    ) -> Self {
+        Self {
+            rhs: LindbladRhs::new_with_rhs_options(plan, execution_mode, rhs_options),
+            output: output_spec.create(capacity),
+            param_values: vec![Complex64::ZERO; parameter_width],
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn solve(
+        &mut self,
+        trajectory: usize,
+        y0: &[f64],
+        t0: f64,
+        t1: f64,
+        options: &OdeOptions,
+        solver: OdeSolver,
+        parameter_slot_indices: &[usize],
+        axes: &[Complex64],
+        axis_offsets: &[usize],
+        axis_lengths: &[usize],
+        strides: &[usize],
+    ) -> Result<(OdeOutputResult, OdeStats), String> {
+        fill_grid_parameter_values(
+            trajectory,
+            axes,
+            axis_offsets,
+            axis_lengths,
+            strides,
+            &mut self.param_values,
+        );
+        self.rhs
+            .set_scalar_parameter_overrides(parameter_slot_indices, &self.param_values)?;
+        self.output.reset();
+        let stats = self
+            .output
+            .solve(&mut self.rhs, y0, t0, t1, options, solver)?;
+        Ok((self.output.snapshot(), stats))
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn solve_grid_ode_direct(
+    plan: &PreparedLindbladPlan,
+    solver: OdeSolver,
+    y0: &[f64],
+    t0: f64,
+    t1: f64,
+    options: &OdeOptions,
+    execution_mode: ExecutionMode,
+    rhs_options: RhsOptions,
+    output_spec: &OutputSpec,
+    output_when: &str,
+    parameter_slot_indices: &[usize],
+    axes: &[Complex64],
+    axis_offsets: &[usize],
+    axis_lengths: &[usize],
+    parallel: bool,
+    threads: Option<usize>,
+) -> Result<Option<BatchOdeResult>, String> {
+    if output_spec.is_full() {
+        return Ok(None);
+    }
+    if output_when == "saveat" {
+        return Ok(None);
+    }
+    let Some(times) = fixed_output_times(output_when, t0, t1, options)? else {
+        return Ok(None);
+    };
+    let trajectory_count = grid_trajectory_count(axis_lengths)?;
+    let strides = grid_strides(axis_lengths);
+    let width = output_spec.width();
+    let time_count = times.len();
+    let value_count = width
+        .checked_mul(time_count)
+        .and_then(|count| count.checked_mul(trajectory_count))
+        .ok_or_else(|| "grid output value count overflowed".to_string())?;
+    let capacity = options.saveat.as_ref().map_or(1, |s| s.len() + 1);
+    let expected_per_trajectory = width * time_count;
+
+    let solve_real_serial = |values: &mut [f64]| -> Result<Vec<OdeStats>, String> {
+        let mut worker = GridWorker::new(
+            plan,
+            execution_mode,
+            rhs_options,
+            output_spec,
+            capacity,
+            parameter_slot_indices.len(),
+        );
+        let mut stats = Vec::with_capacity(trajectory_count);
+        for (trajectory, chunk) in values
+            .chunks_mut(expected_per_trajectory)
+            .enumerate()
+            .take(trajectory_count)
+        {
+            let (result, trajectory_stats) = worker.solve(
+                trajectory,
+                y0,
+                t0,
+                t1,
+                options,
+                solver,
+                parameter_slot_indices,
+                axes,
+                axis_offsets,
+                axis_lengths,
+                &strides,
+            )?;
+            copy_real_output(trajectory, expected_per_trajectory, result, chunk)?;
+            stats.push(trajectory_stats);
+        }
+        Ok(stats)
+    };
+
+    let solve_complex_serial = |values: &mut [Complex64]| -> Result<Vec<OdeStats>, String> {
+        let mut worker = GridWorker::new(
+            plan,
+            execution_mode,
+            rhs_options,
+            output_spec,
+            capacity,
+            parameter_slot_indices.len(),
+        );
+        let mut stats = Vec::with_capacity(trajectory_count);
+        for (trajectory, chunk) in values
+            .chunks_mut(expected_per_trajectory)
+            .enumerate()
+            .take(trajectory_count)
+        {
+            let (result, trajectory_stats) = worker.solve(
+                trajectory,
+                y0,
+                t0,
+                t1,
+                options,
+                solver,
+                parameter_slot_indices,
+                axes,
+                axis_offsets,
+                axis_lengths,
+                &strides,
+            )?;
+            copy_complex_output(trajectory, expected_per_trajectory, result, chunk)?;
+            stats.push(trajectory_stats);
+        }
+        Ok(stats)
+    };
+
+    if output_spec.is_complex() {
+        let mut values = vec![Complex64::ZERO; value_count];
+        let stats = if !parallel || threads == Some(1) {
+            solve_complex_serial(&mut values)?
+        } else if let Some(n_threads) = threads {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(n_threads)
+                .build()
+                .map_err(|e| format!("failed to create thread pool: {e}"))?;
+            pool.install(|| {
+                values
+                    .par_chunks_mut(expected_per_trajectory)
+                    .enumerate()
+                    .map_init(
+                        || {
+                            GridWorker::new(
+                                plan,
+                                execution_mode,
+                                rhs_options,
+                                output_spec,
+                                capacity,
+                                parameter_slot_indices.len(),
+                            )
+                        },
+                        |worker, (trajectory, chunk)| {
+                            let (result, stats) = worker.solve(
+                                trajectory,
+                                y0,
+                                t0,
+                                t1,
+                                options,
+                                solver,
+                                parameter_slot_indices,
+                                axes,
+                                axis_offsets,
+                                axis_lengths,
+                                &strides,
+                            )?;
+                            copy_complex_output(
+                                trajectory,
+                                expected_per_trajectory,
+                                result,
+                                chunk,
+                            )?;
+                            Ok(stats)
+                        },
+                    )
+                    .collect::<Result<Vec<_>, String>>()
+            })?
+        } else {
+            values
+                .par_chunks_mut(expected_per_trajectory)
+                .enumerate()
+                .map_init(
+                    || {
+                        GridWorker::new(
+                            plan,
+                            execution_mode,
+                            rhs_options,
+                            output_spec,
+                            capacity,
+                            parameter_slot_indices.len(),
+                        )
+                    },
+                    |worker, (trajectory, chunk)| {
+                        let (result, stats) = worker.solve(
+                            trajectory,
+                            y0,
+                            t0,
+                            t1,
+                            options,
+                            solver,
+                            parameter_slot_indices,
+                            axes,
+                            axis_offsets,
+                            axis_lengths,
+                            &strides,
+                        )?;
+                        copy_complex_output(trajectory, expected_per_trajectory, result, chunk)?;
+                        Ok(stats)
+                    },
+                )
+                .collect::<Result<Vec<_>, String>>()?
+        };
+        return Ok(Some(BatchOdeResult {
+            times,
+            values: OdeOutputValues::Complex(values),
+            width,
+            time_count,
+            stats: aggregate_stats(stats),
+            event_triggered: vec![false; trajectory_count],
+            event_times: vec![t1; trajectory_count],
+        }));
+    }
+
+    let mut values = vec![0.0; value_count];
+    let stats = if !parallel || threads == Some(1) {
+        solve_real_serial(&mut values)?
+    } else if let Some(n_threads) = threads {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(n_threads)
+            .build()
+            .map_err(|e| format!("failed to create thread pool: {e}"))?;
+        pool.install(|| {
+            values
+                .par_chunks_mut(expected_per_trajectory)
+                .enumerate()
+                .map_init(
+                    || {
+                            GridWorker::new(
+                                plan,
+                                execution_mode,
+                                rhs_options,
+                                output_spec,
+                                capacity,
+                                parameter_slot_indices.len(),
+                        )
+                    },
+                    |worker, (trajectory, chunk)| {
+                        let (result, stats) = worker.solve(
+                            trajectory,
+                            y0,
+                            t0,
+                            t1,
+                            options,
+                            solver,
+                            parameter_slot_indices,
+                            axes,
+                            axis_offsets,
+                            axis_lengths,
+                            &strides,
+                        )?;
+                        copy_real_output(trajectory, expected_per_trajectory, result, chunk)?;
+                        Ok(stats)
+                    },
+                )
+                .collect::<Result<Vec<_>, String>>()
+        })?
+    } else {
+        values
+            .par_chunks_mut(expected_per_trajectory)
+            .enumerate()
+            .map_init(
+                || {
+                    GridWorker::new(
+                        plan,
+                        execution_mode,
+                        rhs_options,
+                        output_spec,
+                        capacity,
+                        parameter_slot_indices.len(),
+                    )
+                },
+                |worker, (trajectory, chunk)| {
+                    let (result, stats) = worker.solve(
+                        trajectory,
+                        y0,
+                        t0,
+                        t1,
+                        options,
+                        solver,
+                        parameter_slot_indices,
+                        axes,
+                        axis_offsets,
+                        axis_lengths,
+                        &strides,
+                    )?;
+                    copy_real_output(trajectory, expected_per_trajectory, result, chunk)?;
+                    Ok(stats)
+                },
+            )
+            .collect::<Result<Vec<_>, String>>()?
+    };
+
+    Ok(Some(BatchOdeResult {
+        times,
+        values: OdeOutputValues::Real(values),
+        width,
+        time_count,
+        stats: aggregate_stats(stats),
+        event_triggered: vec![false; trajectory_count],
+        event_times: vec![t1; trajectory_count],
+    }))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn solve_grid_ode(
     plan: &PreparedLindbladPlan,
@@ -321,7 +812,9 @@ pub fn solve_grid_ode(
     t1: f64,
     options: &OdeOptions,
     execution_mode: ExecutionMode,
+    rhs_options: RhsOptions,
     output_mode: &str,
+    output_when: &str,
     output_indices: Option<&[(usize, usize)]>,
     integral_weights: Option<&[(usize, f64)]>,
     parameter_slot_indices: &[usize],
@@ -355,10 +848,41 @@ pub fn solve_grid_ode(
                 .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
             OutputSpec::WeightedIntegral {
                 weights: weights.to_vec(),
+                store_trace: output_when == "saveat",
+            }
+        }
+        "weighted_rate" | "photon_rate" | "excited_population_rate" => {
+            let weights = integral_weights
+                .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+            OutputSpec::WeightedRate {
+                weights: weights.to_vec(),
             }
         }
         other => return Err(format!("unknown output mode: {other:?}")),
     };
+
+    if stop_event.is_none() {
+        if let Some(result) = solve_grid_ode_direct(
+            plan,
+            solver,
+            y0,
+            t0,
+            t1,
+            options,
+            execution_mode,
+            rhs_options,
+            &output_spec,
+            output_when,
+            parameter_slot_indices,
+            axes,
+            axis_offsets,
+            axis_lengths,
+            parallel,
+            threads,
+        )? {
+            return Ok(result);
+        }
+    }
 
     let solve_one = |trajectory: usize| -> Result<(OdeOutputResult, OdeStats), String> {
         let mut param_values = vec![Complex64::ZERO; parameter_slot_indices.len()];
@@ -370,9 +894,10 @@ pub fn solve_grid_ode(
             &strides,
             &mut param_values,
         );
-        let mut rhs = LindbladRhs::new_with_overrides(
+        let mut rhs = LindbladRhs::new_with_options_and_overrides(
             plan,
             execution_mode,
+            rhs_options,
             parameter_slot_indices,
             &param_values,
         )?

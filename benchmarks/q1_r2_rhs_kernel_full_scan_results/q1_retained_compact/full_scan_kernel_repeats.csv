@@ -1,0 +1,9 @@
+system,pair,order_index,label,mode,wall_seconds,stats_total_seconds,rhs_calls,accepted_steps,peak_detuning_MHz,peak_photons
+q1_retained_compact,1,1,baseline_packed,experimental_expanded_sparse_baseline_packed,2.224845699965954,2.2246175999753177,17538335,2922878,-1.0,0.7408454680195512
+q1_retained_compact,1,2,current_split_inputs,expanded_sparse,2.165142499958165,2.164749399991706,17538341,2922879,-1.0,0.7408454677659446
+q1_retained_compact,2,1,current_split_inputs,expanded_sparse,2.198586200014688,2.1983093000017107,17538341,2922879,-1.0,0.7408454677659446
+q1_retained_compact,2,2,baseline_packed,experimental_expanded_sparse_baseline_packed,2.3283356999745592,2.328054399928078,17538335,2922878,-1.0,0.7408454680195512
+q1_retained_compact,3,1,baseline_packed,experimental_expanded_sparse_baseline_packed,2.185569600085728,2.1848648000741377,17538335,2922878,-1.0,0.7408454680195512
+q1_retained_compact,3,2,current_split_inputs,expanded_sparse,2.1059583000605926,2.105673799989745,17538341,2922879,-1.0,0.7408454677659446
+q1_retained_compact,4,1,current_split_inputs,expanded_sparse,2.116224700002931,2.115963499993086,17538341,2922879,-1.0,0.7408454677659446
+q1_retained_compact,4,2,baseline_packed,experimental_expanded_sparse_baseline_packed,2.2145693000638857,2.214302600012161,17538335,2922878,-1.0,0.7408454680195512

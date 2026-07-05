@@ -16,6 +16,21 @@ Consists of six modules:
 
 `states` has code to generate states and the classes that describe the `CoupledBasisState`, `UncoupledBasisState` and `State`; where `State` holds multiple `CoupledBasisStates` or `UncoupledBasisStates` with different amplitudes, i.e. when superpositions arise.
 
+## Lindblad Solver Performance Options
+Rust-backed Lindblad solves default to `execution_mode="expanded_sparse"`. This mode uses a packed Hermitian density matrix and, by default, groups diagonal-real and complex input terms in the RHS kernel. The grouping can be controlled with `use_split_input_rhs` on `solve_lindblad`, `solve_lindblad_batch`, `parameter_scan`, `initial_condition_scan`, and `grid_scan`.
+
+```python
+result = solve_lindblad(
+    prepared,
+    rho0,
+    (0.0, t_end),
+    execution_mode="expanded_sparse",
+    use_split_input_rhs=True,  # default
+)
+```
+
+Set `use_split_input_rhs=False` to keep the same expanded-sparse coefficient representation while disabling input-term grouping. This is mainly useful for benchmarking or checking full-system performance regressions; compact systems usually benefit from the default grouped path.
+
 ## Dependencies
 * `numpy`
 * `scipy`
