@@ -50,79 +50,115 @@ def generate_density_matrix(nstates: int, symbol: str = "\u03c1") -> smp.Matrix:
     return density_matrix
 
 
+def _sympy_number(value: complex) -> smp.Expr:
+    """Convert a python/numpy complex to a sympy number, dropping a zero imaginary part."""
+    if value.imag == 0.0:
+        return smp.Float(value.real)
+    return smp.Float(value.real) + smp.Float(value.imag) * smp.I
+
+
 def generate_dissipator_term(
     C_array: npt.NDArray[np.floating | np.complexfloating],
     density_matrix: smp.Matrix,
     fast: bool = False,
 ) -> smp.Matrix:
+    """Build the symbolic Lindblad dissipator entrywise from operator sparsity.
+
+    Both terms are assembled from nonzero structure instead of dense sympy
+    matrix products (which multiply mostly zeros and dominate OBE setup time;
+    see IMPLEMENTATION_AUDIT.md "Performance Review (2026-07-11)"):
+
+    - Jump term Σᵢ CᵢρCᵢ†: iterates nonzero entries of each Cᵢ, so a
+      single-jump operator contributes exactly one term. Handles multi-entry
+      operators as well (all nonzero pairs).
+    - Anticommutator -½{Cᵢ†Cᵢ, ρ}: Σᵢ Cᵢ†Cᵢ is a plain numeric matrix,
+      computed with numpy; only its nonzero entries generate symbolic terms.
+      For single-jump operators it is diagonal, giving -(γᵢ+γⱼ)/2 · ρᵢⱼ.
+
+    Args:
+        C_array: Collapse operators, shape (n_operators, n, n).
+        density_matrix: Symbolic density matrix from generate_density_matrix.
+        fast: Deprecated, ignored. The sparse construction is always used and
+            is both faster and more general than the old fast/dense paths.
+    """
     nstates = density_matrix.shape[0]
 
     if not np.iscomplexobj(C_array):
         C_array = C_array.astype(np.complex128)
 
-    # Compute conjugate transpose of all collapse operators: Cᵢ†
-    # einsum("ijk->ikj") transposes the last two dimensions for each operator
+    # Cache symbolic rho entries; Matrix __getitem__ is comparatively slow.
+    rho = [[density_matrix[i, j] for j in range(nstates)] for i in range(nstates)]
+    terms: list[list[list[smp.Expr]]] = [
+        [[] for _ in range(nstates)] for _ in range(nstates)
+    ]
+
+    # Jump term: (C ρ C†)[i, j] = Σ_{α,β} C[i,α] ρ[α,β] conj(C[j,β])
+    for C in C_array:
+        nonzero = np.argwhere(C != 0)
+        for i, alpha in nonzero:
+            c_ia = complex(C[i, alpha])
+            for j, beta in nonzero:
+                coefficient = _sympy_number(c_ia * complex(C[j, beta]).conjugate())
+                terms[i][j].append(coefficient * rho[alpha][beta])
+
+    # Anticommutator term from the numeric Σᵢ Cᵢ†Cᵢ
     C_conj_array: npt.NDArray[np.complexfloating] = np.einsum(
         "ijk->ikj",
         C_array.conj(),  # type: ignore[arg-type]
     )
-
-    # Initialize accumulator for dissipation term: Σᵢ CᵢρCᵢ†
-    dissipation_sum: smp.Matrix = smp.zeros(nstates, nstates)
-
-    if fast:
-        # Sparse optimization: only compute non-zero contributions
-        # Significant speedup when collapse operators are sparse (typical for decay)
-        for C, C_conj in zip(C_array, C_conj_array):
-            # Get indices of non-zero elements: nonzero returns tuple of (row_indices, col_indices)
-            nonzero_C = np.nonzero(C)
-            nonzero_C_conj = np.nonzero(C_conj)
-
-            # Only process if both operators have non-zero elements
-            if len(nonzero_C[0]) > 0 and len(nonzero_C_conj[0]) > 0:
-                # For sparse operators (e.g., |g⟩⟨e|), typically only one non-zero element
-                # nonzero_C[0][0] is row index, nonzero_C[1][0] is column index
-                # density_matrix indexing returns a MatrixElement directly (no [0] needed)
-                value = (
-                    C[nonzero_C][0]  # Get first non-zero value from C
-                    * C_conj[nonzero_C_conj][0]  # Get first non-zero value from C†
-                    * density_matrix[int(nonzero_C[1][0]), int(nonzero_C_conj[0][0])]
-                )
-                dissipation_sum[int(nonzero_C[0][0]), int(nonzero_C_conj[1][0])] += (
-                    value
-                )
-    else:
-        # Standard computation: Σᵢ CᵢρCᵢ† for all operators
-        # Use full matrix multiplication (more general but slower)
-        for idx in range(C_array.shape[0]):
-            dissipation_sum += C_array[idx] @ density_matrix @ C_conj_array[idx]
-
-    # Precompute Σᵢ Cᵢ†Cᵢ for anticommutator term: -½{Cᵢ†Cᵢ, ρ}
-    # einsum("ijk,ikl") efficiently computes the sum of Cᵢ†Cᵢ for all i
     C_dagger_C_sum: npt.NDArray[np.complexfloating] = np.einsum(
         "ijk,ikl",
         C_conj_array,  # type: ignore[arg-type]
         C_array,  # type: ignore[arg-type]
     )
+    nonzero = np.argwhere(C_dagger_C_sum != 0)
+    # -½ (C†C)·ρ : row i of C†C hits every column j of ρ
+    for i, k in nonzero:
+        coefficient = _sympy_number(-0.5 * complex(C_dagger_C_sum[i, k]))
+        for j in range(nstates):
+            terms[i][j].append(coefficient * rho[k][j])
+    # -½ ρ·(C†C) : column j of C†C hits every row i of ρ
+    for k, j in nonzero:
+        coefficient = _sympy_number(-0.5 * complex(C_dagger_C_sum[k, j]))
+        for i in range(nstates):
+            terms[i][j].append(coefficient * rho[i][k])
 
-    # Anticommutator term: -½{Cᵢ†Cᵢ, ρ} = -½(Cᵢ†Cᵢ·ρ + ρ·Cᵢ†Cᵢ)
-    anticommutator_term: smp.Matrix = -0.5 * (
-        C_dagger_C_sum @ density_matrix + density_matrix @ C_dagger_C_sum
+    return smp.Matrix(
+        nstates, nstates, lambda i, j: smp.Add(*terms[i][j])
     )
-
-    lindblad_dissipation = dissipation_sum + anticommutator_term
-    return lindblad_dissipation
 
 
 def generate_hamiltonian_term(
     hamiltonian: smp.Matrix, density_matrix: smp.Matrix
 ) -> smp.Matrix:
-    # Compute Hamiltonian contribution: -i[H, ρ] = -i(Hρ - ρH)
-    # This is the coherent (unitary) evolution part
-    hamiltonian_term: smp.Matrix = -1j * (
-        hamiltonian @ density_matrix - density_matrix @ hamiltonian
+    """Build the coherent term -i[H, ρ] entrywise from H's nonzero structure.
+
+    Equivalent to -1j * (H @ rho - rho @ H) but O(nnz(H)·n) sympy operations
+    instead of O(n³) dense symbolic matrix products.
+    """
+    nstates = hamiltonian.shape[0]
+    rho = [[density_matrix[i, j] for j in range(nstates)] for i in range(nstates)]
+    terms: list[list[list[smp.Expr]]] = [
+        [[] for _ in range(nstates)] for _ in range(nstates)
+    ]
+
+    for a in range(nstates):
+        for b in range(nstates):
+            h_ab = hamiltonian[a, b]
+            if h_ab == 0:
+                continue
+            # -i (H ρ)[a, j] contribution: H[a,b] ρ[b,j]
+            coefficient = -1j * h_ab
+            for j in range(nstates):
+                terms[a][j].append(coefficient * rho[b][j])
+            # +i (ρ H)[i, b] contribution: ρ[i,a] H[a,b]
+            coefficient = 1j * h_ab
+            for i in range(nstates):
+                terms[i][b].append(coefficient * rho[i][a])
+
+    return smp.Matrix(
+        nstates, nstates, lambda i, j: smp.Add(*terms[i][j])
     )
-    return hamiltonian_term
 
 
 @overload

@@ -1,0 +1,75 @@
+{
+  "system": "q1_retained_compact",
+  "baseline_packed": {
+    "n": 4,
+    "wall_mean_seconds": 2.202887399937026,
+    "wall_std_seconds": 0.021521276438499166,
+    "stats_total_mean_seconds": 2.2025893249665387,
+    "stats_total_std_seconds": 0.021551250093614603,
+    "rhs_calls_unique": [
+      17538335
+    ],
+    "accepted_steps_unique": [
+      2922878
+    ],
+    "peak_detuning_unique": [
+      -1.0
+    ]
+  },
+  "current_split_inputs": {
+    "n": 4,
+    "wall_mean_seconds": 2.1632328249979764,
+    "wall_std_seconds": 0.035785950997772424,
+    "stats_total_mean_seconds": 2.162898149981629,
+    "stats_total_std_seconds": 0.035796143650114874,
+    "rhs_calls_unique": [
+      17538341
+    ],
+    "accepted_steps_unique": [
+      2922879
+    ],
+    "peak_detuning_unique": [
+      -1.0
+    ]
+  },
+  "static_dynamic": {
+    "n": 4,
+    "wall_mean_seconds": 2.0837307500187308,
+    "wall_std_seconds": 0.012992978919515485,
+    "stats_total_mean_seconds": 2.083415250002872,
+    "stats_total_std_seconds": 0.012984056498290928,
+    "rhs_calls_unique": [
+      17538347
+    ],
+    "accepted_steps_unique": [
+      2922880
+    ],
+    "peak_detuning_unique": [
+      -1.0
+    ]
+  },
+  "paired_speedup_baseline_over_static_dynamic": {
+    "values": [
+      1.0629149362556336,
+      1.066050741294389,
+      1.0424675939898886,
+      1.0573702361568635
+    ],
+    "mean": 1.0572008769241936,
+    "std": 0.010457355975357595
+  },
+  "paired_speedup_current_over_static_dynamic": {
+    "values": [
+      1.045941265213586,
+      1.0597792433419035,
+      1.0191606424183057,
+      1.0278466482477042
+    ],
+    "mean": 1.0381819498053748,
+    "std": 0.018214267820479326
+  },
+  "validation": {
+    "max_abs_photon_diff_first_comparison": 2.2748236627734286e-10,
+    "max_rel_photon_diff_first_comparison": 3.0705778208437325e-10
+  }
+}

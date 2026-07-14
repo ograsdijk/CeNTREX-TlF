@@ -29,6 +29,7 @@ __all__ = [
     "generate_total_symbolic_hamiltonian",
     "generate_unitary_transformation_matrix",
     "generate_symbolic_hamiltonian",
+    "apply_per_level_rotating_frame",
 ]
 
 
@@ -148,12 +149,22 @@ def symbolic_hamiltonian_to_rotating_frame(
 
     transformed = smp.Matrix(transformed)
 
+    qn_index = {id(state): idx for idx, state in enumerate(QN)}
+
+    def _qn_index(state: states.CoupledState) -> int:
+        idx = qn_index.get(id(state))
+        if idx is None:
+            # Coupling main states are often distinct objects from QN entries;
+            # fall back to equality search in that case.
+            idx = QN.index(state)
+        return idx
+
     for idc, (δ, coupling) in enumerate(zip(δs, couplings)):
         # generate transition frequency symbol
         ω = smp.Symbol(f"ω{idc}", real=True)
         # get indices of ground and excited states
-        idg = QN.index(coupling.ground_main)
-        ide = QN.index(coupling.excited_main)
+        idg = _qn_index(coupling.ground_main)
+        ide = _qn_index(coupling.excited_main)
 
         # transform to δ instead of ω and E
         if idg < ide:
@@ -163,7 +174,7 @@ def symbolic_hamiltonian_to_rotating_frame(
 
     # remove excited state energy from all diagonal entries
     for idc, (δ, coupling) in enumerate(zip(δs, couplings)):
-        idg = QN.index(coupling.ground_main)
+        idg = _qn_index(coupling.ground_main)
         expr = transformed[idg, idg]
         for d in δs:
             expr = expr.subs(d, 0)
@@ -340,3 +351,100 @@ def generate_total_symbolic_hamiltonian(
         return H_symbolic, QN_compact
 
     return H_symbolic
+
+
+def apply_per_level_rotating_frame(obe_system: Any) -> Any:
+    """Move an ``OBESystem`` into a per-level co-rotating frame.
+
+    This removes the *numeric* static part of every diagonal Hamiltonian
+    entry analytically, by transforming with the diagonal unitary
+    ``T = diag(exp(-i * E_i * t))``, where ``E_i`` is the purely numeric
+    residual energy of state ``i`` (all remaining free symbols -- e.g.
+    symbolic detunings -- are set to 0 before evaluating ``E_i``, so they are
+    *not* removed and parameter scans over detuning etc. still work
+    unchanged in the rotated frame). Under ``rho' = T^dagger rho T``, the
+    transformed Hamiltonian is
+
+        H'[i, i] = H[i, i] - E_i
+        H'[i, j] = H[i, j] * exp(i * (E_i - E_j) * t)   for i != j
+
+    (the multiplication by the oscillating phase is skipped whenever
+    ``E_i == E_j`` exactly, to avoid inserting a spurious ``exp(i*0*t)``
+    factor). The Lindblad dissipator is built from single-jump collapse
+    operators ``C``; a diagonal phase rotation sends ``C -> phase * C``, and
+    ``C rho C^dagger`` (population transfer) and ``C^dagger C`` (used in the
+    anticommutator) are invariant under an overall phase on ``C``, so
+    ``C_array`` is reused unchanged -- it is *not* touched by this function.
+
+    Only ``H_symbolic`` is replaced; the returned ``OBESystem`` is otherwise
+    a shallow copy of ``obe_system``, with ``system``/``dissipator`` left
+    unset so they lazily rebuild from the new (now explicitly
+    time-dependent) ``H_symbolic`` on first access.
+
+    Frame-invariance notes for consumers:
+
+    - Populations (diagonal density-matrix elements) and any
+      weighted-population integral/rate (``output in {"populations",
+      "weighted_integral", "photon_integral", "excited_population", ...}``)
+      are IDENTICAL in the original and rotated frames, because
+      ``rho'_ii = rho_ii`` for a diagonal transformation.
+    - Individual COHERENCES (``output="selected"`` off-diagonal entries) are
+      reported in the ROTATED frame and differ from the original frame by
+      the known phase ``exp(i * (E_i - E_j) * t)`` -- multiply the rotated
+      coherence by ``exp(-i * (E_i - E_j) * t)`` to recover the original
+      frame's value.
+    - The initial condition is unchanged: ``T(0) = I``, so ``rho'(0) =
+      rho(0)``.
+
+    Args:
+        obe_system: an ``OBESystem`` (as returned by
+            ``generate_OBE_system``/``generate_OBE_system_transitions``).
+
+    Returns:
+        A new ``OBESystem`` with the per-level co-rotating-frame
+        ``H_symbolic`` and all other fields copied from ``obe_system``.
+    """
+    # Local import: utils_setup imports from this module at module scope, so
+    # importing OBESystem at module scope here would create a circular import.
+    from .utils_setup import OBESystem
+
+    H = obe_system.H_symbolic
+    n = int(H.shape[0])
+    t = smp.Symbol("t", real=True)
+
+    energies: List[float] = []
+    for i in range(n):
+        entry = H[i, i]
+        zero_subs = {s: 0 for s in entry.free_symbols}
+        energies.append(complex(entry.subs(zero_subs)).real)
+
+    H_new = smp.zeros(n, n)
+    for i in range(n):
+        H_new[i, i] = H[i, i] - energies[i]
+        for j in range(n):
+            if i == j:
+                continue
+            entry = H[i, j]
+            if entry == 0:
+                continue
+            delta = energies[i] - energies[j]
+            if delta != 0.0:
+                H_new[i, j] = entry * smp.exp(smp.I * smp.Float(delta) * t)
+            else:
+                H_new[i, j] = entry
+
+    return OBESystem(
+        ground=obe_system.ground,
+        excited=obe_system.excited,
+        QN=obe_system.QN,
+        H_int=obe_system.H_int,
+        V_ref_int=obe_system.V_ref_int,
+        couplings=obe_system.couplings,
+        H_symbolic=smp.Matrix(H_new),
+        C_array=obe_system.C_array,
+        coupling_symbols=obe_system.coupling_symbols,
+        polarization_symbols=obe_system.polarization_symbols,
+        QN_original=obe_system.QN_original,
+        decay_channels=obe_system.decay_channels,
+        couplings_original=obe_system.couplings_original,
+    )

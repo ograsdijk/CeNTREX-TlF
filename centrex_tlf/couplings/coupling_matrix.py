@@ -194,8 +194,17 @@ def generate_coupling_matrix(
         # parity partners can have the same largest Ω-basis component, so an index map
         # built after the transform may collapse distinct retained levels.
         QN_original = list(QN)
-        ground_indices = [QN_original.index(gs) for gs in ground_states]
-        excited_indices = [QN_original.index(es) for es in excited_states]
+        original_index = {id(state): idx for idx, state in enumerate(QN_original)}
+
+        def _original_index(state: states.CoupledState) -> int:
+            idx = original_index.get(id(state))
+            if idx is None:
+                # Fall back to equality search for states not identical by id.
+                idx = QN_original.index(state)
+            return idx
+
+        ground_indices = [_original_index(gs) for gs in ground_states]
+        excited_indices = [_original_index(es) for es in excited_states]
         QN = [
             qn.transform_to_omega_basis()
             if qn.largest.basis is states.Basis.CoupledP

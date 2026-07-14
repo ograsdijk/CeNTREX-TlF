@@ -213,10 +213,13 @@ def run_benchmarks():
             stats = data.get("solver_stats")
             if not stats:
                 continue
+            rhs_seconds = stats.get("rhs_seconds", 0.0)
+            total_seconds = stats.get("total_seconds", 0.0)
+            non_rhs_seconds = total_seconds - rhs_seconds
             print(
-                f"  {label:38s} {stats['rhs_calls']:10d} {stats['accepted_steps']:8d} "
-                f"{stats['rejected_steps']:8d} {stats['rhs_seconds']*1000:10.1f} "
-                f"{stats['non_rhs_seconds']*1000:12.1f}"
+                f"  {label:38s} {stats.get('rhs_calls', 0):10d} {stats.get('accepted_steps', 0):8d} "
+                f"{stats.get('rejected_steps', 0):8d} {rhs_seconds*1000:10.1f} "
+                f"{non_rhs_seconds*1000:12.1f}"
             )
 
     print("\n" + "=" * 70)

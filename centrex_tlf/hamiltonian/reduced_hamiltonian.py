@@ -426,6 +426,7 @@ def generate_total_reduced_hamiltonian(
     H_func_X: Optional[Callable] = None,
     H_func_B: Optional[Callable] = None,
     use_omega_basis: bool = True,
+    B_hamiltonian_omega: Optional[ReducedHamiltonian] = None,
 ) -> ReducedHamiltonianTotal:
     """
     Generate the total reduced hamiltonian for all X and B states in X_states_approx and
@@ -474,6 +475,15 @@ def generate_total_reduced_hamiltonian(
                                             hamiltonian and then transform to P basis if
                                             the P state is requested. Ω basis is faster
                                             to calculate. Defaults to True.
+        B_hamiltonian_omega (Optional[ReducedHamiltonian]): Prebuilt Ω-basis B-state
+                                            Hamiltonian to reuse instead of rebuilding.
+                                            Must have been built by
+                                            generate_reduced_B_hamiltonian in the Ω
+                                            basis over the same Jmin_B/Jmax_B range,
+                                            fields, and constants (internal reuse from
+                                            generate_reduced_hamiltonian_transitions).
+                                            Only used when use_omega_basis is True and
+                                            H_func_B is None. Defaults to None.
 
     Returns:
         ReducedHamiltonian: Dataclass holding the X states, B states, total states,
@@ -507,20 +517,30 @@ def generate_total_reduced_hamiltonian(
     else:
         _B_states_approx = cast(List[CoupledBasisState], list(B_states_approx))
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        H_B_red = generate_reduced_B_hamiltonian(
-            _B_states_approx,
-            E=E,
-            B=B,
-            rtol=rtol,
-            stol=stol,
-            Jmin=Jmin_B,
-            Jmax=Jmax_B,
-            constants=B_constants,
-            nuclear_spins=nuclear_spins,
-            H_func=H_func_B,
-        )
+    if (
+        B_hamiltonian_omega is not None
+        and use_omega_basis
+        and B_states_approx[0].basis == Basis.CoupledP
+        and H_func_B is None
+    ):
+        # Reuse the prebuilt Ω-basis B Hamiltonian (identical to what the call
+        # below would construct for the same J range/fields/constants).
+        H_B_red = B_hamiltonian_omega
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            H_B_red = generate_reduced_B_hamiltonian(
+                _B_states_approx,
+                E=E,
+                B=B,
+                rtol=rtol,
+                stol=stol,
+                Jmin=Jmin_B,
+                Jmax=Jmax_B,
+                constants=B_constants,
+                nuclear_spins=nuclear_spins,
+                H_func=H_func_B,
+            )
 
     if use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
         excited_states = [
@@ -623,8 +643,9 @@ def generate_reduced_hamiltonian_transitions(
     """
     _J_ground: List[int] = []
     excited_states_selectors = []
+    optical_states_approx: List[List[CoupledBasisState]] = []
 
-    # figure out which rotational levels to include
+    # collect the approximate excited states per optical transition
     for transition in transitions:
         if isinstance(transition, OpticalTransition):
             excited_states_approx_qn_select = transition.qn_select_excited
@@ -632,11 +653,36 @@ def generate_reduced_hamiltonian_transitions(
                 excited_states_approx_qn_select = _retain_opposite_parity_levels(
                     excited_states_approx_qn_select
                 )
-            excited_states_approx = list(
-                generate_coupled_states_B(excited_states_approx_qn_select)
+            optical_states_approx.append(
+                list(generate_coupled_states_B(excited_states_approx_qn_select))
             )
-            excited_states, excited_hamiltonian = generate_reduced_B_hamiltonian(
-                B_states_approx=excited_states_approx,
+            excited_states_selectors.append(excited_states_approx_qn_select)
+
+        if isinstance(transition, MicrowaveTransition):
+            _J_ground.extend([transition.J_ground, transition.J_excited])
+
+    # Build the B-state Hamiltonian ONCE over the union J range of all optical
+    # transitions, in the Ω basis (identical to the build
+    # generate_total_reduced_hamiltonian performs), and reuse it both for the
+    # per-transition ground-J discovery below and — via B_hamiltonian_omega —
+    # for the final total Hamiltonian. Previously each optical transition
+    # triggered its own parity-basis B build plus a rebuild in the total step.
+    B_hamiltonian_omega: Optional[ReducedHamiltonian] = None
+    if optical_states_approx:
+        union_states_omega = cast(
+            List[CoupledBasisState],
+            get_unique_basisstates_from_states(
+                [
+                    qn.transform_to_omega_basis()
+                    for approx in optical_states_approx
+                    for qn in approx
+                ]
+            ),
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            B_hamiltonian_omega = generate_reduced_B_hamiltonian(
+                B_states_approx=union_states_omega,
                 E=E,
                 B=B,
                 rtol=rtol,
@@ -646,41 +692,54 @@ def generate_reduced_hamiltonian_transitions(
                 constants=Bconstants,
                 nuclear_spins=nuclear_spins,
             )
-            excited_states = cast(List[CoupledState], excited_states)
+        # Dressed levels labeled in the parity basis; each transition's excited
+        # states are identified by largest overlap, the same matching used in
+        # generate_total_reduced_hamiltonian.
+        dressed_states_parity = [
+            qn.transform_to_parity_basis().remove_small_components(stol)
+            for qn in B_hamiltonian_omega.QN_basis
+        ]
 
-            # figure out which excited states are involved
-            excited_states = [
-                s.remove_small_components(minimum_amplitude) for s in excited_states
+    # figure out which rotational ground levels to include per transition
+    for excited_states_approx in optical_states_approx:
+        state_vecs = np.array(
+            [
+                (1 * s).state_vector(dressed_states_parity)
+                for s in excited_states_approx
             ]
+        )
+        excited_states = [
+            dressed_states_parity[idx]
+            for idx in np.argmax(np.abs(state_vecs), axis=1)
+        ]
+        excited_states = [
+            s.remove_small_components(minimum_amplitude) for s in excited_states
+        ]
 
-            Js_excited: npt.NDArray[np.int_] = np.unique(
-                [s.J for es in excited_states for a, s in es]
-            )
-            if Jmax_X is None:
-                _Jmax_X = Js_excited.max() + 2
-            else:
-                _Jmax_X = Jmax_X
-            ground_states = generate_coupled_states_ground(
-                Js=np.arange(0, _Jmax_X + 1).astype(int)
-            )
-            # calculate the coupling between the ground and excited states to determine
-            # which states to include
-            nonzero_coupling = []
-            for gs in ground_states:
-                for es in excited_states:
-                    if (
-                        np.abs(generate_ED_ME_mixed_state(1 * gs, es))
-                        >= minimum_coupling
-                    ):
-                        nonzero_coupling.append(gs)
+        Js_excited: npt.NDArray[np.int_] = np.unique(
+            [s.J for es in excited_states for a, s in es]
+        )
+        if Jmax_X is None:
+            _Jmax_X = Js_excited.max() + 2
+        else:
+            _Jmax_X = Jmax_X
+        ground_states = generate_coupled_states_ground(
+            Js=np.arange(0, _Jmax_X + 1).astype(int)
+        )
+        # calculate the coupling between the ground and excited states to determine
+        # which states to include
+        nonzero_coupling = []
+        for gs in ground_states:
+            for es in excited_states:
+                if (
+                    np.abs(generate_ED_ME_mixed_state(1 * gs, es))
+                    >= minimum_coupling
+                ):
+                    nonzero_coupling.append(gs)
 
-            Js_ground = list(np.unique([s.J for s in nonzero_coupling]))
+        Js_ground = list(np.unique([s.J for s in nonzero_coupling]))
 
-            _J_ground.extend(Js_ground)
-            excited_states_selectors.append(excited_states_approx_qn_select)
-
-        if isinstance(transition, MicrowaveTransition):
-            _J_ground.extend([transition.J_ground, transition.J_excited])
+        _J_ground.extend(Js_ground)
 
     # removing duplicates
     J_ground: List[int] = list(np.unique(_J_ground))
@@ -711,4 +770,5 @@ def generate_reduced_hamiltonian_transitions(
         H_func_X=None,
         H_func_B=None,
         use_omega_basis=use_omega_basis,
+        B_hamiltonian_omega=B_hamiltonian_omega if use_omega_basis else None,
     )

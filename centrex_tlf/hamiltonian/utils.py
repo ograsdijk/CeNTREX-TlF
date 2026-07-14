@@ -96,9 +96,15 @@ def reduced_basis_hamiltonian(
     """
 
     # Determine the indices of each of the reduced basis states
+    original_index = {id(state): idx for idx, state in enumerate(basis_original)}
+
     index_red = np.zeros(len(basis_reduced), dtype=int)
     for i, state_red in enumerate(basis_reduced):
-        index_red[i] = basis_original.index(state_red)
+        idx = original_index.get(id(state_red))
+        if idx is None:
+            # Fall back to equality search for states not identical by id.
+            idx = basis_original.index(state_red)
+        index_red[i] = idx
 
     # Initialize matrix for Hamiltonian in reduced basis
     H_red = np.zeros((len(basis_reduced), len(basis_reduced)), dtype=complex)

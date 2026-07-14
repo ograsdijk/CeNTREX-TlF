@@ -374,11 +374,128 @@ def test_expanded_sparse_rhs_matches_structured_upper(
         rust.lindblad_rhs_py(rust_plan, packed, time, "structured_upper"),
         dtype=np.float64,
     )
-    rhs_expanded = np.asarray(
-        rust.lindblad_rhs_py(rust_plan, packed, time, "expanded_sparse"),
+    for mode in (
+        "expanded_sparse",
+        "experimental_expanded_sparse_current_split_inputs",
+        "experimental_expanded_sparse_baseline_packed",
+    ):
+        rhs_expanded = np.asarray(
+            rust.lindblad_rhs_py(rust_plan, packed, time, mode),
+            dtype=np.float64,
+        )
+        np.testing.assert_allclose(rhs_expanded, rhs_upper, atol=1e-11, rtol=1e-11)
+
+
+def _make_chain_system(n_states: int) -> OBESystem:
+    """Nearest-neighbor coupled chain with n_states levels.
+
+    Used to exercise the `expanded_sparse` RHS kernel on both sides of the
+    partitioned/split-inputs selection gate in `rust/src/lindblad/rhs.rs`
+    (`PARTITIONED_PACKED_MAX_STATES`), not just the 2-level systems used
+    elsewhere in this file.
+    """
+    omega, delta = smp.symbols("Omega delta", real=True)
+    hamiltonian = smp.zeros(n_states, n_states)
+    for i in range(n_states):
+        hamiltonian[i, i] = delta * i
+    for i in range(n_states - 1):
+        hamiltonian[i, i + 1] = omega / 2
+        hamiltonian[i + 1, i] = smp.conjugate(omega) / 2
+    c_array = np.zeros((n_states - 1, n_states, n_states), dtype=np.complex128)
+    for i in range(n_states - 1):
+        c_array[i, i, i + 1] = np.sqrt(0.1)
+    zeros = np.zeros((n_states, n_states), dtype=np.complex128)
+    return OBESystem(
+        ground=[],
+        excited=[],
+        QN=[],
+        H_int=zeros,
+        V_ref_int=zeros,
+        couplings=[],
+        H_symbolic=hamiltonian,
+        C_array=c_array,
+        system=None,
+        coupling_symbols=[omega, delta],
+        polarization_symbols=[],
+    )
+
+
+def _chain_packed_rho(n_states: int) -> np.ndarray:
+    rng = np.random.default_rng(0)
+    real = rng.standard_normal((n_states, n_states))
+    imag = rng.standard_normal((n_states, n_states))
+    matrix = real + 1j * imag
+    hermitian = matrix + matrix.conj().T
+    return hermitian.astype(np.complex128)
+
+
+@pytest.mark.parametrize(
+    "n_states",
+    [3, 45],
+    ids=["below_partitioned_gate", "above_partitioned_gate"],
+)
+def test_expanded_sparse_rhs_matches_reference_across_partition_gate(n_states: int) -> None:
+    # n_states=3 stays below and n_states=45 stays above the
+    # `PARTITIONED_PACKED_MAX_STATES` (=40) gate in rust/src/lindblad/rhs.rs, so this
+    # covers both the partitioned kernel and the split-inputs fallback with a single
+    # parametrized check.
+    system = _make_chain_system(n_states)
+    omega_symbol, delta_symbol = system.coupling_symbols
+    parameters = {
+        "omega0": 1.0,
+        "modulation_depth": 0.5,
+        "modulation_frequency": 1.9,
+        str(delta_symbol): 0.2,
+        str(omega_symbol): "omega0*phase_modulation(t, modulation_depth, modulation_frequency)",
+    }
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="python",
+        hamiltonian_representation="decomposed",
+    )
+    assert prepared.expanded_rhs_plan is not None
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    packed = prepared.layout.pack(_chain_packed_rho(n_states))
+    rhs_reference = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, 0.41, "reference"),
         dtype=np.float64,
     )
-    np.testing.assert_allclose(rhs_expanded, rhs_upper, atol=1e-11, rtol=1e-11)
+    rhs_expanded = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, 0.41, "expanded_sparse"),
+        dtype=np.float64,
+    )
+    np.testing.assert_allclose(rhs_expanded, rhs_reference, atol=1e-12, rtol=1e-9)
+
+
+def test_expanded_sparse_indirect_time_dependency_updates_reused_workspace() -> None:
+    system = _make_two_level_system()
+    parameters = {
+        "omega0": 1.0,
+        "modulation_depth": 0.5,
+        "modulation_frequency": 1.9,
+        str(system.coupling_symbols[1]): -0.1,
+        str(system.coupling_symbols[0]): (
+            "omega0*phase_modulation(t, modulation_depth, modulation_frequency)"
+        ),
+    }
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="python",
+        hamiltonian_representation="decomposed",
+    )
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    expanded = rust.create_lindblad_rhs_evaluator_py(rust_plan, "expanded_sparse")
+    structured = rust.create_lindblad_rhs_evaluator_py(rust_plan, "structured_upper")
+    packed = prepared.layout.pack(
+        np.array([[0.8, 0.05 + 0.04j], [0.05 - 0.04j, 0.2]], dtype=np.complex128)
+    )
+    first = np.asarray(expanded.rhs_packed_py(packed, 0.0), dtype=np.float64)
+    second = np.asarray(expanded.rhs_packed_py(packed, 0.41), dtype=np.float64)
+    expected = np.asarray(structured.rhs_packed_py(packed, 0.41), dtype=np.float64)
+    assert not np.allclose(first, second)
+    np.testing.assert_allclose(second, expected, atol=1e-11, rtol=1e-11)
 
 
 def test_expanded_sparse_split_input_flag_matches_default_rhs() -> None:

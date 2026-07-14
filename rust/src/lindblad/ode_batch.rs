@@ -237,33 +237,42 @@ pub fn solve_batch_ode(
         other => return Err(format!("unknown output mode: {other:?}")),
     };
 
-    let solve_one = |trajectory: usize| -> Result<(OdeOutputResult, OdeStats), String> {
+    // Reuse per-thread workers (RHS + workspace + output buffers) across
+    // trajectories, mirroring solve_grid_ode_direct's GridWorker pattern,
+    // instead of constructing a fresh LindbladRhs/workspace per trajectory.
+    let use_overrides = !parameter_slot_indices.is_empty() && parameter_batch.is_some();
+    let make_worker = || {
+        GridWorker::new_with_event(
+            plan,
+            execution_mode,
+            rhs_options,
+            &output_spec,
+            capacity,
+            parameter_width,
+            stop_event.clone(),
+        )
+    };
+    let solve_with_worker = |worker: &mut GridWorker,
+                             trajectory: usize|
+     -> Result<(OdeOutputResult, OdeStats), String> {
         let y0_start = trajectory * dim;
         let y0 = &y0_batch[y0_start..y0_start + dim];
-        let mut rhs = if !parameter_slot_indices.is_empty() && parameter_batch.is_some() {
+        let param_values = if use_overrides {
             let batch = parameter_batch.unwrap();
             let start = trajectory * parameter_width;
-            let param_values = &batch[start..start + parameter_width];
-            LindbladRhs::new_with_options_overrides_and_event(
-                plan,
-                execution_mode,
-                rhs_options,
-                parameter_slot_indices,
-                param_values,
-                stop_event.clone(),
-            )?
+            Some(&batch[start..start + parameter_width])
         } else {
-            LindbladRhs::new_with_rhs_options(plan, execution_mode, rhs_options)
-                .with_stop_event(stop_event.clone())
+            None
         };
-        let mut output = output_spec.create(capacity);
-        let stats = output.solve(&mut rhs, y0, t0, t1, options, solver)?;
-        Ok((output.finish(), stats))
+        worker.solve_batch(y0, t0, t1, options, solver, parameter_slot_indices, param_values)
     };
 
     let results: Vec<Result<(OdeOutputResult, OdeStats), String>> =
         if !parallel || threads == Some(1) {
-            (0..trajectory_count).map(solve_one).collect()
+            let mut worker = make_worker();
+            (0..trajectory_count)
+                .map(|trajectory| solve_with_worker(&mut worker, trajectory))
+                .collect()
         } else if let Some(n_threads) = threads {
             let pool = rayon::ThreadPoolBuilder::new()
                 .num_threads(n_threads)
@@ -272,13 +281,17 @@ pub fn solve_batch_ode(
             pool.install(|| {
                 (0..trajectory_count)
                     .into_par_iter()
-                    .map(solve_one)
+                    .map_init(&make_worker, |worker, trajectory| {
+                        solve_with_worker(worker, trajectory)
+                    })
                     .collect()
             })
         } else {
             (0..trajectory_count)
                 .into_par_iter()
-                .map(solve_one)
+                .map_init(&make_worker, |worker, trajectory| {
+                    solve_with_worker(worker, trajectory)
+                })
                 .collect()
         };
 
@@ -476,6 +489,49 @@ impl<'a> GridWorker<'a> {
             output: output_spec.create(capacity),
             param_values: vec![Complex64::ZERO; parameter_width],
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_event(
+        plan: &'a PreparedLindbladPlan,
+        execution_mode: ExecutionMode,
+        rhs_options: RhsOptions,
+        output_spec: &OutputSpec,
+        capacity: usize,
+        parameter_width: usize,
+        stop_event: Option<LindbladStopEvent>,
+    ) -> Self {
+        Self {
+            rhs: LindbladRhs::new_with_rhs_options(plan, execution_mode, rhs_options)
+                .with_stop_event(stop_event),
+            output: output_spec.create(capacity),
+            param_values: vec![Complex64::ZERO; parameter_width],
+        }
+    }
+
+    /// Solve one batch trajectory, reusing this worker's RHS workspace and
+    /// output buffers. `parameter_values` (when present) fully overwrites the
+    /// scalar overrides left by the previous trajectory.
+    #[allow(clippy::too_many_arguments)]
+    fn solve_batch(
+        &mut self,
+        y0: &[f64],
+        t0: f64,
+        t1: f64,
+        options: &OdeOptions,
+        solver: OdeSolver,
+        parameter_slot_indices: &[usize],
+        parameter_values: Option<&[Complex64]>,
+    ) -> Result<(OdeOutputResult, OdeStats), String> {
+        if let Some(values) = parameter_values {
+            self.rhs
+                .set_scalar_parameter_overrides(parameter_slot_indices, values)?;
+        }
+        self.output.reset();
+        let stats = self
+            .output
+            .solve(&mut self.rhs, y0, t0, t1, options, solver)?;
+        Ok((self.output.snapshot(), stats))
     }
 
     #[allow(clippy::too_many_arguments)]

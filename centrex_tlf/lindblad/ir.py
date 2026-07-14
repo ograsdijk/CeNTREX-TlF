@@ -407,6 +407,19 @@ def lower_hamiltonian_upper_triangle(
     if tuple_value_names is None:
         tuple_value_names = set()
 
+    if representation == "entrywise":
+        return _lower_hamiltonian_upper_triangle_entrywise(
+            hamiltonian,
+            slot_index_by_name,
+            tuple_value_names=tuple_value_names,
+        )
+    if representation == "decomposed":
+        return _lower_hamiltonian_upper_triangle_decomposed(
+            hamiltonian,
+            slot_index_by_name,
+            tuple_value_names=tuple_value_names,
+        )
+
     entrywise_plan = _lower_hamiltonian_upper_triangle_entrywise(
         hamiltonian,
         slot_index_by_name,
@@ -417,11 +430,6 @@ def lower_hamiltonian_upper_triangle(
         slot_index_by_name,
         tuple_value_names=tuple_value_names,
     )
-
-    if representation == "entrywise":
-        return entrywise_plan
-    if representation == "decomposed":
-        return decomposed_plan
 
     entrywise_cost = len(entrywise_plan["temps"]) + len(entrywise_plan["entries"])
     diagnostics = decomposed_plan.get("diagnostics", {})

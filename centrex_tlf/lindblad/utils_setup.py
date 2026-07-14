@@ -19,7 +19,7 @@ from .generate_hamiltonian import generate_total_symbolic_hamiltonian
 from .generate_system_of_equations import (
     generate_density_matrix,
     generate_dissipator_term,
-    generate_system_of_equations_symbolic,
+    generate_hamiltonian_term,
 )
 from .utils_compact import generate_qn_compact
 
@@ -32,23 +32,84 @@ __all__ = [
 ]
 
 
-@dataclass
 class OBESystem:
-    ground: Sequence[states.CoupledState]
-    excited: Sequence[states.CoupledState]
-    QN: Sequence[states.CoupledState]
-    H_int: npt.NDArray[np.complex128]
-    V_ref_int: npt.NDArray[np.complex128]
-    couplings: List[Any]
-    H_symbolic: smp.MutableDenseMatrix
-    C_array: npt.NDArray[np.floating]
-    system: smp.MutableDenseMatrix | None
-    coupling_symbols: Sequence[smp.Symbol]
-    polarization_symbols: Sequence[Sequence[smp.Symbol]]
-    dissipator: Optional[smp.MutableDenseMatrix] = None
-    QN_original: Optional[Sequence[states.CoupledState]] = None
-    decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None
-    couplings_original: Optional[List[couplings_tlf.CouplingFields]] = None
+    """OBE system container with lazily built symbolic Lindblad matrices.
+
+    ``system`` and ``dissipator`` are cached properties constructed on first
+    access from ``H_symbolic`` and ``C_array`` (which fully determine them)
+    using the sparse entrywise builders in
+    ``generate_system_of_equations``. The recommended Rust solve path never
+    reads them, so building an OBESystem no longer pays for the symbolic
+    system of equations; consumers that do need the symbolic matrices (Julia
+    code generation, visualization) trigger a fast on-demand build instead.
+
+    ``system``/``dissipator`` may still be passed to the constructor (or
+    assigned) to override the lazy build, e.g. by code that constructs them
+    separately.
+    """
+
+    def __init__(
+        self,
+        ground: Sequence[states.CoupledState],
+        excited: Sequence[states.CoupledState],
+        QN: Sequence[states.CoupledState],
+        H_int: npt.NDArray[np.complex128],
+        V_ref_int: npt.NDArray[np.complex128],
+        couplings: List[Any],
+        H_symbolic: smp.MutableDenseMatrix,
+        C_array: npt.NDArray[np.floating],
+        system: smp.MutableDenseMatrix | None = None,
+        coupling_symbols: Sequence[smp.Symbol] = (),
+        polarization_symbols: Sequence[Sequence[smp.Symbol]] = (),
+        dissipator: Optional[smp.MutableDenseMatrix] = None,
+        QN_original: Optional[Sequence[states.CoupledState]] = None,
+        decay_channels: Optional[Sequence[utils_decay.DecayChannel]] = None,
+        couplings_original: Optional[List[couplings_tlf.CouplingFields]] = None,
+    ) -> None:
+        self.ground = ground
+        self.excited = excited
+        self.QN = QN
+        self.H_int = H_int
+        self.V_ref_int = V_ref_int
+        self.couplings = couplings
+        self.H_symbolic = H_symbolic
+        self.C_array = C_array
+        self.coupling_symbols = coupling_symbols
+        self.polarization_symbols = polarization_symbols
+        self.QN_original = QN_original
+        self.decay_channels = decay_channels
+        self.couplings_original = couplings_original
+        self._system = system
+        self._dissipator = dissipator
+
+    @property
+    def dissipator(self) -> smp.MutableDenseMatrix:
+        """Symbolic Lindblad dissipator; built and cached on first access."""
+        if self._dissipator is None:
+            density_matrix = generate_density_matrix(self.H_symbolic.shape[0])
+            self._dissipator = generate_dissipator_term(
+                self.C_array, density_matrix, fast=True
+            )
+        return self._dissipator
+
+    @dissipator.setter
+    def dissipator(self, value: Optional[smp.MutableDenseMatrix]) -> None:
+        self._dissipator = value
+
+    @property
+    def system(self) -> smp.MutableDenseMatrix:
+        """Symbolic dρ/dt = -i[H, ρ] + dissipator; built and cached on first access."""
+        if self._system is None:
+            density_matrix = generate_density_matrix(self.H_symbolic.shape[0])
+            hamiltonian_term = generate_hamiltonian_term(
+                self.H_symbolic, density_matrix
+            )
+            self._system = hamiltonian_term + self.dissipator
+        return self._system
+
+    @system.setter
+    def system(self, value: Optional[smp.MutableDenseMatrix]) -> None:
+        self._system = value
 
     def __repr__(self) -> str:
         ground = [s.largest for s in self.ground]
@@ -253,19 +314,14 @@ def _build_obe_system(
 
     if verbose:
         logger.info(
-            "generate_OBE_system: 5/5 -> Transforming the Hamiltonian and collapse "
-            "matrices into a symbolic system of equations"
+            "generate_OBE_system: 5/5 -> Assembling the OBE system (symbolic "
+            "system of equations is now built lazily on first access)"
         )
-    if method == "expanded":
-        hamiltonian_term, dissipator = generate_system_of_equations_symbolic(
-            H_symbolic, C_array, fast=True, split_output=True
-        )
-        system = hamiltonian_term + dissipator
-    elif method == "matrix":
-        system = None
-        density_matrix = generate_density_matrix(H_symbolic.shape[0])
-        dissipator = generate_dissipator_term(C_array, density_matrix, fast=True)
-    else:
+    # The symbolic system/dissipator are no longer built here: they are lazy
+    # cached properties on OBESystem, fully determined by H_symbolic and
+    # C_array. `method` used to select what was precomputed and is now a
+    # deprecated no-op (validated for compatibility).
+    if method not in ("expanded", "matrix"):
         raise ValueError(f"method {method} not recognised; use 'expanded' or 'matrix'")
 
     return OBESystem(
@@ -277,8 +333,6 @@ def _build_obe_system(
         H_int=H_int,
         V_ref_int=V_ref_int,
         C_array=C_array,
-        system=system,
-        dissipator=dissipator,
         coupling_symbols=[trans.Ω for trans in transition_selectors],
         polarization_symbols=[
             trans.polarization_symbols for trans in transition_selectors
@@ -375,6 +429,9 @@ def generate_OBE_system(
         decay_channels (DecayChannel): dataclass specifying the decay channel to
                                         add
         verbose (bool, optional): Log progress to INFO. Defaults to False.
+        method (str): Deprecated, no effect. `OBESystem.system` and
+                        `OBESystem.dissipator` are now built lazily on first
+                        access regardless of method.
 
     Returns:
         OBESystem: dataclass designed to hold the generated values
@@ -478,6 +535,9 @@ def generate_OBE_system_transitions(
                                         the opposite bare parity partner in the
                                         reduced OBE system. Defaults to False.
         verbose (bool, optional): Log progress to INFO. Defaults to False.
+        method (str): Deprecated, no effect. `OBESystem.system` and
+                        `OBESystem.dissipator` are now built lazily on first
+                        access regardless of method.
 
     Returns:
         OBESystem: dataclass designed to hold the generated values
