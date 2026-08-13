@@ -426,7 +426,7 @@ def generate_total_reduced_hamiltonian(
     H_func_X: Optional[Callable] = None,
     H_func_B: Optional[Callable] = None,
     use_omega_basis: bool = True,
-    B_hamiltonian_omega: Optional[ReducedHamiltonian] = None,
+    B_hamiltonian_omega: ReducedHamiltonian | None = None,
 ) -> ReducedHamiltonianTotal:
     """
     Generate the total reduced hamiltonian for all X and B states in X_states_approx and
@@ -643,7 +643,7 @@ def generate_reduced_hamiltonian_transitions(
     """
     _J_ground: List[int] = []
     excited_states_selectors = []
-    optical_states_approx: List[List[CoupledBasisState]] = []
+    optical_states_approx: list[list[CoupledBasisState]] = []
 
     # collect the approximate excited states per optical transition
     for transition in transitions:
@@ -667,10 +667,10 @@ def generate_reduced_hamiltonian_transitions(
     # per-transition ground-J discovery below and — via B_hamiltonian_omega —
     # for the final total Hamiltonian. Previously each optical transition
     # triggered its own parity-basis B build plus a rebuild in the total step.
-    B_hamiltonian_omega: Optional[ReducedHamiltonian] = None
+    B_hamiltonian_omega: ReducedHamiltonian | None = None
     if optical_states_approx:
         union_states_omega = cast(
-            List[CoupledBasisState],
+            list[CoupledBasisState],
             get_unique_basisstates_from_states(
                 [
                     qn.transform_to_omega_basis()

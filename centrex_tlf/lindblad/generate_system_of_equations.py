@@ -68,10 +68,10 @@ def generate_dissipator_term(
     matrix products (which multiply mostly zeros and dominate OBE setup time;
     see IMPLEMENTATION_AUDIT.md "Performance Review (2026-07-11)"):
 
-    - Jump term Σᵢ CᵢρCᵢ†: iterates nonzero entries of each Cᵢ, so a
+    - Jump term: iterates nonzero entries of each collapse operator, so a
       single-jump operator contributes exactly one term. Handles multi-entry
       operators as well (all nonzero pairs).
-    - Anticommutator -½{Cᵢ†Cᵢ, ρ}: Σᵢ Cᵢ†Cᵢ is a plain numeric matrix,
+    - Anticommutator: the summed operator product is a plain numeric matrix,
       computed with numpy; only its nonzero entries generate symbolic terms.
       For single-jump operators it is diagonal, giving -(γᵢ+γⱼ)/2 · ρᵢⱼ.
 
@@ -92,7 +92,7 @@ def generate_dissipator_term(
         [[] for _ in range(nstates)] for _ in range(nstates)
     ]
 
-    # Jump term: (C ρ C†)[i, j] = Σ_{α,β} C[i,α] ρ[α,β] conj(C[j,β])
+    # Jump term assembled from pairs of nonzero collapse-operator entries.
     for C in C_array:
         nonzero = np.argwhere(C != 0)
         for i, alpha in nonzero:
@@ -131,7 +131,7 @@ def generate_dissipator_term(
 def generate_hamiltonian_term(
     hamiltonian: smp.Matrix, density_matrix: smp.Matrix
 ) -> smp.Matrix:
-    """Build the coherent term -i[H, ρ] entrywise from H's nonzero structure.
+    """Build the coherent commutator term entrywise from H's nonzero structure.
 
     Equivalent to -1j * (H @ rho - rho @ H) but O(nnz(H)·n) sympy operations
     instead of O(n³) dense symbolic matrix products.

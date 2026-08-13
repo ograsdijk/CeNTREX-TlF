@@ -1,18 +1,9 @@
-"""Regression test pinning the CURRENT symbolic OBE construction.
+"""Regression tests for lazy symbolic OBE construction.
 
-`IMPLEMENTATION_AUDIT.md` (section "Performance Review (2026-07-11)") plans to
-turn `OBESystem.system`/`OBESystem.dissipator` into lazily built, sparse
-entrywise constructors instead of the current eager
-`generate_system_of_equations_symbolic(H_symbolic, C_array, fast=True,
-split_output=True)` call (see
-`centrex_tlf.lindblad.utils_setup._build_obe_system`, `method="expanded"`
-branch). This test numerically pins the *current* construction so that
-refactor is required to reproduce it bit-for-bit (up to floating point
-tolerance): it builds a small `OBESystem` with `method="expanded"`, assigns
-random numeric values to every symbol involved (Hamiltonian parameters and
-density-matrix entries), and checks that both the combined `system` matrix
-and the standalone `dissipator` matrix agree with a plain-numpy evaluation of
-the Lindblad master equation
+The tests build a small `OBESystem`, assign random numeric values to every
+symbol involved, and check that both the lazily built combined `system` matrix
+and standalone `dissipator` matrix agree with a plain-numpy evaluation of the
+Lindblad master equation
 
     drho/dt = -i[H, rho] + sum_k(C_k rho C_k^dagger
                                   - 0.5 * {C_k^dagger C_k, rho})
@@ -22,6 +13,9 @@ involved in the "expected" side at all.
 """
 
 from __future__ import annotations
+
+import dataclasses
+import warnings
 
 import numpy as np
 import pytest
@@ -52,8 +46,8 @@ def small_obe_system() -> OBESystem:
     tolerance question, not a correctness question -- the assertions below
     use a magnitude-aware atol instead of a fixed absolute one.
 
-    `method="expanded"` is required so `_build_obe_system` populates both
-    `system` (= hamiltonian_term + dissipator) and `dissipator`.
+    The symbolic `system` and `dissipator` are built lazily when the tests
+    access them.
     """
     trans = transitions.R0_F1_1o2_F0
     transition_selectors = couplings.generate_transition_selectors(
@@ -62,7 +56,6 @@ def small_obe_system() -> OBESystem:
     return lindblad.generate_OBE_system_transitions(
         [trans],
         transition_selectors,
-        method="expanded",
     )
 
 
@@ -73,7 +66,7 @@ def _random_hermitian_rho(
 
     `generate_density_matrix(n)` (see
     `centrex_tlf/lindblad/generate_system_of_equations.py`) represents rho
-    with independent `IndexedBase("ρ")[i, j]` symbols for the upper
+    with independent indexed rho symbols for the upper
     triangle (i <= j); lower-triangle entries are `conjugate(rho[j, i])` of
     the *same* symbols, not independent symbols. So only upper-triangle
     (including diagonal) symbols need values in the substitution dict --
@@ -107,7 +100,7 @@ def _lindblad_rhs(
     C_dagger = np.conj(np.transpose(C_array, (0, 2, 1)))
     commutator = H @ rho - rho @ H
     jump_sum = np.zeros_like(rho)
-    for C, C_dag in zip(C_array, C_dagger):
+    for C, C_dag in zip(C_array, C_dagger, strict=True):
         jump_sum += C @ rho @ C_dag
     C_dagger_C_sum = np.einsum("kij,kjl->il", C_dagger, C_array)
     anticommutator = C_dagger_C_sum @ rho + rho @ C_dagger_C_sum
@@ -187,3 +180,38 @@ def test_symbolic_dissipator_matches_numpy_dissipator(small_obe_system: OBESyste
     cdagger_c = np.einsum("kij,kjl->il", np.conj(np.transpose(C_arr, (0, 2, 1))), C_arr)
     atol = _cancellation_atol(np.abs(cdagger_c) * np.abs(rho_num).max())
     np.testing.assert_allclose(dissipator_num, expected_dissipator, atol=atol, rtol=1e-12)
+
+
+def test_obe_system_lazy_matrices_are_cached(small_obe_system: OBESystem) -> None:
+    assert not dataclasses.is_dataclass(small_obe_system)
+    system = small_obe_system.system
+    dissipator = small_obe_system.dissipator
+    assert system is small_obe_system._system
+    assert dissipator is small_obe_system._dissipator
+
+
+def test_legacy_method_warns_and_has_no_effect() -> None:
+    trans = transitions.R0_F1_1o2_F0
+    transition_selectors = couplings.generate_transition_selectors(
+        [trans], [[couplings.polarization_Z]]
+    )
+    with pytest.warns(DeprecationWarning, match="method is deprecated"):
+        system = lindblad.generate_OBE_system_transitions(
+            [trans], transition_selectors, method="matrix"
+        )
+    assert system._system is None
+    assert system._dissipator is None
+
+
+def test_omitted_method_is_silent_and_unknown_method_fails() -> None:
+    trans = transitions.R0_F1_1o2_F0
+    transition_selectors = couplings.generate_transition_selectors(
+        [trans], [[couplings.polarization_Z]]
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        lindblad.generate_OBE_system_transitions([trans], transition_selectors)
+    with pytest.raises(ValueError, match="method invalid not recognised"):
+        lindblad.generate_OBE_system_transitions(
+            [trans], transition_selectors, method="invalid"
+        )

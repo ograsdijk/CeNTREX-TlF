@@ -31,7 +31,7 @@ from centrex_tlf.lindblad.plan_static import prepare_lindblad_problem
 from centrex_tlf.lindblad.solve import solve_lindblad
 from centrex_tlf.lindblad.utils_setup import OBESystem
 
-GAMMA = getattr(hamiltonian, "Γ")  # 2*pi*1.56e6 rad/s
+GAMMA = hamiltonian.Γ  # 2*pi*1.56e6 rad/s
 
 
 def _load_diagnose_step_size():
@@ -140,7 +140,8 @@ def test_two_level_toy_rotated_frame_matches_original(
 def test_r2_system_rotated_frame_matches_original(detuning_mhz: float) -> None:
     diagnose = _load_diagnose_step_size()
 
-    system, ts = diagnose.build_system()
+    with pytest.warns(UserWarning, match="Low overlap detected"):
+        system, ts = diagnose.build_system()
     rotated = apply_per_level_rotating_frame(system)
 
     rabi_value = diagnose.power_to_rabi_rectangular_beam(

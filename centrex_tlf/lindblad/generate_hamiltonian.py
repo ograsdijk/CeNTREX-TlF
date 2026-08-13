@@ -412,7 +412,7 @@ def apply_per_level_rotating_frame(obe_system: Any) -> Any:
     n = int(H.shape[0])
     t = smp.Symbol("t", real=True)
 
-    energies: List[float] = []
+    energies: list[float] = []
     for i in range(n):
         entry = H[i, i]
         zero_subs = {s: 0 for s in entry.free_symbols}

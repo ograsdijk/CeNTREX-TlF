@@ -107,7 +107,6 @@ def build_system():
         E=E_FIELD,
         B=B_FIELD,
         retain_opposite_parity_levels=True,
-        method="matrix",
         normalize_pol=True,
     )
     return system, transition_selectors[0]
