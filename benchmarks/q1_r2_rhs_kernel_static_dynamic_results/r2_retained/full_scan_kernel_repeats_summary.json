@@ -1,0 +1,75 @@
+{
+  "system": "r2_retained",
+  "baseline_packed": {
+    "n": 4,
+    "wall_mean_seconds": 293.45338542497484,
+    "wall_std_seconds": 3.0447122309289423,
+    "stats_total_mean_seconds": 293.4404349499382,
+    "stats_total_std_seconds": 3.045038014365686,
+    "rhs_calls_unique": [
+      33698285
+    ],
+    "accepted_steps_unique": [
+      5616245
+    ],
+    "peak_detuning_unique": [
+      1.0
+    ]
+  },
+  "current_split_inputs": {
+    "n": 4,
+    "wall_mean_seconds": 285.58455655002035,
+    "wall_std_seconds": 1.3966927338945812,
+    "stats_total_mean_seconds": 285.5706994999782,
+    "stats_total_std_seconds": 1.3964703311814095,
+    "rhs_calls_unique": [
+      33698285
+    ],
+    "accepted_steps_unique": [
+      5616245
+    ],
+    "peak_detuning_unique": [
+      1.0
+    ]
+  },
+  "static_dynamic": {
+    "n": 4,
+    "wall_mean_seconds": 309.566958350013,
+    "wall_std_seconds": 2.069850356987661,
+    "stats_total_mean_seconds": 309.5535765750101,
+    "stats_total_std_seconds": 2.0680740919041174,
+    "rhs_calls_unique": [
+      33698285
+    ],
+    "accepted_steps_unique": [
+      5616245
+    ],
+    "peak_detuning_unique": [
+      1.0
+    ]
+  },
+  "paired_speedup_baseline_over_static_dynamic": {
+    "values": [
+      0.929795196573574,
+      0.9639096494048293,
+      0.9477967685181085,
+      0.9505129063129064
+    ],
+    "mean": 0.9480036302023546,
+    "std": 0.014034335994726121
+  },
+  "paired_speedup_current_over_static_dynamic": {
+    "values": [
+      0.9203404546257197,
+      0.9254907330091601,
+      0.9129427418034173,
+      0.9314722107974295
+    ],
+    "mean": 0.9225615350589316,
+    "std": 0.007862033764266555
+  },
+  "validation": {
+    "max_abs_photon_diff_first_comparison": 6.994405055138486e-15,
+    "max_rel_photon_diff_first_comparison": 5.764303555265366e-15
+  }
+}

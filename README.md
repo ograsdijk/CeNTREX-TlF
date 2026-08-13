@@ -1,6 +1,9 @@
 [![Python versions on PyPI](https://img.shields.io/pypi/pyversions/centrex-tlf.svg)](https://pypi.python.org/pypi/centrex-tlf/)
 [![CeNTREX-TlF version on PyPI](https://img.shields.io/pypi/v/centrex-tlf.svg "CeNTREX-TlF on PyPI")](https://pypi.python.org/pypi/centrex-tlf/)
 
+See the [changelog](https://github.com/ograsdijk/CeNTREX-TlF/blob/main/CHANGELOG.md)
+for release notes and migration guidance.
+
 ## Extensions
 [![CeNTREX-TlF-julia-extension version on PyPI](https://img.shields.io/badge/extension-julia-informational "CeNTREX-TlF-julia-extension on PyPI")](https://github.com/ograsdijk/CeNTREX-TlF-julia-extension) [![CeNTREX-TlF version on PyPI](https://img.shields.io/pypi/v/centrex-tlf-julia-extension.svg "CeNTREX-TlF on PyPI")](https://pypi.python.org/pypi/centrex-tlf-julia-extension/)
 # CeNTREX-TlF

@@ -13,14 +13,14 @@ from typing import Any
 
 import numpy as np
 
-
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-RESULTS_DIR = HERE / "q1_r2_rhs_kernel_full_scan_results"
+RESULTS_DIR = HERE / "q1_r2_rhs_kernel_static_dynamic_results"
 
 MODES = {
     "baseline_packed": "experimental_expanded_sparse_baseline_packed",
-    "current_split_inputs": "expanded_sparse",
+    "current_split_inputs": "experimental_expanded_sparse_current_split_inputs",
+    "static_dynamic": "expanded_sparse",
 }
 
 
@@ -61,7 +61,7 @@ def prepare_q1(quiet: bool, *, qn_compact: bool) -> dict[str, Any]:
         backend="rust",
         hamiltonian_representation="decomposed",
     )
-    gamma = getattr(ns["hamiltonian"], "\u0393")
+    gamma = getattr(ns["hamiltonian"], "\u0393")  # noqa: B009
     weights = [(int(idx), float(gamma)) for idx in ns["index_sets"](system)["excited"]]
     return {
         "name": "q1_retained_compact" if qn_compact else "q1_retained",
@@ -176,20 +176,24 @@ def summarize(system: str, rows: list[dict[str, Any]], photon_refs: dict[str, np
             "accepted_steps_unique": sorted({int(row["accepted_steps"]) for row in group}),
             "peak_detuning_unique": sorted({float(row["peak_detuning_MHz"]) for row in group}),
         }
-    base = by_label["baseline_packed"]
-    current = by_label["current_split_inputs"]
-    count = min(len(base), len(current))
-    speedups = [
-        float(base[idx]["wall_seconds"]) / float(current[idx]["wall_seconds"])
-        for idx in range(count)
-    ]
-    summary["paired_speedup_baseline_over_current"] = {
-        "values": speedups,
-        "mean": statistics.mean(speedups) if speedups else None,
-        "std": statistics.stdev(speedups) if len(speedups) > 1 else 0.0,
-    }
+    for comparison, numerator, denominator in (
+        ("baseline_over_static_dynamic", "baseline_packed", "static_dynamic"),
+        ("current_over_static_dynamic", "current_split_inputs", "static_dynamic"),
+    ):
+        left = by_label[numerator]
+        right = by_label[denominator]
+        count = min(len(left), len(right))
+        speedups = [
+            float(left[idx]["wall_seconds"]) / float(right[idx]["wall_seconds"])
+            for idx in range(count)
+        ]
+        summary[f"paired_speedup_{comparison}"] = {
+            "values": speedups,
+            "mean": statistics.mean(speedups) if speedups else None,
+            "std": statistics.stdev(speedups) if len(speedups) > 1 else 0.0,
+        }
     if set(photon_refs) == set(MODES):
-        diff = np.abs(photon_refs["baseline_packed"] - photon_refs["current_split_inputs"])
+        diff = np.abs(photon_refs["baseline_packed"] - photon_refs["static_dynamic"])
         denom = max(float(np.max(np.abs(photon_refs["baseline_packed"]))), 1e-30)
         summary["validation"] = {
             "max_abs_photon_diff_first_comparison": float(np.max(diff)),
@@ -204,10 +208,8 @@ def benchmark_model(model: dict[str, Any], *, repeats: int, threads: int | None)
     summary_path = out_dir / "full_scan_kernel_repeats_summary.json"
     rows: list[dict[str, Any]] = []
     photon_refs: dict[str, np.ndarray] = {}
-    orders = [
-        ["baseline_packed", "current_split_inputs"],
-        ["current_split_inputs", "baseline_packed"],
-    ]
+    labels = list(MODES)
+    orders = [labels[offset:] + labels[:offset] for offset in range(len(labels))]
     print(
         f"{model['name']}: levels={model['n_levels']} "
         f"scan_points={model['detuning_mhz'].size} saveat={model['saveat'].size}",

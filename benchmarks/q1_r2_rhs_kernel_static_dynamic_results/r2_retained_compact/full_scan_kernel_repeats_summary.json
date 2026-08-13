@@ -1,0 +1,75 @@
+{
+  "system": "r2_retained_compact",
+  "baseline_packed": {
+    "n": 4,
+    "wall_mean_seconds": 31.07570260000648,
+    "wall_std_seconds": 0.18125662270852513,
+    "stats_total_mean_seconds": 31.074813625076786,
+    "stats_total_std_seconds": 0.18123294020358124,
+    "rhs_calls_unique": [
+      33836645
+    ],
+    "accepted_steps_unique": [
+      5639233
+    ],
+    "peak_detuning_unique": [
+      1.0
+    ]
+  },
+  "current_split_inputs": {
+    "n": 4,
+    "wall_mean_seconds": 32.33092610002495,
+    "wall_std_seconds": 0.19386247040027388,
+    "stats_total_mean_seconds": 32.329992025042884,
+    "stats_total_std_seconds": 0.19388934590218854,
+    "rhs_calls_unique": [
+      33836645
+    ],
+    "accepted_steps_unique": [
+      5639233
+    ],
+    "peak_detuning_unique": [
+      1.0
+    ]
+  },
+  "static_dynamic": {
+    "n": 4,
+    "wall_mean_seconds": 30.406653599988203,
+    "wall_std_seconds": 0.33554788063497926,
+    "stats_total_mean_seconds": 30.405655374983326,
+    "stats_total_std_seconds": 0.33540549138980763,
+    "rhs_calls_unique": [
+      33836645
+    ],
+    "accepted_steps_unique": [
+      5639233
+    ],
+    "peak_detuning_unique": [
+      1.0
+    ]
+  },
+  "paired_speedup_baseline_over_static_dynamic": {
+    "values": [
+      1.0220600032130303,
+      1.0364376845917485,
+      1.031130488431587,
+      0.9989247935163004
+    ],
+    "mean": 1.0221382424381664,
+    "std": 0.016575130629291807
+  },
+  "paired_speedup_current_over_static_dynamic": {
+    "values": [
+      1.066662580107076,
+      1.06128172934545,
+      1.0762346442862012,
+      1.049273493435186
+    ],
+    "mean": 1.0633631117934783,
+    "std": 0.011245922790667223
+  },
+  "validation": {
+    "max_abs_photon_diff_first_comparison": 8.770761894538737e-15,
+    "max_rel_photon_diff_first_comparison": 7.228253584856924e-15
+  }
+}

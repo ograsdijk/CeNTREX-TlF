@@ -3,9 +3,14 @@ use crate::lindblad::eval::RuntimeValue;
 use crate::lindblad::layout::UpperTriLayout;
 use crate::lindblad::plan::{ExpandedSparseRhsPlan, HermitianSparsePattern, PreparedLindbladPlan};
 use num_complex::Complex64;
+use std::collections::BTreeMap;
 use std::time::Instant;
 
 const NO_PACKED_IMAG_INDEX: usize = usize::MAX;
+// The partitioned layout removes coefficient indirection for compact systems, but its four
+// per-output streams lose cache locality once the packed upper triangle becomes large. Retained
+// q1/r2 benchmarks put the crossover between 38 and 64 states.
+const PARTITIONED_PACKED_MAX_STATES: usize = 40;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ExecutionMode {
@@ -13,6 +18,8 @@ pub enum ExecutionMode {
     StructuredBlas,
     StructuredUpper,
     ExpandedSparse,
+    ExperimentalExpandedSparseBaselinePacked,
+    ExperimentalExpandedSparseCurrentSplitInputs,
     ExperimentalExpandedSparseSplitCoefficients,
     ExperimentalExpandedSparseSplitInputs,
     ExperimentalExpandedSparsePrecomputedInputs,
@@ -38,6 +45,12 @@ impl ExecutionMode {
             "structured" => Ok(Self::StructuredBlas),
             "structured_upper" => Ok(Self::StructuredUpper),
             "expanded_sparse" => Ok(Self::ExpandedSparse),
+            "experimental_expanded_sparse_baseline_packed" => {
+                Ok(Self::ExperimentalExpandedSparseBaselinePacked)
+            }
+            "experimental_expanded_sparse_current_split_inputs" => {
+                Ok(Self::ExperimentalExpandedSparseCurrentSplitInputs)
+            }
             "experimental_expanded_sparse_split_coefficients" => {
                 Ok(Self::ExperimentalExpandedSparseSplitCoefficients)
             }
@@ -55,6 +68,8 @@ impl ExecutionMode {
         matches!(
             self,
             Self::ExpandedSparse
+                | Self::ExperimentalExpandedSparseBaselinePacked
+                | Self::ExperimentalExpandedSparseCurrentSplitInputs
                 | Self::ExperimentalExpandedSparseSplitCoefficients
                 | Self::ExperimentalExpandedSparseSplitInputs
                 | Self::ExperimentalExpandedSparsePrecomputedInputs
@@ -101,6 +116,36 @@ struct PrecomputedPackedInputs {
     complex_re_indices: Vec<usize>,
     complex_im_indices: Vec<usize>,
     complex_imag_signs: Vec<f64>,
+}
+
+#[derive(Clone, Debug)]
+struct StaticPackedTerm {
+    source_term_indices: Vec<usize>,
+    re: usize,
+    im: usize,
+    imag_sign: f64,
+    coefficient_re: f64,
+    coefficient_im: f64,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct DynamicPackedTerm {
+    term_index: usize,
+    re: usize,
+    im: usize,
+    imag_sign: f64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct PartitionedPackedInputs {
+    static_real_ptrs: Vec<usize>,
+    static_complex_ptrs: Vec<usize>,
+    dynamic_real_ptrs: Vec<usize>,
+    dynamic_complex_ptrs: Vec<usize>,
+    static_real_terms: Vec<StaticPackedTerm>,
+    static_complex_terms: Vec<StaticPackedTerm>,
+    dynamic_real_terms: Vec<DynamicPackedTerm>,
+    dynamic_complex_terms: Vec<DynamicPackedTerm>,
 }
 
 fn build_upper_to_packed_indices(n: usize, upper_layout: &UpperTriLayout) -> Vec<PackedUpperIndex> {
@@ -235,6 +280,107 @@ fn build_precomputed_expanded_packed_inputs(
         complex_im_indices,
         complex_imag_signs,
     }
+}
+
+fn build_partitioned_expanded_packed_inputs(
+    plan: &PreparedLindbladPlan,
+    upper_to_packed: &[PackedUpperIndex],
+) -> PartitionedPackedInputs {
+    let Some(rhs_plan) = plan.expanded_rhs_plan.as_ref() else {
+        return PartitionedPackedInputs::default();
+    };
+    let output_len = rhs_plan.output_ptrs.len().saturating_sub(1);
+    let mut result = PartitionedPackedInputs::default();
+    result.static_real_ptrs.reserve(output_len + 1);
+    result.static_complex_ptrs.reserve(output_len + 1);
+    result.dynamic_real_ptrs.reserve(output_len + 1);
+    result.dynamic_complex_ptrs.reserve(output_len + 1);
+    result.static_real_ptrs.push(0);
+    result.static_complex_ptrs.push(0);
+    result.dynamic_real_ptrs.push(0);
+    result.dynamic_complex_ptrs.push(0);
+
+    for window in rhs_plan.output_ptrs.windows(2) {
+        let mut static_real: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        let mut static_complex: BTreeMap<(usize, usize, i8), Vec<usize>> = BTreeMap::new();
+        let mut dynamic_real = Vec::new();
+        let mut dynamic_complex = Vec::new();
+        for term_index in window[0]..window[1] {
+            let term = &rhs_plan.terms[term_index];
+            let dynamic = term
+                .coeff_index
+                .and_then(|index| plan.dynamic_hamiltonian_coefficients.get(index))
+                .copied()
+                .unwrap_or(false);
+            let index = upper_to_packed[term.input];
+            if index.im == NO_PACKED_IMAG_INDEX {
+                if dynamic {
+                    dynamic_real.push(DynamicPackedTerm {
+                        term_index,
+                        re: index.re,
+                        im: index.re,
+                        imag_sign: 0.0,
+                    });
+                } else {
+                    static_real.entry(index.re).or_default().push(term_index);
+                }
+            } else {
+                let sign = if term.input_conj { -1 } else { 1 };
+                if dynamic {
+                    dynamic_complex.push(DynamicPackedTerm {
+                        term_index,
+                        re: index.re,
+                        im: index.im,
+                        imag_sign: f64::from(sign),
+                    });
+                } else {
+                    static_complex
+                        .entry((index.re, index.im, sign))
+                        .or_default()
+                        .push(term_index);
+                }
+            }
+        }
+        result.static_real_terms.extend(static_real.into_iter().map(
+            |(re, source_term_indices)| StaticPackedTerm {
+                source_term_indices,
+                re,
+                im: re,
+                imag_sign: 0.0,
+                coefficient_re: 0.0,
+                coefficient_im: 0.0,
+            },
+        ));
+        result
+            .static_complex_terms
+            .extend(
+                static_complex
+                    .into_iter()
+                    .map(|((re, im, sign), source_term_indices)| StaticPackedTerm {
+                        source_term_indices,
+                        re,
+                        im,
+                        imag_sign: f64::from(sign),
+                        coefficient_re: 0.0,
+                        coefficient_im: 0.0,
+                    }),
+            );
+        dynamic_real.sort_unstable_by_key(|term| term.re);
+        dynamic_complex.sort_unstable_by_key(|term| (term.re, term.im));
+        result.dynamic_real_terms.extend(dynamic_real);
+        result.dynamic_complex_terms.extend(dynamic_complex);
+        result.static_real_ptrs.push(result.static_real_terms.len());
+        result
+            .static_complex_ptrs
+            .push(result.static_complex_terms.len());
+        result
+            .dynamic_real_ptrs
+            .push(result.dynamic_real_terms.len());
+        result
+            .dynamic_complex_ptrs
+            .push(result.dynamic_complex_terms.len());
+    }
+    result
 }
 
 #[inline(always)]
@@ -595,8 +741,8 @@ fn add_expanded_sparse_rhs_packed_precomputed_inputs(
             acc_re += term_values_re[term_index] * value_re;
             acc_im += term_values_im[term_index] * value_re;
         }
-        for idx in packed_inputs.complex_ptrs[output_index]
-            ..packed_inputs.complex_ptrs[output_index + 1]
+        for idx in
+            packed_inputs.complex_ptrs[output_index]..packed_inputs.complex_ptrs[output_index + 1]
         {
             let term_index = packed_inputs.complex_term_indices[idx];
             let coefficient_re = term_values_re[term_index];
@@ -662,6 +808,133 @@ fn fill_expanded_sparse_term_values_split(
         coefficient *= term.factor;
         out_re[idx] = coefficient.re;
         out_im[idx] = coefficient.im;
+    }
+    Ok(())
+}
+
+fn add_expanded_sparse_rhs_packed_partitioned(
+    inputs: &PartitionedPackedInputs,
+    dynamic_values_re: &[f64],
+    dynamic_values_im: &[f64],
+    upper_to_packed: &[PackedUpperIndex],
+    packed_state: &[f64],
+    out: &mut [f64],
+) -> Result<(), String> {
+    let output_len = upper_to_packed.len();
+    if inputs.static_real_ptrs.len() != output_len + 1
+        || inputs.static_complex_ptrs.len() != output_len + 1
+        || inputs.dynamic_real_ptrs.len() != output_len + 1
+        || inputs.dynamic_complex_ptrs.len() != output_len + 1
+    {
+        return Err("expanded RHS partitioned input pointers have wrong length".to_string());
+    }
+    if packed_state.len() != out.len() {
+        return Err(format!(
+            "expanded RHS expected matching packed input/output lengths, got {} and {}",
+            packed_state.len(),
+            out.len()
+        ));
+    }
+    for output_index in 0..output_len {
+        let mut acc_re = 0.0_f64;
+        let mut acc_im = 0.0_f64;
+        for term in &inputs.static_real_terms
+            [inputs.static_real_ptrs[output_index]..inputs.static_real_ptrs[output_index + 1]]
+        {
+            let value_re = packed_state[term.re];
+            acc_re += term.coefficient_re * value_re;
+            acc_im += term.coefficient_im * value_re;
+        }
+        for term in &inputs.static_complex_terms
+            [inputs.static_complex_ptrs[output_index]..inputs.static_complex_ptrs[output_index + 1]]
+        {
+            let value_re = packed_state[term.re];
+            let value_im = term.imag_sign * packed_state[term.im];
+            acc_re += term.coefficient_re * value_re - term.coefficient_im * value_im;
+            acc_im += term.coefficient_re * value_im + term.coefficient_im * value_re;
+        }
+        for term in &inputs.dynamic_real_terms
+            [inputs.dynamic_real_ptrs[output_index]..inputs.dynamic_real_ptrs[output_index + 1]]
+        {
+            let value_re = packed_state[term.re];
+            acc_re += dynamic_values_re[term.term_index] * value_re;
+            acc_im += dynamic_values_im[term.term_index] * value_re;
+        }
+        for term in &inputs.dynamic_complex_terms[inputs.dynamic_complex_ptrs[output_index]
+            ..inputs.dynamic_complex_ptrs[output_index + 1]]
+        {
+            let coefficient_re = dynamic_values_re[term.term_index];
+            let coefficient_im = dynamic_values_im[term.term_index];
+            let value_re = packed_state[term.re];
+            let value_im = term.imag_sign * packed_state[term.im];
+            acc_re += coefficient_re * value_re - coefficient_im * value_im;
+            acc_im += coefficient_re * value_im + coefficient_im * value_re;
+        }
+        write_packed_upper_parts(out, upper_to_packed, output_index, acc_re, acc_im);
+    }
+    Ok(())
+}
+
+#[inline]
+fn expanded_sparse_term_value(
+    rhs_plan: &ExpandedSparseRhsPlan,
+    term_index: usize,
+    coeff_values: &[Complex64],
+) -> Result<Complex64, String> {
+    let term = &rhs_plan.terms[term_index];
+    let mut coefficient = Complex64::ONE;
+    if let Some(coeff_index) = term.coeff_index {
+        if coeff_index >= coeff_values.len() {
+            return Err(format!(
+                "expanded RHS coefficient index {coeff_index} out of bounds for {} values",
+                coeff_values.len()
+            ));
+        }
+        coefficient = coeff_values[coeff_index];
+        if term.coeff_conj {
+            coefficient = coefficient.conj();
+        }
+    }
+    Ok(term.factor * coefficient)
+}
+
+fn refresh_partitioned_static_terms(
+    rhs_plan: &ExpandedSparseRhsPlan,
+    coeff_values: &[Complex64],
+    inputs: &mut PartitionedPackedInputs,
+) -> Result<(), String> {
+    for term in inputs
+        .static_real_terms
+        .iter_mut()
+        .chain(inputs.static_complex_terms.iter_mut())
+    {
+        let mut coefficient = Complex64::ZERO;
+        for &term_index in &term.source_term_indices {
+            coefficient += expanded_sparse_term_value(rhs_plan, term_index, coeff_values)?;
+        }
+        term.coefficient_re = coefficient.re;
+        term.coefficient_im = coefficient.im;
+    }
+    Ok(())
+}
+
+fn fill_partitioned_dynamic_term_values(
+    rhs_plan: &ExpandedSparseRhsPlan,
+    coeff_values: &[Complex64],
+    inputs: &PartitionedPackedInputs,
+    out_re: &mut Vec<f64>,
+    out_im: &mut Vec<f64>,
+) -> Result<(), String> {
+    out_re.resize(rhs_plan.terms.len(), 0.0);
+    out_im.resize(rhs_plan.terms.len(), 0.0);
+    for term in inputs
+        .dynamic_real_terms
+        .iter()
+        .chain(inputs.dynamic_complex_terms.iter())
+    {
+        let coefficient = expanded_sparse_term_value(rhs_plan, term.term_index, coeff_values)?;
+        out_re[term.term_index] = coefficient.re;
+        out_im[term.term_index] = coefficient.im;
     }
     Ok(())
 }
@@ -787,6 +1060,7 @@ pub struct RhsWorkspace {
     expanded_packed_inputs: Vec<PackedTermInput>,
     grouped_expanded_packed_inputs: GroupedPackedInputs,
     precomputed_expanded_packed_inputs: PrecomputedPackedInputs,
+    partitioned_expanded_packed_inputs: PartitionedPackedInputs,
     pchip_hints: Vec<usize>,
     hamiltonian_valid: bool,
     h_sparse_valid: bool,
@@ -815,6 +1089,8 @@ impl RhsWorkspace {
             build_grouped_expanded_packed_inputs(plan, &upper_to_packed);
         let precomputed_expanded_packed_inputs =
             build_precomputed_expanded_packed_inputs(plan, &upper_to_packed);
+        let partitioned_expanded_packed_inputs =
+            build_partitioned_expanded_packed_inputs(plan, &upper_to_packed);
         let expanded_term_capacity = plan
             .expanded_rhs_plan
             .as_ref()
@@ -845,6 +1121,7 @@ impl RhsWorkspace {
             expanded_packed_inputs,
             grouped_expanded_packed_inputs,
             precomputed_expanded_packed_inputs,
+            partitioned_expanded_packed_inputs,
             pchip_hints: vec![0; plan.parameter_graph.pchip_tables.len()],
             hamiltonian_valid: false,
             h_sparse_valid: false,
@@ -1015,6 +1292,8 @@ fn rhs_from_workspace_rho(
                 )?;
             }
             ExecutionMode::ExpandedSparse
+            | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
+            | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
             | ExecutionMode::ExperimentalExpandedSparseSplitCoefficients
             | ExecutionMode::ExperimentalExpandedSparseSplitInputs
             | ExecutionMode::ExperimentalExpandedSparsePrecomputedInputs => {
@@ -1076,6 +1355,8 @@ fn rhs_from_workspace_rho(
             );
         }
         ExecutionMode::ExpandedSparse
+        | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
+        | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
         | ExecutionMode::ExperimentalExpandedSparseSplitCoefficients
         | ExecutionMode::ExperimentalExpandedSparseSplitInputs
         | ExecutionMode::ExperimentalExpandedSparsePrecomputedInputs => {
@@ -1114,6 +1395,8 @@ fn rhs_from_workspace_rho(
             workspace.drho_upper.as_mut_slice(),
         ),
         ExecutionMode::ExpandedSparse
+        | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
+        | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
         | ExecutionMode::ExperimentalExpandedSparseSplitCoefficients
         | ExecutionMode::ExperimentalExpandedSparseSplitInputs
         | ExecutionMode::ExperimentalExpandedSparsePrecomputedInputs => {}
@@ -1156,6 +1439,8 @@ pub fn rhs_matrix_into_with_profile(
         }
         ExecutionMode::StructuredUpper
         | ExecutionMode::ExpandedSparse
+        | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
+        | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
         | ExecutionMode::ExperimentalExpandedSparseSplitCoefficients
         | ExecutionMode::ExperimentalExpandedSparseSplitInputs
         | ExecutionMode::ExperimentalExpandedSparsePrecomputedInputs => {
@@ -1172,6 +1457,8 @@ pub fn rhs_matrix_into_with_profile(
         }
         ExecutionMode::StructuredUpper
         | ExecutionMode::ExpandedSparse
+        | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
+        | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
         | ExecutionMode::ExperimentalExpandedSparseSplitCoefficients
         | ExecutionMode::ExperimentalExpandedSparseSplitInputs
         | ExecutionMode::ExperimentalExpandedSparsePrecomputedInputs => {
@@ -1325,6 +1612,85 @@ pub fn build_packed_jacobian_sparse(
 }
 
 fn rhs_packed_expanded_sparse_into_with_profile(
+    plan: &PreparedLindbladPlan,
+    packed_state: &[f64],
+    t: f64,
+    _options: RhsOptions,
+    workspace: &mut RhsWorkspace,
+    out: &mut [f64],
+    mut profile: Option<&mut RhsProfileStats>,
+) -> Result<(), String> {
+    let rhs_plan = plan.expanded_rhs_plan.as_ref().ok_or_else(|| {
+        "execution_mode='expanded_sparse' requires a decomposed Hamiltonian plan".to_string()
+    })?;
+    if packed_state.len() != plan.layout.packed_len() || out.len() != plan.layout.packed_len() {
+        return Err(format!(
+            "expected packed input/output length {}, got {} and {}",
+            plan.layout.packed_len(),
+            packed_state.len(),
+            out.len()
+        ));
+    }
+
+    let total_start = Instant::now();
+    let parameter_start = Instant::now();
+    let initialize_static = !workspace.hamiltonian_valid;
+    if initialize_static || plan.is_time_dependent {
+        workspace.evaluate_parameter_graph(plan, t)?;
+    }
+    if let Some(stats) = profile.as_mut() {
+        stats.parameter_eval_seconds += parameter_start.elapsed().as_secs_f64();
+    }
+
+    let hamiltonian_start = Instant::now();
+    if initialize_static || plan.is_time_dependent {
+        plan.hamiltonian_plan
+            .evaluate_decomposed_coefficients_into(
+                workspace.parameter_values.as_slice(),
+                t,
+                &mut workspace.eval_stack,
+                &mut workspace.scalar_stack,
+                &mut workspace.expanded_coeff_values,
+            )?;
+        if initialize_static {
+            refresh_partitioned_static_terms(
+                rhs_plan,
+                workspace.expanded_coeff_values.as_slice(),
+                &mut workspace.partitioned_expanded_packed_inputs,
+            )?;
+        }
+        fill_partitioned_dynamic_term_values(
+            rhs_plan,
+            workspace.expanded_coeff_values.as_slice(),
+            &workspace.partitioned_expanded_packed_inputs,
+            &mut workspace.expanded_term_values_re,
+            &mut workspace.expanded_term_values_im,
+        )?;
+        workspace.hamiltonian_valid = true;
+        workspace.h_sparse_valid = false;
+    }
+    if let Some(stats) = profile.as_mut() {
+        stats.hamiltonian_fill_seconds += hamiltonian_start.elapsed().as_secs_f64();
+    }
+
+    let commutator_start = Instant::now();
+    add_expanded_sparse_rhs_packed_partitioned(
+        &workspace.partitioned_expanded_packed_inputs,
+        workspace.expanded_term_values_re.as_slice(),
+        workspace.expanded_term_values_im.as_slice(),
+        workspace.upper_to_packed.as_slice(),
+        packed_state,
+        out,
+    )?;
+    if let Some(stats) = profile.as_mut() {
+        stats.commutator_seconds += commutator_start.elapsed().as_secs_f64();
+        stats.calls += 1;
+        stats.total_seconds += total_start.elapsed().as_secs_f64();
+    }
+    Ok(())
+}
+
+fn rhs_packed_expanded_sparse_current_into_with_profile(
     plan: &PreparedLindbladPlan,
     packed_state: &[f64],
     t: f64,
@@ -1524,7 +1890,11 @@ fn rhs_packed_expanded_sparse_experimental_into_with_profile(
                 out,
             )?;
         }
-        _ => return Err(format!("unsupported experimental packed RHS mode: {mode:?}")),
+        _ => {
+            return Err(format!(
+                "unsupported experimental packed RHS mode: {mode:?}"
+            ))
+        }
     }
     if let Some(stats) = profile.as_mut() {
         stats.commutator_seconds += commutator_start.elapsed().as_secs_f64();
@@ -1550,7 +1920,29 @@ pub fn rhs_packed_into_with_profile(
     mut profile: Option<&mut RhsProfileStats>,
 ) -> Result<(), String> {
     if mode == ExecutionMode::ExpandedSparse {
-        return rhs_packed_expanded_sparse_into_with_profile(
+        if plan.n_states() <= PARTITIONED_PACKED_MAX_STATES {
+            return rhs_packed_expanded_sparse_into_with_profile(
+                plan,
+                packed_state,
+                t,
+                options,
+                workspace,
+                out,
+                profile,
+            );
+        }
+        return rhs_packed_expanded_sparse_current_into_with_profile(
+            plan,
+            packed_state,
+            t,
+            options,
+            workspace,
+            out,
+            profile,
+        );
+    }
+    if mode == ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs {
+        return rhs_packed_expanded_sparse_current_into_with_profile(
             plan,
             packed_state,
             t,
@@ -1584,6 +1976,8 @@ pub fn rhs_packed_into_with_profile(
         }
         ExecutionMode::StructuredUpper
         | ExecutionMode::ExpandedSparse
+        | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
+        | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
         | ExecutionMode::ExperimentalExpandedSparseSplitCoefficients
         | ExecutionMode::ExperimentalExpandedSparseSplitInputs
         | ExecutionMode::ExperimentalExpandedSparsePrecomputedInputs => {
@@ -1603,6 +1997,8 @@ pub fn rhs_packed_into_with_profile(
         }
         ExecutionMode::StructuredUpper
         | ExecutionMode::ExpandedSparse
+        | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
+        | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
         | ExecutionMode::ExperimentalExpandedSparseSplitCoefficients
         | ExecutionMode::ExperimentalExpandedSparseSplitInputs
         | ExecutionMode::ExperimentalExpandedSparsePrecomputedInputs => {

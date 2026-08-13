@@ -1,0 +1,11 @@
+metric,value
+single_build_s,6.93511850014329
+single_prepare_s,0.5928563000634313
+single_scan_s,67.0095934998244
+single_total_s,74.53756830003113
+reference_build_s,81.37200889992528
+reference_prepare_s,6.208656199742109
+reference_scan_s,77.68228519987315
+reference_total_s,165.26295029954053
+speedup_total,2.217176573755647
+speedup_build_prepare,11.634027401003307

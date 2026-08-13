@@ -48,7 +48,6 @@ def test_generate_obe_system_transitions_with_compact_selector_over_multiple_js(
         qn_compact=states.QuantumSelector(
             J=[1, 2, 3], electronic=states.ElectronicState.X
         ),
-        method="matrix",
     )
 
     assert system.QN_original is not None
@@ -67,21 +66,18 @@ def test_generate_obe_system_transitions_retains_opposite_parity_levels():
         [trans],
         transition_selectors,
         E=np.array([0.0, 0.0, 200.0]),
-        method="matrix",
     )
     retained = lindblad.generate_OBE_system_transitions(
         [trans],
         transition_selectors,
         E=np.array([0.0, 0.0, 200.0]),
         retain_opposite_parity_levels=True,
-        method="matrix",
     )
     retained_from_setup = lindblad.setup_OBE_system_transitions(
         [trans],
         transition_selectors,
         E=np.array([0.0, 0.0, 200.0]),
         retain_opposite_parity_levels=True,
-        method="matrix",
     )
 
     default_parities = {

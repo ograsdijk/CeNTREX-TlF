@@ -676,6 +676,7 @@ pub struct PreparedLindbladPlan {
     pub blas_config: Option<BlasConfig>,
     pub hamiltonian_sparse_pattern: HermitianSparsePattern,
     pub is_time_dependent: bool,
+    pub dynamic_hamiltonian_coefficients: Vec<bool>,
 }
 
 impl PreparedLindbladPlan {
@@ -1231,12 +1232,45 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
     let hamiltonian_sparse_pattern =
         HermitianSparsePattern::from_hamiltonian_plan(&hamiltonian_plan);
 
+    let expr_uses_time = |expr: &CompiledExpression| -> bool {
+        expr.instructions
+            .iter()
+            .any(|instr| instr.op == InstructionOp::Time)
+    };
+    let mut dynamic_parameter_slots = vec![false; parameter_graph.slot_names.len()];
+    for compound in &parameter_graph.compounds {
+        let dynamic = expr_uses_time(&compound.expression)
+            || compound.expression.instructions.iter().any(|instr| {
+                instr.op == InstructionOp::Slot
+                    && dynamic_parameter_slots
+                        .get(instr.index)
+                        .copied()
+                        .unwrap_or(false)
+            });
+        if let Some(slot) = dynamic_parameter_slots.get_mut(compound.slot) {
+            *slot = dynamic;
+        }
+    }
+    let expression_is_dynamic = |expr: &CompiledExpression| -> bool {
+        expr_uses_time(expr)
+            || expr.instructions.iter().any(|instr| {
+                instr.op == InstructionOp::Slot
+                    && dynamic_parameter_slots
+                        .get(instr.index)
+                        .copied()
+                        .unwrap_or(false)
+            })
+    };
+    let dynamic_hamiltonian_coefficients = if hamiltonian_plan.kind == HamiltonianKind::Decomposed {
+        hamiltonian_plan
+            .coefficients
+            .iter()
+            .map(|coefficient| expression_is_dynamic(&coefficient.expression))
+            .collect()
+    } else {
+        Vec::new()
+    };
     let is_time_dependent = {
-        let expr_uses_time = |expr: &CompiledExpression| -> bool {
-            expr.instructions
-                .iter()
-                .any(|instr| instr.op == InstructionOp::Time)
-        };
         let params_use_time = parameter_graph
             .compounds
             .iter()
@@ -1269,5 +1303,6 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
         blas_config,
         hamiltonian_sparse_pattern,
         is_time_dependent,
+        dynamic_hamiltonian_coefficients,
     })
 }

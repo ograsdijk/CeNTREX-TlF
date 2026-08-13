@@ -24,7 +24,7 @@ from centrex_tlf.lindblad.utils_setup import OBESystem
 from centrex_tlf.utils.rabi import power_to_rabi_rectangular_beam
 
 HERE = Path(__file__).resolve().parent
-RESULTS_DIR = HERE / "expanded_sparse_packed_rhs_results"
+RESULTS_DIR = HERE / "expanded_sparse_static_dynamic_results"
 REPORT_PATH = RESULTS_DIR / "expanded_sparse_packed_rhs_report.md"
 RHS_TIMINGS_PATH = RESULTS_DIR / "rhs_only_timings.csv"
 SOLVE_TIMINGS_PATH = RESULTS_DIR / "solve_timings.csv"
@@ -49,16 +49,9 @@ RABI_PARAMETER_NAME = "rabi"
 DETUNING_PARAMETER_NAME = "detuning"
 
 VARIANTS = [
-    ("baseline", "expanded_sparse"),
-    (
-        "split_coefficients",
-        "experimental_expanded_sparse_split_coefficients",
-    ),
-    ("split_inputs", "experimental_expanded_sparse_split_inputs"),
-    (
-        "precomputed_inputs",
-        "experimental_expanded_sparse_precomputed_inputs",
-    ),
+    ("legacy_packed", "experimental_expanded_sparse_baseline_packed"),
+    ("current_split_inputs", "experimental_expanded_sparse_current_split_inputs"),
+    ("static_dynamic", "expanded_sparse"),
 ]
 
 
@@ -292,9 +285,9 @@ def prepare_r2_model() -> BenchmarkModel:
         reltol=1e-7,
         abstol=1e-9,
         rhs_iterations=100,
-        rhs_repeats=5,
-        solve_repeats=3,
-        grid_repeats=2,
+        rhs_repeats=7,
+        solve_repeats=4,
+        grid_repeats=4,
         detuning_symbol=DETUNING_PARAMETER_NAME,
         detuning_axis=2 * np.pi * 1e6 * np.linspace(-80.0, 80.0, 9),
         photon_integral_weights=[(int(idx), float(GAMMA)) for idx in excited],
@@ -528,7 +521,7 @@ def system_rows(models: list[BenchmarkModel]) -> list[dict[str, Any]]:
 def speedup_table(df: pd.DataFrame, value_column: str) -> pd.DataFrame:
     rows = []
     for model, group in df.groupby("model", sort=False):
-        baseline = float(group.loc[group["variant"] == "baseline", value_column].iloc[0])
+        baseline = float(group.loc[group["variant"] == "legacy_packed", value_column].iloc[0])
         for row in group.itertuples(index=False):
             rows.append(
                 {
@@ -580,10 +573,9 @@ def write_report(
     )
     recommendation["risk_complexity"] = recommendation["variant"].map(
         {
-            "baseline": "none",
-            "split_coefficients": "low",
-            "split_inputs": "medium",
-            "precomputed_inputs": "medium",
+            "legacy_packed": "none",
+            "current_split_inputs": "medium",
+            "static_dynamic": "medium",
         }
     )
     recommendation["worth_implementing_signal"] = np.where(
@@ -595,8 +587,8 @@ def write_report(
     lines = [
         "# Expanded-Sparse Packed RHS Kernel Benchmark",
         "",
-        "This report benchmarks experimental packed `expanded_sparse` RHS kernels. "
-        "The default `expanded_sparse` implementation is the baseline; experimental modes are hidden and benchmark-only.",
+        "This report benchmarks the optimized static/dynamic `expanded_sparse` RHS kernel "
+        "against retained legacy-packed and current split-input benchmark controls.",
         "",
         "## Systems",
         markdown_table(systems),
