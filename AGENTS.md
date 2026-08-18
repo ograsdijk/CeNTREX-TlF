@@ -177,6 +177,20 @@ Each of these produces plausible-looking but wrong output rather than an error.
   mixing-only pair as the main pair silently inflates every Rabi rate; a warning fires below
   `weak_main_fraction` (default 1e-2) of the strongest element. Tune or silence it with the
   `weak_main_fraction` argument to `generate_coupling_field`.
+- **`B=[0,0,1e-5]` orders the ±mF states but does not make their eigenvectors
+  well-determined.** At that field the Zeeman splitting of an mF=±1 pair is ~6e-8 MHz
+  (0.37 rad/s) while `||H||₂` is ~5e11 rad/s, a relative gap of 7e-13 — only ~3000× machine
+  epsilon. Eigen*values* are still exact to full precision, but the eigen*vector* error
+  scales as `eps·||H||/gap`, so the mixing angle within a ±mF pair is uncertain at the
+  1e-4…1e-2 level and changes with the BLAS build (kernel selection, blocking, threading —
+  not just the numpy version). Measured: the same case gave a 0.54% different eigenvector on
+  scipy-openblas 0.3.29 vs 0.3.34, shifting a field-mixed matrix element by 0.46%.
+  This matters whenever a polarization addresses both ±mF (X̂ or Ŷ light couples an mF=0
+  ground state to both mF′=±1), since the contamination then adds coherently. Strongly mixed
+  couplings are the most exposed; ordinary allowed couplings sit on much larger gaps and are
+  ~100× less sensitive. **For quantitative work involving ±mF pairs, use a B field that
+  actually lifts the degeneracy (≥1e-3 G, ideally the real experimental field) rather than
+  the 1e-5 placeholder.**
 - **`method=` on the OBE builders is deprecated and does nothing.** Several committed notebooks
   still pass `method="matrix"`. Drop it in new code.
 - **`generate_uniform_population_state_indices` is defined twice** in

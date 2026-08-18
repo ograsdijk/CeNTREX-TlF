@@ -74,9 +74,12 @@ def test_bare_forbidden_transition_builds_in_field():
 
     main = abs(system.couplings[0].main_coupling)
     assert main > 0.1, f"expected a strong field-mixed coupling, got {main}"
-    # A field-mixed element derives from the eigenvector composition of a strongly mixed
-    # state, so it varies at the ~0.5% level across LAPACK/numpy versions (0.15854 on
-    # some, 0.15781 on others). Pin the physics, not the last digits.
+    # This element is dominated by the F=2/F=1 admixtures, not the nominal F=3 component,
+    # and the ground state has a degenerate mF=+1 partner split by only ~6e-8 MHz at
+    # B=1e-5 G. That gap is ~3000x machine epsilon relative to ||H||, so the mixing angle
+    # within the pair — and hence this matrix element — depends on the BLAS build:
+    # measured 0.15854 (scipy-openblas 0.3.29) vs 0.15781 (0.3.34). Pin the physics, not
+    # digits that are not reproducible across platforms. See the B-field note in AGENTS.md.
     np.testing.assert_allclose(main, 0.1585, rtol=2e-2)
 
 
