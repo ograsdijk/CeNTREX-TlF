@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.2.2
+
+Transition validity during OBE setup is now decided by the mixed-state dipole matrix
+element rather than by applying the E1 selection rules to bare state labels. In an
+electric or magnetic field the eigenstates are superpositions, so nominally forbidden
+pairs can be genuinely driveable; previously such a system could not be built at all.
+
+### Compatibility notes
+
+- `check_transitions_allowed` is no longer called during OBE setup and is deprecated.
+  It applied the selection rules to `state.largest`, which cannot see field mixing. The
+  rules are still consulted, but only to explain why a matrix element vanished.
+- A transition is rejected only when the mixed-state matrix element between the
+  field-dressed main states is zero. At zero field P, F and mF remain good quantum
+  numbers, so rule-violating elements vanish identically and the numeric test reproduces
+  the previous rule-based behaviour exactly.
+- Results for existing builds are unchanged. The canonical `P2_F1_3o2_F1` system at
+  200 V/cm keeps its level count and `main_coupling` to twelve significant digits, and
+  automatic main-state selection returns the same pair as before at every field.
+
+### Added
+
+- `generate_coupling_field` warns when `main_coupling` falls below `weak_main_fraction`
+  (default 1e-2) of the strongest element in the coupling matrix. `main_coupling`
+  normalizes the whole matrix, so a weakly coupled main pair silently inflates every
+  Rabi rate. The warning also reports when the main element has been pruned outright.
+- `select_main_states_indices_coupling` selects the main pair from mixed-state matrix
+  elements. It prefers bare-allowed pairs, falling back to the strongest field-mixed
+  coupling only when no bare-allowed pair exists.
+
 ## 0.2.1
 
 This release substantially reduces Lindblad setup time and improves Rust batch and

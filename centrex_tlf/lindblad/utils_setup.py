@@ -359,7 +359,16 @@ def check_transitions_allowed(
     transition_selectors: Sequence[couplings_tlf.TransitionSelector],
 ) -> None:
     """
-    Check if a sequence of TransitionSelectors are all allowed transitions
+    Check if a sequence of TransitionSelectors are all allowed transitions.
+
+    .. deprecated::
+        No longer called during OBE setup. This applies the E1 selection rules to the
+        *bare* dominant component (``state.largest``) of each main state, which gives the
+        wrong answer in an electric or magnetic field: field mixing makes nominally
+        forbidden pairs genuinely driveable. Transition validity is now decided by the
+        mixed-state matrix element in
+        :func:`centrex_tlf.couplings.generate_coupling_field`, which operates on the
+        field-dressed eigenstates. Retained for diagnostic use only.
 
     Args:
         transition_selectors (Sequence[couplings_TlF.TransitionSelector]): Sequence of
@@ -452,8 +461,6 @@ def generate_OBE_system(
                     C_array, system
     """
     _warn_deprecated_method(method)
-    # check if transitions are allowed before generating the hamiltonian
-    check_transitions_allowed(transition_selectors=transition_selectors)
 
     QN_X_original = list(states.generate_coupled_states_X(X_states))
     QN_B_original = list(states.generate_coupled_states_B(B_states))
@@ -561,8 +568,6 @@ def generate_OBE_system_transitions(
 
     _warn_deprecated_method(method)
 
-    # check if transitions are allowed before generating the hamiltonian
-    check_transitions_allowed(transition_selectors=transition_selectors)
 
     if verbose:
         logging.basicConfig(level=logging.INFO)
