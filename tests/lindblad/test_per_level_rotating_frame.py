@@ -140,8 +140,7 @@ def test_two_level_toy_rotated_frame_matches_original(
 def test_r2_system_rotated_frame_matches_original(detuning_mhz: float) -> None:
     diagnose = _load_diagnose_step_size()
 
-    with pytest.warns(UserWarning, match="Low overlap detected"):
-        system, ts = diagnose.build_system()
+    system, ts = diagnose.build_system()
     rotated = apply_per_level_rotating_frame(system)
 
     rabi_value = diagnose.power_to_rabi_rectangular_beam(

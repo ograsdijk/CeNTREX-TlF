@@ -316,8 +316,9 @@ def find_exact_states_indices(
     H: Optional[npt.NDArray[np.complex128]] = None,
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
-    overlap_threshold: float = 0.5,
+    overlap_threshold: Optional[float] = None,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> npt.NDArray[np.int_]: ...
 
 
@@ -328,8 +329,9 @@ def find_exact_states_indices(
     H: Optional[npt.NDArray[np.complex128]] = None,
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
-    overlap_threshold: float = 0.5,
+    overlap_threshold: Optional[float] = None,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> npt.NDArray[np.int_]: ...
 
 
@@ -339,8 +341,9 @@ def find_exact_states_indices(
     H: Optional[npt.NDArray[np.complex128]] = None,
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
-    overlap_threshold: float = 0.5,
+    overlap_threshold: Optional[float] = None,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> npt.NDArray[np.int_]:
     """Find optimal eigenstate indices matching approximate states.
 
@@ -359,8 +362,24 @@ def find_exact_states_indices(
             shape (N, N). If None, computed from H. Defaults to None.
         V_ref (npt.NDArray[np.complex128] | None): Reference eigenvectors for
             consistent ordering/phase across multiple calculations. Defaults to None.
-        overlap_threshold (float): Minimum overlap probability to warn about poor
-            matching. Overlaps below this trigger UserWarning. Defaults to 0.5.
+        overlap_threshold (float | None): Minimum overlap probability to warn about
+            impure state labels. Overlaps below this trigger a UserWarning. This tests
+            label purity, not whether the assignment is correct: ordinary Stark mixing
+            drives the purity of every state below 0.5 while the assignment stays
+            exact, so it is off by default. Defaults to None (no purity check).
+        margin_threshold (float | None): Minimum gap between the best and second-best
+            overlap for an approximate state. A small or negative margin means the
+            assigned eigenstate is barely preferred over a competitor, so the labelling
+            can flip with a small change in field or numerical noise; this triggers a
+            UserWarning. The default is chosen so the warning is silent wherever a
+            single-shot match is actually correct, in both X (J=0-6, silent to 10 kV/cm)
+            and B with both Lambda-doublet partners retained (silent to 200 V/cm, where
+            a larger threshold produces dozens of false alarms on ordinary builds). It is
+            therefore a sufficient, not a necessary, signal: a firing warning means the
+            assignment is likely wrong, but silence is not a guarantee. Above ~10 kV/cm
+            in X, or ~500 V/cm in B with both parities, do not rely on single-shot
+            matching regardless of the margin - track adiabatically instead.
+            Set to None to disable. Defaults to 0.02.
         use_optimal_assignment (bool): If True, use Hungarian algorithm for optimal
             assignment. If False, use greedy argmax (legacy behavior, may produce
             duplicates). Defaults to True.
@@ -375,7 +394,8 @@ def find_exact_states_indices(
             assignment).
         ValueError: If greedy assignment produces duplicates (when not using optimal
             assignment).
-        UserWarning: If any overlap is below overlap_threshold.
+        UserWarning: If any assignment margin is below margin_threshold, or if any
+            overlap is below overlap_threshold when that check is enabled.
 
     Example:
         >>> # Find dressed states from bare states
@@ -389,6 +409,13 @@ def find_exact_states_indices(
     Note:
         - Overlap probability is |<approx|exact>|²
         - Hungarian algorithm minimizes total cost = Σ(1 - overlap_i)
+        - Because the assignment is optimized globally, an individual state can be
+          given its second-best eigenstate so another state can have its best; this
+          shows up as a negative margin and is a genuine ambiguity signal
+        - Matching bare states to eigenstates in a single shot fails once mixing is
+          strong (in X above roughly 20 kV/cm). Track states adiabatically instead:
+          step the field up from ~0 in small increments and match each set of
+          eigenvectors to the previous set
         - For n approximate states and m eigenstates with n ≤ m, guarantees unique assignment
         - V_ref helps maintain consistent eigenstate ordering across parameter sweeps
     """
@@ -464,17 +491,54 @@ def find_exact_states_indices(
                 f"Consider using use_optimal_assignment=True."
             )
 
-    # Warn about poor overlaps
-    poor_overlaps = max_overlaps < overlap_threshold
-    if np.any(poor_overlaps):
-        poor_indices = np.where(poor_overlaps)[0]
-        warnings.warn(
-            f"Low overlap detected for approximate states at indices {poor_indices.tolist()}. "
-            f"Overlaps: {max_overlaps[poor_overlaps].tolist()}. "
-            f"The approximate states may not be well-represented in the eigenstate basis.",
-            UserWarning,
-            stacklevel=2,
-        )
+    # Warn about ambiguous assignments: the assigned eigenstate is barely preferred
+    # over the runner-up, so the labelling is not robust against small changes in the
+    # Hamiltonian. Unlike a low absolute overlap - which strong but harmless mixing
+    # produces on its own - this indicates the assignment itself may be wrong.
+    if margin_threshold is not None:
+        runner_up = overlaps.copy()
+        runner_up[np.arange(n_approx), indices] = -np.inf
+        runner_up_indices = np.argmax(runner_up, axis=1)
+        margins = max_overlaps - runner_up[np.arange(n_approx), runner_up_indices]
+
+        ambiguous = margins < margin_threshold
+        if np.any(ambiguous):
+            ambiguous_indices = np.where(ambiguous)[0]
+            details = ", ".join(
+                f"{i} (assigned {indices[i]} at {max_overlaps[i]:.3f}, "
+                f"runner-up {runner_up_indices[i]} at "
+                f"{overlaps[i, runner_up_indices[i]]:.3f})"
+                for i in ambiguous_indices[:10]
+            )
+            if ambiguous_indices.size > 10:
+                details += f", ... ({ambiguous_indices.size} states total)"
+            warnings.warn(
+                f"Ambiguous eigenstate assignment for approximate states: {details}. "
+                f"The assigned eigenstate is not clearly preferred over the next "
+                f"candidate, so the labelling can change with a small change in field "
+                f"or with numerical noise. Treat this as a warning about the assignment "
+                f"as a whole, not only about the states listed: mis-assignments come in "
+                f"groups within a mixed manifold and a state can be assigned wrongly "
+                f"while its own margin looks acceptable. Track the states adiabatically "
+                f"instead: step the field up from ~0 in small increments and match each "
+                f"set of eigenvectors to the previous set.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+    # Warn about impure state labels, if requested. Note that strong mixing lowers
+    # every overlap without making the assignment wrong, so this is off by default.
+    if overlap_threshold is not None:
+        poor_overlaps = max_overlaps < overlap_threshold
+        if np.any(poor_overlaps):
+            poor_indices = np.where(poor_overlaps)[0]
+            warnings.warn(
+                f"Low overlap detected for approximate states at indices {poor_indices.tolist()}. "
+                f"Overlaps: {max_overlaps[poor_overlaps].tolist()}. "
+                f"The approximate states may not be well-represented in the eigenstate basis.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     return indices.astype(np.int_)
 
@@ -487,8 +551,9 @@ def find_exact_states(
     H: Optional[npt.NDArray[np.complex128]] = None,
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
-    overlap_threshold: float = 0.5,
+    overlap_threshold: Optional[float] = None,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> List[CoupledState]: ...
 
 
@@ -500,8 +565,9 @@ def find_exact_states(
     H: Optional[npt.NDArray[np.complex128]] = None,
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
-    overlap_threshold: float = 0.5,
+    overlap_threshold: Optional[float] = None,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> List[UncoupledState]: ...
 
 
@@ -512,8 +578,9 @@ def find_exact_states(
     H: Optional[npt.NDArray[np.complex128]] = None,
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
-    overlap_threshold: float = 0.5,
+    overlap_threshold: Optional[float] = None,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ):
     """Find exact eigenstates corresponding to approximate states.
 
@@ -533,7 +600,11 @@ def find_exact_states(
             computed from H. Defaults to None.
         V_ref (npt.NDArray[np.complex128] | None): Reference eigenvectors for
             consistent ordering. Defaults to None.
-        overlap_threshold (float): Minimum overlap probability for warning. Defaults to 0.5.
+        overlap_threshold (float | None): Minimum overlap probability for the label
+            purity warning, or None to disable it. Defaults to None.
+        margin_threshold (float | None): Minimum gap between the best and second-best
+            overlap before warning about an ambiguous assignment, or None to disable.
+            Defaults to 0.02.
         use_optimal_assignment (bool): Use Hungarian algorithm for optimal assignment.
             Defaults to True.
 
@@ -564,11 +635,12 @@ def find_exact_states(
     indices = find_exact_states_indices(
         states_approx,
         QN_construct,
-        H,
-        V,
-        V_ref,
-        overlap_threshold,
-        use_optimal_assignment,
+        H=H,
+        V=V,
+        V_ref=V_ref,
+        overlap_threshold=overlap_threshold,
+        margin_threshold=margin_threshold,
+        use_optimal_assignment=use_optimal_assignment,
     )
     return [QN_basis[idx] for idx in indices]
 
