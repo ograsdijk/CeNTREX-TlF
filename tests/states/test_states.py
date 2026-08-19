@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 
@@ -68,6 +70,109 @@ def test_reorder_evecs():
     E_out, V_out = states.reorder_evecs(V_in, E_in, V_ref)
     assert E_out[ida] == E_in[idb]
     assert E_out[idb] == E_in[ida]
+
+
+def test_reorder_evecs_unique_assignment():
+    # eigenvector 1 and 2 both have their largest overlap with reference column 2,
+    # so a greedy per-eigenvector argmax cannot produce a valid one-to-one ordering
+    V_in = np.array(
+        [
+            [-0.4607, 0.5716, -0.6790],
+            [-0.8465, -0.5128, 0.1427],
+            [-0.2666, 0.6405, 0.7202],
+        ],
+        dtype=np.complex128,
+    )
+    E_in = np.array([1.0, 2.0, 3.0], dtype=np.complex128)
+    V_ref = np.eye(3, dtype=np.complex128)
+
+    overlaps = np.abs(np.conj(V_in.T) @ V_ref)
+    assert len(set(np.argmax(overlaps, axis=1).tolist())) < 3
+
+    E_out, V_out = states.reorder_evecs(V_in, E_in, V_ref)
+
+    # the ordering is a permutation of the input eigenvectors
+    assignment = [
+        int(np.argmax(np.abs(np.conj(V_out[:, k]) @ V_in))) for k in range(3)
+    ]
+    assert sorted(assignment) == [0, 1, 2]
+    assert np.allclose(np.sort(E_out.real), E_in.real)
+    # and it is the assignment maximizing the total overlap with the reference
+    total = sum(overlaps[assignment[k], k] for k in range(3))
+    assert total >= max(
+        sum(overlaps[perm[k], k] for k in range(3))
+        for perm in [
+            (0, 1, 2),
+            (0, 2, 1),
+            (1, 0, 2),
+            (1, 2, 0),
+            (2, 0, 1),
+            (2, 1, 0),
+        ]
+    )
+
+
+def _embedded_V(block):
+    """Identity eigenvector matrix with `block` mixing the first few basis states."""
+    n = 16
+    V = np.eye(n, dtype=np.complex128)
+    k = block.shape[0]
+    V[:k, :k] = block
+    return V
+
+
+def test_reorder_evecs_fewer_reference_vectors():
+    # with fewer reference columns than eigenvectors every eigenvector must still be
+    # returned, the matched ones first
+    rng = np.random.default_rng(0)
+    V_in = np.linalg.qr(rng.normal(size=(6, 6)))[0].astype(np.complex128)
+    E_in = np.arange(6).astype(np.complex128)
+    V_ref = np.eye(6, dtype=np.complex128)[:, :3]
+
+    E_out, V_out = states.reorder_evecs(V_in, E_in, V_ref)
+
+    assert V_out.shape == V_in.shape
+    assert sorted(E_out.real.tolist()) == sorted(E_in.real.tolist())
+
+
+def test_find_exact_states_indices_ambiguous_assignment_warns():
+    # a 50/50 mixture of two basis states: neither label prefers either eigenvector,
+    # so the assignment is a coin flip and should be flagged
+    QN = states.generate_coupled_states_ground(Js=[0, 1])
+    states_approx = [1 * s for s in QN]
+    block = np.array([[1, 1], [1, -1]], dtype=np.complex128) / np.sqrt(2)
+
+    with pytest.warns(UserWarning, match="Ambiguous eigenstate assignment"):
+        states.find_exact_states_indices(
+            states_approx, list(QN), V=_embedded_V(block)
+        )
+
+
+def test_find_exact_states_indices_strong_mixing_does_not_warn():
+    # three-way mixing leaves the first state only 48% pure - which happens from a few
+    # hundred V/cm on - but its assignment is still unambiguous, so nothing is flagged
+    QN = states.generate_coupled_states_ground(Js=[0, 1])
+    states_approx = [1 * s for s in QN]
+    block = np.array(
+        [
+            [0.692820, 0.575968, -0.433891],
+            [0.547723, -0.811687, -0.202890],
+            [0.469042, 0.097085, 0.877824],
+        ],
+        dtype=np.complex128,
+    )
+    V = _embedded_V(block)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        indices = states.find_exact_states_indices(states_approx, list(QN), V=V)
+    assert np.all(indices == np.arange(len(QN)))
+
+    # the purity check is opt-in and does flag it
+    with pytest.warns(UserWarning, match="Low overlap detected"):
+        states.find_exact_states_indices(
+            states_approx, list(QN), V=V, overlap_threshold=0.5
+        )
 
 
 def test_quantumselector_get_indices():

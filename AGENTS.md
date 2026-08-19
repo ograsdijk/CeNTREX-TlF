@@ -154,6 +154,46 @@ Each of these produces plausible-looking but wrong output rather than an error.
   the field changes (in X J=2 the F=3, mF=±1 pair drops below F=2, mF=0 between 200 and
   250 V/cm), so `min(candidates, key=lambda i: H_int[i, i])` silently picks a different state at
   different fields.
+- **State labels stop being pure long before state *identification* breaks.** Stark mixing
+  drives the overlap of every X state with its bare label below 0.5 above roughly
+  400 V/cm (the four |mF|=1 levels in J=2 mix among themselves), and every B state below
+  0.5 by 100 V/cm when both Λ-doublet partners are retained — yet the assignment
+  `find_exact_states` returns is still exact in both cases, verified against adiabatic
+  continuation from zero field. So `find_exact_states_indices` no longer warns on low
+  purity by default (`overlap_threshold=None`, pass `0.5` to restore it). It warns instead
+  on a small or negative **margin** between the best and second-best overlap
+  (`margin_threshold=0.02`), the condition under which the label can actually land on the
+  wrong eigenvector.
+- **The margin warning is sufficient, not necessary.** It is calibrated to stay silent
+  wherever single-shot matching is genuinely correct (X to 10 kV/cm, B to 200 V/cm), which
+  forces the threshold low: at `0.12` an ordinary B analysis at 200 V/cm flags 52 of 192
+  states with nothing wrong. The price is incomplete coverage — at 30 kV/cm in X it catches
+  4 of 8 mis-assignments, at 1 kV/cm in B 10 of 44. Margins of mis-assigned states run as
+  high as +0.11 (X, 50 kV/cm) and +0.22 (B, 500 V/cm), so no threshold separates right from
+  wrong cleanly. **Silence is not a guarantee; use the field-based rule below.**
+- **Above ~10 kV/cm in X, or ~500 V/cm in B with both parities retained, match states
+  adiabatically — one-shot matching is wrong, not merely uncertain.** Converged X basis
+  (J=0–6, 196 levels): one-shot disagrees with tracking on 8 states at 20 and 30 kV/cm and
+  66 at 50 kV/cm. B (J=1–4, both parities, 192 levels): 12 states wrong at 500 V/cm, 44 at
+  1 kV/cm. In every case one-shot scores the *higher* total overlap (X 30 kV/cm: 91.83 vs
+  90.22 tracked), i.e. its objective prefers the physically wrong answer, so no
+  bare-overlap diagnostic can rescue it. Step the field up from ~0 and match each set of
+  eigenvectors to the previous set; the result is step-size independent (X: 50 vs 20 V/cm
+  steps to 50 kV/cm; B: 1.0 vs 0.2 V/cm steps to 1 kV/cm).
+  The OBE builders are exposed to this too. `generate_reduced_B_hamiltonian` diagonalizes
+  the *full* manifold — `J = 1 … J′+2`, `P=[-1, 1]`, `Ω=1`, every F₁/F/mF (120 states for
+  J′=1) — and matches against all of it; only `B_states_approx`, the handful of states the
+  transition names, gets a margin evaluated. Whether the builder warns therefore depends on
+  which manifold the transition targets: at 171.6 V/cm the J′=1 F₁=3/2 F=1 states sit at
+  margin +0.125, but J′=2 F₁=3/2 F=2 sits at +0.049 and does warn at a 0.12 threshold.
+  This is the concrete reason the default is 0.02 and not 0.12.
+- **At tens of kV/cm the J truncation must be raised — J≤3 does not have the physics.**
+  Going from `Jmax=3` to `Jmax=4` at 30 kV/cm shifts X state purities by 0.055 and
+  assignment margins by 0.092, i.e. more than the whole ambiguity threshold; it also
+  understates how badly one-shot matching breaks (24 wrong states at 50 kV/cm instead of
+  66). Converged by `Jmax=5`–`6` (Δmargin 5→6 is 0.0005, 6→7 is 0.0001). At 1 and 5 kV/cm
+  `Jmax=3` is already converged to 4 decimals, so this is specific to the tens-of-kV/cm
+  regime.
 - **`excited_main` must be reachable by the polarization in use.** With pure X̂ light and an mF=0
   ground state, only mF′=±1 is driven; choosing an mF′=0 `excited_main` makes `main_coupling` zero
   and the power→Rabi conversion divides by zero.
@@ -214,6 +254,14 @@ above `minimum_coupling=1e-3`. Measured convergence for an optical transition to
 `main_coupling` identical to six digits; raising `Jmax_B` from 3 to 6 leaves the B line offsets
 identical to four decimals. The defaults are converged at few-hundred V/cm fields — do not spend
 time re-deriving this, but do re-check if you move to kV/cm.
+
+Convergence of the *eigenvectors* (state purity and assignment margin) is the stricter test, since
+identification depends on them rather than on energies. For **B** the `J′+2` default is enough well
+past experimental fields: for a J′=2 target, going from `Jmax = J′+2` to `J′+5` changes purity and
+margin by 0.0000 at 171.6, 200, 500, 1000 and 5000 V/cm — only the `J′+1` basis is visibly off
+(0.008 in margin at 5 kV/cm). For **X** the default holds to a few kV/cm but not beyond: at
+30 kV/cm `Jmax=3` misses purity by 0.055 and margin by 0.092, and J=5–6 is needed (see the
+identification gotchas above).
 
 ## Beyond single-laser OBE
 
