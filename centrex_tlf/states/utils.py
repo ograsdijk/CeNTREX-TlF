@@ -3,6 +3,7 @@ from typing import List, Sequence, Tuple, TypeVar
 
 import numpy as np
 import numpy.typing as npt
+from scipy.optimize import linear_sum_assignment
 from sympy.physics.quantum.cg import CG
 
 __all__ = ["CGc", "parity_X", "reorder_evecs"]
@@ -50,6 +51,15 @@ def reorder_evecs(
 ) -> Tuple[npt.NDArray[np.complex128], npt.NDArray[np.complex128]]:
     """Reshuffle eigenvectors and eigenergies based on a reference
 
+    Column k of the returned eigenvector matrix is the input eigenvector matched to
+    column k of ``V_ref``; if ``V_ref`` has fewer columns than ``V_in``, the unmatched
+    eigenvectors follow in their original order. The matching is the assignment that maximizes the total
+    overlap ``Σ_k |⟨V_in[:, i_k] | V_ref[:, k]⟩|`` (Hungarian algorithm), which
+    guarantees a one-to-one mapping. A greedy per-eigenvector argmax does not: when
+    two input eigenvectors have their largest overlap with the same reference column
+    - which happens once states mix strongly, e.g. in X at electric fields above
+    roughly 20 kV/cm - it silently produces an arbitrary ordering instead.
+
     Args:
         V_in (np.ndarray): eigenvector matrix to be reorganized
         E_in (np.ndarray): energy vector to be reorganized
@@ -61,8 +71,18 @@ def reorder_evecs(
     # take dot product between each eigenvector in V and state_vec
     overlap_vectors = np.absolute(np.matmul(np.conj(V_in.T), V_ref))
 
-    # find which state has the largest overlap:
-    index = np.argsort(np.argmax(overlap_vectors, axis=1))
+    # optimal one-to-one matching of input eigenvectors to reference eigenvectors
+    row_ind, col_ind = linear_sum_assignment(-overlap_vectors)
+
+    # index[k] is the input eigenvector assigned to reference eigenvector k
+    index = row_ind[np.argsort(col_ind)]
+
+    # with fewer reference vectors than eigenvectors only min(N, M) get assigned; keep
+    # the rest, in their original order, so the output always holds every eigenvector
+    if index.size < V_in.shape[1]:
+        remaining = np.setdiff1d(np.arange(V_in.shape[1]), index)
+        index = np.concatenate([index, remaining])
+
     # store energy and state
     E_out = E_in[index]
     V_out = V_in[:, index]

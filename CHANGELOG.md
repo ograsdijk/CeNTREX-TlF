@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.2.3
+
+State identification now warns about assignments that are genuinely ambiguous instead of
+about state labels that are merely impure, and `reorder_evecs` orders eigenvectors with an
+optimal assignment rather than a greedy per-eigenvector argmax.
+
+### Compatibility notes
+
+- `find_exact_states_indices` and `find_exact_states` no longer warn on low overlap by
+  default: `overlap_threshold` now defaults to `None`. Pass `overlap_threshold=0.5` to
+  restore the previous behaviour. The old check measured label purity, which ordinary
+  Stark mixing drives below 0.5 (every X state above roughly 400 V/cm, every B state by
+  100 V/cm when both Lambda-doublet partners are retained) while the returned assignment
+  stays exact — verified against adiabatic continuation from zero field.
+- Returned indices are unchanged; only the warning behaviour and the eigenvector ordering
+  in strongly mixed cases differ.
+
+### Added
+
+- `margin_threshold` (default 0.02) on `find_exact_states_indices` and
+  `find_exact_states`. It warns when the gap between the best and second-best overlap is
+  small or negative, which is the condition under which a label can land on the wrong
+  eigenvector. The warning names the competing eigenstate and its overlap. The default is
+  chosen so the warning stays silent wherever single-shot matching is actually correct, in
+  X to 10 kV/cm and in B to 200 V/cm; a larger threshold produces false alarms on ordinary
+  builds (a J′=2 F₁=3/2 F=2 target at 171.6 V/cm flags at 0.12). It is a sufficient, not a
+  necessary, signal: above ~10 kV/cm in X or ~500 V/cm in B with both parities retained,
+  single-shot matching is unreliable regardless of the margin and states should be tracked
+  adiabatically.
+
+### Fixed
+
+- `reorder_evecs` matches eigenvectors to the reference with `linear_sum_assignment`
+  instead of `argsort(argmax(...))`. The greedy version had no uniqueness guarantee: once
+  two eigenvectors claimed the same reference column it returned a silently arbitrary
+  ordering. Output is identical wherever the greedy result was well defined; in X, J=0-3
+  at 20 kV/cm the total overlap with the reference improves from 26.20 to 44.56. The
+  change costs about 0.5 ms per OBE build. When `V_ref` has fewer columns than `V_in` the
+  unmatched eigenvectors are appended in their original order, so the output still holds
+  every eigenvector as it did before.
+
 ## 0.2.2
 
 Transition validity during OBE setup is now decided by the mixed-state dipole matrix
