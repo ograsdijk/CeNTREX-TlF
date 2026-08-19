@@ -360,7 +360,13 @@ def select_main_states(
 
     if not allowed_transitions:
         raise ValueError(
-            "None of the supplied ground and excited states have allowed transitions"
+            "None of the supplied ground and excited states have allowed transitions. "
+            "This check applies the E1 selection rules to the bare dominant component of "
+            "each state, so it cannot see couplings that exist only because an electric "
+            "or magnetic field mixes the eigenstates. If the transition you want is "
+            "field-mixed, pass ground_main and excited_main explicitly to "
+            "generate_transition_selectors, or use generate_coupling_field_automatic, "
+            "which selects the main pair from the mixed-state matrix elements."
         )
 
     # Select the main pair

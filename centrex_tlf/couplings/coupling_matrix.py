@@ -6,8 +6,9 @@ selection based on coupling strength, and generation of coupling field objects f
 use in optical Bloch equations.
 """
 
+import warnings
 from dataclasses import dataclass
-from typing import Sequence, Union, cast
+from typing import List, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -16,7 +17,7 @@ import pandas as pd
 from centrex_tlf import hamiltonian, states
 from centrex_tlf.states.states import CoupledBasisState
 
-from .utils import ΔmF_allowed, assert_transition_coupled_allowed, select_main_states
+from .utils import ΔmF_allowed, check_transition_coupled_allowed_polarization
 
 try:
     from ..centrex_tlf_rust import (
@@ -28,10 +29,17 @@ except ImportError:
     _generate_coupling_matrix_rust = None  # type: ignore[assignment]
     HAS_RUST = False
 
+# Tolerance for deciding that a main coupling matrix element is *zero*, i.e. that the
+# transition is driven neither directly nor through field mixing. Deliberately far below
+# `absolute_coupling`, which is a matrix *pruning* threshold: a genuinely weak but real
+# field-mixed coupling must stay usable, and is flagged by `weak_main_fraction` instead.
+MAIN_COUPLING_ZERO_TOL = 1e-12
+
 __all__ = [
     "generate_coupling_matrix",
     "generate_coupling_field",
     "generate_coupling_field_automatic",
+    "select_main_states_indices_coupling",
     "CouplingFields",
     "CouplingField",
     "generate_coupling_dataframe",
@@ -336,6 +344,162 @@ def generate_coupling_dataframe(
     return dfs
 
 
+def _dress_states(
+    states_approx: Sequence[states.CoupledState],
+    QN_basis: Sequence[states.CoupledState],
+    QN: Sequence[states.CoupledState],
+    H_rot: npt.NDArray[np.complex128],
+    V_ref: npt.NDArray[np.complex128],
+) -> Sequence[states.CoupledState]:
+    """Map approximate (bare) states onto the field-dressed eigenstates of H_rot.
+
+    Thin wrapper around :func:`states.find_exact_states` so that
+    :func:`generate_coupling_field` and :func:`generate_coupling_field_automatic` share a
+    single implementation and the (non-free) assignment is not performed twice.
+    """
+    return states.find_exact_states(states_approx, QN_basis, QN, H_rot, V_ref=V_ref)
+
+
+def _explain_zero_main_coupling(
+    ground_main: states.CoupledState,
+    excited_main: states.CoupledState,
+    pol_main: npt.NDArray[np.complex128],
+) -> str:
+    """Explain why a main coupling matrix element came out zero.
+
+    The E1 selection rules are applied to the *bare* dominant component of each state, so
+    they cannot decide whether a field-mixed transition is allowed. They are still the
+    best available explanation when the mixed-state matrix element is zero, which is
+    exactly the situation where the bare labels are informative.
+    """
+    try:
+        allowed, reason = cast(
+            Tuple[bool, str],
+            check_transition_coupled_allowed_polarization(
+                cast(CoupledBasisState, ground_main.largest),
+                cast(CoupledBasisState, excited_main.largest),
+                ΔmF_allowed(pol_main),
+                return_err=True,
+            ),
+        )
+    except Exception as err:  # noqa: BLE001 - never let a diagnostic mask the real error
+        # e.g. an UncoupledBasisState has no F/mF, raising AttributeError here.
+        return f"selection rules could not be evaluated ({err})"
+
+    if not allowed:
+        return (
+            f"{reason}; this holds for the dominant basis component and no field mixing "
+            f"lifts it here"
+        )
+    return (
+        "the E1 selection rules are satisfied by the dominant basis components, so this "
+        "is most likely a state-identification problem rather than a forbidden "
+        "transition"
+    )
+
+
+def select_main_states_indices_coupling(
+    ground_states: Sequence[states.CoupledState],
+    excited_states: Sequence[states.CoupledState],
+    polarization: npt.NDArray[np.complex128],
+    absolute_coupling: float = 1e-6,
+    normalize_pol: bool = True,
+) -> Tuple[int, int]:
+    """Pick the main ground/excited pair, falling back to field-mixed couplings.
+
+    The main pair is the Rabi normalization reference: the whole coupling matrix is
+    divided by its matrix element. It should therefore be a *strongly* coupled pair
+    whenever one exists.
+
+    A bare-allowed pair is always preferred, chosen with the historical heuristic of
+    :func:`~centrex_tlf.couplings.utils.select_main_states` (prefer an mF = 0 ground
+    state, last match in scan order), so the selected pair is unchanged at any field.
+    Only when no bare-allowed pair has a non-vanishing matrix element — the case that
+    used to raise outright — does this fall back to the mixed-state matrix elements, and
+    then it picks the *strongest* available coupling rather than a positional heuristic.
+
+    Args:
+        ground_states (Sequence[CoupledState]): field-dressed ground states.
+        excited_states (Sequence[CoupledState]): field-dressed excited states.
+        polarization (npt.NDArray[np.complex128]): Jones vector [Ex, Ey, Ez].
+        absolute_coupling (float): matrix elements below this count as zero.
+        normalize_pol (bool): normalize the polarization vector before evaluating.
+
+    Returns:
+        Tuple[int, int]: indices into ``ground_states`` and ``excited_states``.
+
+    Raises:
+        ValueError: if no pair has a matrix element above ``absolute_coupling``.
+    """
+    pol = np.asarray(polarization, dtype=np.complex128)
+    ΔmF_raw = ΔmF_allowed(polarization)
+    ΔmF_iterable = (
+        (int(ΔmF_raw),)
+        if isinstance(ΔmF_raw, (int, np.integer))
+        else tuple(int(x) for x in np.asarray(ΔmF_raw).tolist())
+    )
+
+    def coupling(g_idx: int, e_idx: int) -> float:
+        return abs(
+            hamiltonian.generate_ED_ME_mixed_state(
+                excited_states[e_idx],
+                ground_states[g_idx],
+                pol_vec=pol,
+                normalize_pol=normalize_pol,
+            )
+        )
+
+    # Pass 1: bare-allowed pairs only, in the historical scan order. Matrix elements are
+    # evaluated lazily here so the common case stays cheap.
+    allowed: List[Tuple[int, int]] = []
+    allowed_mF0: List[Tuple[int, int]] = []
+    for e_idx, exc in enumerate(excited_states):
+        for g_idx, gnd in enumerate(ground_states):
+            gnd_bs = cast(CoupledBasisState, gnd.largest)
+            if not check_transition_coupled_allowed_polarization(
+                gnd_bs,
+                cast(CoupledBasisState, exc.largest),
+                ΔmF_iterable,
+                return_err=False,
+            ):
+                continue
+            if coupling(g_idx, e_idx) < absolute_coupling:
+                continue
+            allowed.append((g_idx, e_idx))
+            if gnd_bs.mF == 0:
+                allowed_mF0.append((g_idx, e_idx))
+
+    if allowed_mF0:
+        return allowed_mF0[-1]
+    if allowed:
+        return allowed[len(allowed) // 2]
+
+    # Pass 2: nothing is allowed by the bare rules, so the transition can only be driven
+    # through field mixing. Take the strongest coupling, still preferring mF = 0.
+    best: Optional[Tuple[int, int]] = None
+    best_me = -np.inf
+    best_mF0: Optional[Tuple[int, int]] = None
+    best_me_mF0 = -np.inf
+    for e_idx in range(len(excited_states)):
+        for g_idx, gnd in enumerate(ground_states):
+            me = coupling(g_idx, e_idx)
+            if me < absolute_coupling:
+                continue
+            if me > best_me:
+                best_me, best = me, (g_idx, e_idx)
+            if cast(CoupledBasisState, gnd.largest).mF == 0 and me > best_me_mF0:
+                best_me_mF0, best_mF0 = me, (g_idx, e_idx)
+
+    chosen = best_mF0 if best_mF0 is not None else best
+    if chosen is None:
+        raise ValueError(
+            "None of the supplied ground and excited states are coupled: every "
+            f"mixed-state dipole matrix element is below absolute_coupling="
+            f"{absolute_coupling:.1e} for polarization {polarization}."
+        )
+    return chosen
+
+
 def generate_coupling_field(
     ground_main_approx: states.CoupledState,
     excited_main_approx: states.CoupledState,
@@ -354,6 +518,15 @@ def generate_coupling_field(
     relative_coupling: float = 1e-3,
     absolute_coupling: float = 1e-6,
     normalize_pol: bool = True,
+    weak_main_fraction: float = 1e-2,
+    _dressed: Optional[
+        Tuple[
+            Sequence[states.CoupledState],
+            Sequence[states.CoupledState],
+            states.CoupledState,
+            states.CoupledState,
+        ]
+    ] = None,
 ) -> CouplingFields:
     """Generate coupling fields for optical transitions with multiple polarizations.
 
@@ -383,13 +556,30 @@ def generate_coupling_field(
         absolute_coupling (float): Absolute threshold for coupling strength. States
             with |coupling| < absolute_coupling are excluded. Defaults to 1e-6.
         normalize_pol (bool): If True, normalize polarization vectors. Defaults to True.
+        weak_main_fraction (float): Warn when |main_coupling| falls below this fraction of
+            the strongest element of the coupling matrix. main_coupling is the Rabi
+            normalization reference, so a mixing-only main pair silently inflates every
+            Rabi rate. Defaults to 1e-2.
+        _dressed (tuple | None): Optionally supply already field-dressed
+            (ground_states, excited_states, ground_main, excited_main) to avoid repeating
+            the state assignment. Internal use.
 
     Returns:
         CouplingFields: Dataclass containing ground/excited states, couplings for each
             polarization, and the main coupling strength
 
     Raises:
-        AssertionError: If pol_main or pol_vecs are not numpy arrays with correct dtype
+        TypeError: If pol_main or pol_vecs are not numpy arrays with correct dtype
+        ValueError: If the mixed-state matrix element between the main states vanishes,
+            i.e. the transition is driven neither directly nor via field mixing.
+
+    Notes:
+        Whether a transition is allowed is decided by the magnitude of the *mixed-state*
+        dipole matrix element between the field-dressed main states, not by applying the
+        E1 selection rules to their bare labels. In an electric or magnetic field, state
+        mixing makes nominally forbidden pairs genuinely driveable; at zero field the
+        numeric test reduces exactly to the selection rules, since P, F and mF remain
+        good quantum numbers there.
     """
     # Initialize default values
     if pol_main is None:
@@ -438,18 +628,21 @@ def generate_coupling_field(
     else:
         _QN_basis = cast(Sequence[states.CoupledState], QN_basis)
 
-    ground_states = states.find_exact_states(
-        _ground_states_approx, _QN_basis, QN, H_rot, V_ref=V_ref
-    )
-    excited_states = states.find_exact_states(
-        _excited_states_approx, _QN_basis, QN, H_rot, V_ref=V_ref
-    )
-    ground_main = states.find_exact_states(
-        [ground_main_approx], _QN_basis, QN, H_rot, V_ref=V_ref
-    )[0]
-    excited_main = states.find_exact_states(
-        [excited_main_approx], _QN_basis, QN, H_rot, V_ref=V_ref
-    )[0]
+    if _dressed is not None:
+        ground_states, excited_states, ground_main, excited_main = _dressed
+    else:
+        ground_states = _dress_states(
+            _ground_states_approx, _QN_basis, QN, H_rot, V_ref
+        )
+        excited_states = _dress_states(
+            _excited_states_approx, _QN_basis, QN, H_rot, V_ref
+        )
+        ground_main = _dress_states(
+            [ground_main_approx], _QN_basis, QN, H_rot, V_ref
+        )[0]
+        excited_main = _dress_states(
+            [excited_main_approx], _QN_basis, QN, H_rot, V_ref
+        )[0]
 
     states.check_approx_state_exact_state(ground_main_approx, ground_main)
     states.check_approx_state_exact_state(excited_main_approx, excited_main)
@@ -460,17 +653,16 @@ def generate_coupling_field(
         normalize_pol=normalize_pol,
     )
 
-    if ME_main == 0:
+    # The mixed-state matrix element is the authoritative test: it already accounts for
+    # any Stark/Zeeman mixing that makes a bare-forbidden pair driveable. The E1
+    # selection rules are consulted only to explain a vanishing element.
+    if abs(ME_main) < MAIN_COUPLING_ZERO_TOL:
         raise ValueError(
             f"main coupling element for {ground_main_approx} -> "
-            f"{excited_main_approx} is zero, pol = {pol_main}"
+            f"{excited_main_approx} is zero (|ME| = {abs(ME_main):.3e}), "
+            f"pol = {pol_main}; "
+            + _explain_zero_main_coupling(ground_main, excited_main, pol_main)
         )
-
-    _ground_main = cast(CoupledBasisState, ground_main.largest)
-    _excited_main = cast(CoupledBasisState, excited_main.largest)
-
-    ΔmF_raw = ΔmF_allowed(pol_main)
-    assert_transition_coupled_allowed(_ground_main, _excited_main, ΔmF_raw)
 
     couplings = []
     for pol in pol_vecs:
@@ -488,6 +680,35 @@ def generate_coupling_field(
         coupling[np.abs(coupling) < relative_coupling * np.max(np.abs(coupling))] = 0
         coupling[np.abs(coupling) < absolute_coupling] = 0
         couplings.append(CouplingField(polarization=pol, field=coupling))
+
+    # main_coupling is the Rabi normalization reference: the whole coupling matrix is
+    # divided by it when the symbolic Hamiltonian is built. A main pair that is only
+    # weakly allowed (e.g. driveable solely through field mixing) therefore inflates
+    # every Rabi rate in the system without any other visible symptom.
+    if couplings and weak_main_fraction > 0:
+        strongest = max(float(np.abs(c.field).max()) for c in couplings)
+        pruned = abs(ME_main) < max(
+            absolute_coupling, relative_coupling * strongest
+        )
+        if strongest > 0 and abs(ME_main) < weak_main_fraction * strongest:
+            warnings.warn(
+                (
+                    "the main coupling element has been pruned from the coupling matrix "
+                    "by relative_coupling/absolute_coupling, so the nominal main "
+                    "transition is not driven at all. "
+                    if pruned
+                    else ""
+                )
+                + f"main coupling {ground_main.largest} -> {excited_main.largest} is weak: "
+                f"|main_coupling| = {abs(ME_main):.3e} is only "
+                f"{abs(ME_main) / strongest:.2e} of the strongest coupling "
+                f"({strongest:.3e}) in the matrix. main_coupling normalizes the Rabi "
+                f"rate, so the requested power will map to a much larger Rabi rate than "
+                f"intended. Pass a more strongly coupled ground_main/excited_main pair, "
+                f"or set weak_main_fraction=0 to silence this.",
+                stacklevel=2,
+            )
+
     return CouplingFields(
         ground_main, excited_main, ME_main, ground_states, excited_states, couplings
     )
@@ -516,6 +737,7 @@ def generate_coupling_field_automatic(
     relative_coupling: float = 1e-3,
     absolute_coupling: float = 1e-6,
     normalize_pol: bool = True,
+    weak_main_fraction: float = 1e-2,
 ) -> CouplingFields:
     """Calculate the coupling fields for a transition for one or multiple
     polarizations.
@@ -585,12 +807,24 @@ def generate_coupling_field_automatic(
         _QN_basis = cast(Sequence[states.CoupledState], QN_basis)
 
     pol_main = pol_vecs[0]
-    ground_main_approx, excited_main_approx = select_main_states(
-        _ground_states_approx, _excited_states_approx, pol_main
+
+    # Dress the states first so the main pair can be chosen on the actual mixed-state
+    # matrix elements rather than on bare-label selection rules, which give the wrong
+    # answer whenever an electric or magnetic field mixes the eigenstates.
+    ground_states = _dress_states(_ground_states_approx, _QN_basis, QN, H_rot, V_ref)
+    excited_states = _dress_states(_excited_states_approx, _QN_basis, QN, H_rot, V_ref)
+
+    idg, ide = select_main_states_indices_coupling(
+        ground_states,
+        excited_states,
+        pol_main,
+        absolute_coupling=absolute_coupling,
+        normalize_pol=normalize_pol,
     )
+
     return generate_coupling_field(
-        ground_main_approx=ground_main_approx,
-        excited_main_approx=excited_main_approx,
+        ground_main_approx=_ground_states_approx[idg],
+        excited_main_approx=_excited_states_approx[ide],
         ground_states_approx=_ground_states_approx,
         excited_states_approx=_excited_states_approx,
         QN_basis=_QN_basis,
@@ -602,4 +836,11 @@ def generate_coupling_field_automatic(
         relative_coupling=relative_coupling,
         absolute_coupling=absolute_coupling,
         normalize_pol=normalize_pol,
+        weak_main_fraction=weak_main_fraction,
+        _dressed=(
+            ground_states,
+            excited_states,
+            ground_states[idg],
+            excited_states[ide],
+        ),
     )
