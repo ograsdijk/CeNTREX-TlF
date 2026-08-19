@@ -20,7 +20,8 @@ optimal assignment rather than a greedy per-eigenvector argmax.
 ### Added
 
 - `margin_threshold` (default 0.02) on `find_exact_states_indices` and
-  `find_exact_states`. It warns when the gap between the best and second-best overlap is
+  `find_exact_states`. It is the last parameter of both signatures, so existing
+  positional calls keep their meaning. It warns when the gap between the best and second-best overlap is
   small or negative, which is the condition under which a label can land on the wrong
   eigenvector. The warning names the competing eigenstate and its overlap. The default is
   chosen so the warning stays silent wherever single-shot matching is actually correct, in

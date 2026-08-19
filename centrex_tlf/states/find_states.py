@@ -317,8 +317,8 @@ def find_exact_states_indices(
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
     overlap_threshold: Optional[float] = None,
-    margin_threshold: Optional[float] = 0.02,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> npt.NDArray[np.int_]: ...
 
 
@@ -330,8 +330,8 @@ def find_exact_states_indices(
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
     overlap_threshold: Optional[float] = None,
-    margin_threshold: Optional[float] = 0.02,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> npt.NDArray[np.int_]: ...
 
 
@@ -342,8 +342,8 @@ def find_exact_states_indices(
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
     overlap_threshold: Optional[float] = None,
-    margin_threshold: Optional[float] = 0.02,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> npt.NDArray[np.int_]:
     """Find optimal eigenstate indices matching approximate states.
 
@@ -552,8 +552,8 @@ def find_exact_states(
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
     overlap_threshold: Optional[float] = None,
-    margin_threshold: Optional[float] = 0.02,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> List[CoupledState]: ...
 
 
@@ -566,8 +566,8 @@ def find_exact_states(
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
     overlap_threshold: Optional[float] = None,
-    margin_threshold: Optional[float] = 0.02,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ) -> List[UncoupledState]: ...
 
 
@@ -579,8 +579,8 @@ def find_exact_states(
     V: Optional[npt.NDArray[np.complex128]] = None,
     V_ref: Optional[npt.NDArray[np.complex128]] = None,
     overlap_threshold: Optional[float] = None,
-    margin_threshold: Optional[float] = 0.02,
     use_optimal_assignment: bool = True,
+    margin_threshold: Optional[float] = 0.02,
 ):
     """Find exact eigenstates corresponding to approximate states.
 
