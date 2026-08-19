@@ -300,17 +300,31 @@ def test_automatic_main_selection_falls_back_to_field_mixed_pairs():
             pol_vecs=[POL_X.vector],
         )
 
-    # The fallback ranks by magnitude rather than by scan position, subject to the
-    # inherited preference for an mF = 0 ground state.
-    from centrex_tlf.couplings.coupling_matrix import _dress_states
+    # The fallback ranks by magnitude rather than by scan position. The inherited
+    # preference for an mF = 0 ground state only applies while that pair stays within
+    # mF0_preference_fraction of the strongest coupling; here the best mF = 0 pair is
+    # five times weaker, so the strongest pair wins.
+    from centrex_tlf.couplings.coupling_matrix import (
+        _dress_states,
+        select_main_states_indices_coupling,
+    )
 
     g = _dress_states(ground, H.QN_basis, H.QN, H.H_int, H.V_ref_int)
     e = _dress_states(excited, H.QN_basis, H.QN, H.H_int, H.V_ref_int)
-    best_mF0 = max(
-        abs(hamiltonian.generate_ED_ME_mixed_state(ex, gd, pol_vec=POL_X.vector))
-        for ex in e
-        for gd in g
-        if gd.largest.mF == 0
+
+    def me(gd, ex):
+        return abs(hamiltonian.generate_ED_ME_mixed_state(ex, gd, pol_vec=POL_X.vector))
+
+    best = max(me(gd, ex) for ex in e for gd in g)
+    best_mF0 = max(me(gd, ex) for ex in e for gd in g if gd.largest.mF == 0)
+    assert best_mF0 < 0.5 * best
+
+    np.testing.assert_allclose(abs(field.main_coupling), best, rtol=1e-6)
+
+    # the preference is a knob, not a rule: disabling the strength gate restores the
+    # historical mF = 0 choice
+    g_idx, e_idx = select_main_states_indices_coupling(
+        g, e, POL_X.vector, mF0_preference_fraction=0.0
     )
-    np.testing.assert_allclose(abs(field.main_coupling), best_mF0, rtol=1e-6)
-    assert field.ground_main.largest.mF == 0
+    assert g[g_idx].largest.mF == 0
+    np.testing.assert_allclose(me(g[g_idx], e[e_idx]), best_mF0, rtol=1e-6)
