@@ -404,6 +404,7 @@ def select_main_states_indices_coupling(
     polarization: npt.NDArray[np.complex128],
     absolute_coupling: float = 1e-6,
     normalize_pol: bool = True,
+    mF0_preference_fraction: float = 0.5,
 ) -> Tuple[int, int]:
     """Pick the main ground/excited pair, falling back to field-mixed couplings.
 
@@ -417,6 +418,10 @@ def select_main_states_indices_coupling(
     Only when no bare-allowed pair has a non-vanishing matrix element — the case that
     used to raise outright — does this fall back to the mixed-state matrix elements, and
     then it picks the *strongest* available coupling rather than a positional heuristic.
+    An mF = 0 ground state is still preferred in that fallback, but only while it stays
+    within ``mF0_preference_fraction`` of the strongest coupling available; preferring a
+    much weaker mF = 0 pair would inflate every Rabi rate in the system, since
+    ``main_coupling`` normalizes the whole coupling matrix.
 
     Args:
         ground_states (Sequence[CoupledState]): field-dressed ground states.
@@ -424,6 +429,10 @@ def select_main_states_indices_coupling(
         polarization (npt.NDArray[np.complex128]): Jones vector [Ex, Ey, Ez].
         absolute_coupling (float): matrix elements below this count as zero.
         normalize_pol (bool): normalize the polarization vector before evaluating.
+        mF0_preference_fraction (float): in the field-mixed fallback, prefer an mF = 0
+            ground state only while its coupling is at least this fraction of the
+            strongest available. Set to 0 to always prefer mF = 0, to 1 to always take
+            the strongest pair. Defaults to 0.5.
 
     Returns:
         Tuple[int, int]: indices into ``ground_states`` and ``excited_states``.
@@ -450,7 +459,8 @@ def select_main_states_indices_coupling(
         )
 
     # Pass 1: bare-allowed pairs only, in the historical scan order. Matrix elements are
-    # evaluated lazily here so the common case stays cheap.
+    # evaluated only for pairs the bare rules already permit, which is a small subset of
+    # the full ground x excited grid; every such pair is evaluated.
     allowed: List[Tuple[int, int]] = []
     allowed_mF0: List[Tuple[int, int]] = []
     for e_idx, exc in enumerate(excited_states):
@@ -490,7 +500,14 @@ def select_main_states_indices_coupling(
             if cast(CoupledBasisState, gnd.largest).mF == 0 and me > best_me_mF0:
                 best_me_mF0, best_mF0 = me, (g_idx, e_idx)
 
-    chosen = best_mF0 if best_mF0 is not None else best
+    # Prefer mF = 0 only while it is not much weaker than the best pair available:
+    # main_coupling divides the entire coupling matrix, so a weak main pair silently
+    # scales up every Rabi rate, and it can sit above weak_main_fraction and so escape
+    # the warning in generate_coupling_field.
+    if best_mF0 is not None and best_me_mF0 >= mF0_preference_fraction * best_me:
+        chosen = best_mF0
+    else:
+        chosen = best
     if chosen is None:
         raise ValueError(
             "None of the supplied ground and excited states are coupled: every "
@@ -686,7 +703,24 @@ def generate_coupling_field(
     # weakly allowed (e.g. driveable solely through field mixing) therefore inflates
     # every Rabi rate in the system without any other visible symptom.
     if couplings and weak_main_fraction > 0:
-        strongest = max(float(np.abs(c.field).max()) for c in couplings)
+        # compare against the matrix built with pol_main where possible: ME_main is
+        # evaluated for pol_main, and pruning is applied per matrix, so mixing
+        # polarizations here would compare unrelated scales
+        pol_main_norm = np.asarray(pol_main, dtype=np.complex128)
+        if normalize_pol:
+            pol_main_norm = pol_main_norm / np.linalg.norm(pol_main_norm)
+        reference = next(
+            (
+                c
+                for c in couplings
+                if np.allclose(c.polarization, pol_main_norm)
+            ),
+            None,
+        )
+        if reference is not None:
+            strongest = float(np.abs(reference.field).max())
+        else:
+            strongest = max(float(np.abs(c.field).max()) for c in couplings)
         pruned = abs(ME_main) < max(
             absolute_coupling, relative_coupling * strongest
         )
@@ -702,10 +736,13 @@ def generate_coupling_field(
                 + f"main coupling {ground_main.largest} -> {excited_main.largest} is weak: "
                 f"|main_coupling| = {abs(ME_main):.3e} is only "
                 f"{abs(ME_main) / strongest:.2e} of the strongest coupling "
-                f"({strongest:.3e}) in the matrix. main_coupling normalizes the Rabi "
-                f"rate, so the requested power will map to a much larger Rabi rate than "
-                f"intended. Pass a more strongly coupled ground_main/excited_main pair, "
-                f"or set weak_main_fraction=0 to silence this.",
+                f"({strongest:.3e}) in the matrix. main_coupling divides the whole "
+                f"coupling matrix, so a Rabi rate set directly maps to a much larger "
+                f"physical Rabi rate than intended; the power_to_rabi_* helpers are "
+                f"unaffected, since they return main_coupling * E_field and the "
+                f"normalization cancels. Pass a more strongly coupled "
+                f"ground_main/excited_main pair, or set weak_main_fraction=0 to "
+                f"silence this.",
                 stacklevel=2,
             )
 

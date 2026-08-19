@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.3
+
+### Fixed
+
+- The field-mixed fallback in `select_main_states_indices_coupling` preferred an mF = 0
+  ground state unconditionally, so it could return a pair far weaker than the strongest
+  available — contradicting its own docstring. `main_coupling` divides the whole coupling
+  matrix, so that silently scales up every Rabi rate for workflows that set `Ω` directly,
+  and the weak pair can sit above `weak_main_fraction` and escape the warning. Measured on
+  the repository's own fallback test case (X J=2 F₁=5/2 F=3 to B J=1 F₁=3/2 F=1 at
+  200 V/cm), the selected pair was 20% of the strongest, a 5x inflation. The preference now
+  applies only while the mF = 0 pair stays within `mF0_preference_fraction` (default 0.5)
+  of the strongest coupling. Pass `mF0_preference_fraction=0.0` for the previous behaviour.
+  Pass 1, which handles every bare-allowed case, is unchanged.
+- The weak-`main_coupling` warning compared `|ME_main|`, evaluated for `pol_main`, against
+  the largest element of *any* polarization's coupling matrix, and derived its "has been
+  pruned" claim from that same cross-polarization threshold. It now uses the matrix built
+  with `pol_main` when one is present. Its closing sentence also claimed the requested
+  power would map to a larger Rabi rate than intended, which is wrong for the
+  `power_to_rabi_*` helpers, where the normalization cancels.
+
 ## 0.2.2
 
 Transition validity during OBE setup is now decided by the mixed-state dipole matrix
