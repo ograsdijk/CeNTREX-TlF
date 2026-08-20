@@ -210,8 +210,18 @@ fn resonant_polarization_modulation(t: f64, gamma: f64, omega: f64) -> Complex64
     Complex64::new(a, a)
 }
 
+/// Sawtooth ramp from 0 to 1 at frequency `omega` [rad/s], phase `phase` [rad].
+///
+/// No `- PI` here, even though the Julia original reads
+/// `0.5*(1 + sawtoothwave(omega*t + phase - pi))`. Julia's
+/// `Waveforms.sawtoothwave` is zero-centred (`rem2pi(x, RoundNearest)/pi`,
+/// range (-pi, pi]), so its `- pi` supplies a half-period shift that the
+/// floor-based `rem_euclid(1.0)` used here already accounts for. Keeping both
+/// applied the shift twice and put phase=0 halfway up the ramp. Do not
+/// "restore" it. Must stay in lockstep with the Python
+/// `helper_functions.sawtooth_wave`.
 fn sawtooth_wave(t: f64, omega: f64, phase: f64) -> f64 {
-    ((omega * t + phase - PI) / (2.0 * PI)).rem_euclid(1.0)
+    ((omega * t + phase) / (2.0 * PI)).rem_euclid(1.0)
 }
 
 fn variable_on_off(t: f64, ton: f64, toff: f64, phase: f64) -> f64 {

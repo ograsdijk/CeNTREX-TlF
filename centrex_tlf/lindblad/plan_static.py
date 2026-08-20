@@ -34,6 +34,27 @@ class PreparedLindbladProblem:
     backend: str
     rust_plan: Any | None = None
 
+    def check_execution_mode(self, execution_mode: str) -> None:
+        """Fail fast when the requested execution mode needs a plan we do not have.
+
+        Every `expanded_sparse*` mode reads `expanded_rhs_plan`, which
+        `lower_expanded_sparse_rhs` only produces for a decomposed Hamiltonian
+        plan. Without this check the Rust RHS raises on its first call, i.e.
+        after the solve has already started -- and inside a parallel batch or
+        grid scan that surfaces as a worker error far from its cause.
+        """
+        if "expanded_sparse" not in execution_mode:
+            return
+        if self.expanded_rhs_plan is not None:
+            return
+        kind = self.hamiltonian_plan.get("kind", "entrywise")
+        raise ValueError(
+            f"execution_mode={execution_mode!r} requires a decomposed Hamiltonian "
+            f"plan, but this problem was prepared with kind={kind!r}. Either pass "
+            "hamiltonian_representation='decomposed' to prepare_lindblad_problem, "
+            "or use execution_mode='structured'."
+        )
+
     def to_payload(self) -> dict[str, Any]:
         return {
             "n_states": int(self.layout.n),

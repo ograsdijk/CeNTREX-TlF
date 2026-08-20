@@ -169,6 +169,7 @@ def solve_lindblad_batch(
 ) -> LindbladBatchResult:
     if prepared.rust_plan is None:
         raise RuntimeError("solve_lindblad_batch requires a Rust prepared plan")
+    prepared.check_execution_mode(execution_mode)
     rust_solvers = {"dopri5", "tsit5", "fixed_dopri5", "fixed_rk2", "fixed_rk4"}
     if solver not in rust_solvers:
         raise NotImplementedError(
@@ -392,6 +393,7 @@ def grid_scan(
         raise TypeError(f"unexpected grid_scan keyword argument(s): {unknown}")
     if prepared.rust_plan is None:
         raise RuntimeError("grid_scan requires a Rust prepared plan")
+    prepared.check_execution_mode(execution_mode)
     rust_solvers = {"dopri5", "tsit5", "fixed_dopri5", "fixed_rk2", "fixed_rk4"}
     if solver not in rust_solvers:
         raise NotImplementedError(

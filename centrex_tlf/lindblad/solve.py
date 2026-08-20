@@ -599,6 +599,10 @@ def solve_lindblad(
         if parameters is None:
             raise TypeError("parameters are required when solving from an OBESystem")
         prepared = prepare_lindblad_problem(prepared_or_obe_system, parameters, backend=backend)
+    if backend == "rust":
+        # The python reference path maps every non-"reference" mode onto the
+        # structured RHS, so it is unaffected by a missing expanded-sparse plan.
+        prepared.check_execution_mode(execution_mode)
     rho0_array = np.asarray(rho0, dtype=np.complex128)
     packed_rho0 = prepared.layout.pack(rho0_array)
     saveat_values = _normalize_saveat(saveat, t_span_tuple, save_start)
