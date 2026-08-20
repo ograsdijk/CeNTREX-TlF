@@ -56,6 +56,12 @@ class PreparedInterpolatedEffectiveHamiltonianModel:
     excited_indices: np.ndarray
     ground_main_index: int
     patches: tuple[InterpolatedEffectivePatch, ...]
+    # Transition frequency of each patch, computed during preparation while the
+    # underlying OBESystem is still in scope. Carrying it here is what lets
+    # prepare_lindblad_safe_compact_interpolated_model avoid rebuilding every
+    # patch a second time. Optional only so that hand-constructed models remain
+    # valid; the preparation path always populates it.
+    patch_transition_frequencies: np.ndarray | None = None
     keep_diagnostics: bool = True
     grid_variation_diagnostics: dict[str, object] | None = None
 

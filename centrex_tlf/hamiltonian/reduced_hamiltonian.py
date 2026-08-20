@@ -33,7 +33,10 @@ from .generate_hamiltonian import (
     generate_uncoupled_hamiltonian_X,
     generate_uncoupled_hamiltonian_X_function,
 )
-from .matrix_elements_electric_dipole import generate_ED_ME_mixed_state
+from .matrix_elements_electric_dipole import (
+    generate_ED_ME_mixed_state,
+    to_omega_basis,
+)
 from .utils import matrix_to_states, reduced_basis_hamiltonian, reorder_evecs
 
 __all__ = [
@@ -728,14 +731,26 @@ def generate_reduced_hamiltonian_transitions(
         )
         # calculate the coupling between the ground and excited states to determine
         # which states to include
+        # Hoist the loop-invariant work. generate_ED_ME_mixed_state transforms
+        # its arguments to the Omega basis on every call, so leaving the
+        # excited states untransformed costs one rebuild per (gs, es) pair
+        # instead of one per excited state; likewise `1 * gs` depends only on
+        # the outer loop. Pre-transforming with the callee's own guard
+        # (to_omega_basis) makes its check a no-op, so results are unchanged.
+        excited_states_omega = [to_omega_basis(es) for es in excited_states]
         nonzero_coupling = []
         for gs in ground_states:
-            for es in excited_states:
+            gs_state = 1 * gs
+            for es in excited_states_omega:
                 if (
-                    np.abs(generate_ED_ME_mixed_state(1 * gs, es))
+                    np.abs(generate_ED_ME_mixed_state(gs_state, es))
                     >= minimum_coupling
                 ):
+                    # Only `s.J` of these is ever read, via np.unique below, so
+                    # recording gs once is equivalent to appending it for every
+                    # excited state it couples to.
                     nonzero_coupling.append(gs)
+                    break
 
         Js_ground = list(np.unique([s.J for s in nonzero_coupling]))
 

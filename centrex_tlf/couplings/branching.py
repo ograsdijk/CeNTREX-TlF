@@ -39,10 +39,16 @@ def calculate_br(
     # Matrix elements between the excited state and the ground states
     MEs = np.zeros((len(ground_states)), dtype=np.complex128)
 
+    # Both the small-component removal and the Omega-basis transform inside
+    # generate_ED_ME_mixed_state depend only on the excited state, so doing
+    # them once here saves one rebuild of each per ground state.
+    excited_reduced = hamiltonian.to_omega_basis(
+        excited_state.remove_small_components(tol=tol)
+    )
     for idg, ground_state in enumerate(ground_states):
         MEs[idg] = hamiltonian.generate_ED_ME_mixed_state(
             ground_state.remove_small_components(tol=tol),
-            excited_state.remove_small_components(tol=tol),
+            excited_reduced,
             pol_vec=polarization_unpolarized.vector,
         )
 
