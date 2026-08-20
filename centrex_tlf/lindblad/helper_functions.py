@@ -8,6 +8,7 @@ from centrex_tlf.constants import ED_XtB
 
 __all__ = [
     "HelperFunctionId",
+    "HELPER_FUNCTION_ALIASES",
     "HELPER_FUNCTION_NAMES",
     "HELPER_FUNCTION_IDS",
     "HELPER_FUNCTIONS",
@@ -108,7 +109,13 @@ def resonant_polarization_modulation(t: float, gamma: float, omega: float) -> co
 
 
 def sawtooth_wave(t: float, omega: float, phase: float) -> float:
-    frac = ((omega * t + phase - math.pi) / (2.0 * math.pi)) % 1.0
+    # No `- pi` here, even though the Julia original reads
+    # `0.5*(1 + sawtoothwave(omega*t + phase - pi))`. Julia's
+    # Waveforms.sawtoothwave is zero-centred (`rem2pi(x, RoundNearest)/pi`,
+    # range (-pi, pi]), so its `- pi` supplies a half-period shift that the
+    # floor-based `% 1.0` used here already accounts for. Keeping both applied
+    # the shift twice and put phase=0 halfway up the ramp. Do not "restore" it.
+    frac = ((omega * t + phase) / (2.0 * math.pi)) % 1.0
     return frac
 
 
@@ -120,6 +127,15 @@ def variable_on_off(t: float, ton: float, toff: float, phase: float) -> float:
 
 
 def variable_on_off_duty(t: float, duty: float, inv_period: float, phase: float) -> float:
+    """Periodic on/off gate parametrized by duty cycle and inverse period.
+
+    Returns 1.0 during the ON fraction of each cycle and 0.0 otherwise.
+    `inv_period` is 1/T, precomputed so the RHS inner loop avoids a division.
+
+    The `% 1.0` plus `<= 0.0` correction reproduces Julia's `mod1(x, 1.0)`,
+    which returns the half-open range (0, 1] rather than [0, 1): a `frac` of
+    exactly 0 maps to 1.0, not 0.0. See `variable_on_off_duty_invT`.
+    """
     frac = (t * inv_period + phase / (2.0 * math.pi)) % 1.0
     if frac <= 0.0:
         frac += 1.0
@@ -129,6 +145,23 @@ def variable_on_off_duty(t: float, duty: float, inv_period: float, phase: float)
 def variable_on_off_duty_invT(
     t: float, duty: float, inv_period: float, phase: float
 ) -> float:
+    """Alias of `variable_on_off_duty`, kept for Julia name parity.
+
+    The Julia backend (`julia_common.jl`) spells this gate
+    `variable_on_off_duty_invT`, emphasizing that the third argument is an
+    inverse period. Python and Rust spell the same function
+    `variable_on_off_duty`. Both names are exported so an expression written
+    against either backend's vocabulary lowers unchanged.
+
+    This is an alias, not a second implementation: both names map to
+    `HelperFunctionId.VARIABLE_ON_OFF_DUTY` in `HELPER_FUNCTION_IDS`, so the
+    Rust evaluator sees one helper and there is exactly one numeric
+    definition to keep in sync. The alias is declared in
+    `HELPER_FUNCTION_ALIASES`, which `HELPER_FUNCTION_NAMES` uses to resolve
+    the shared ID back to the canonical `variable_on_off_duty`; a round-trip
+    through the ID therefore normalizes the alias, which is expected rather
+    than a loss.
+    """
     return variable_on_off_duty(t, duty, inv_period, phase)
 
 
@@ -274,6 +307,18 @@ HELPER_FUNCTION_IDS: Mapping[str, HelperFunctionId] = {
     "pchip_interp": HelperFunctionId.PCHIP_INTERP,
 }
 
+# Names that deliberately share a HelperFunctionId with another entry, mapped
+# to the canonical name for that id. Only alias -> canonical belongs here; a
+# collision between two genuinely different helpers is a bug, not an alias.
+HELPER_FUNCTION_ALIASES: Mapping[str, str] = {
+    "variable_on_off_duty_invT": "variable_on_off_duty",
+}
+
+# Reverse of HELPER_FUNCTION_IDS. Aliases are skipped so the canonical name
+# wins regardless of dict ordering -- a plain inversion let whichever alias
+# happened to be declared last silently claim the id.
 HELPER_FUNCTION_NAMES: Mapping[int, str] = {
-    int(helper_id): name for name, helper_id in HELPER_FUNCTION_IDS.items()
+    int(helper_id): name
+    for name, helper_id in HELPER_FUNCTION_IDS.items()
+    if name not in HELPER_FUNCTION_ALIASES
 }

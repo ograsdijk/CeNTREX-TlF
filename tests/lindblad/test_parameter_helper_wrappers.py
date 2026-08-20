@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -120,6 +121,185 @@ def test_polymorphic_helpers_match_numeric_helpers(
 
     np.testing.assert_allclose(wrapper(*args, **kwargs), helper(*helper_args))
     np.testing.assert_allclose(getattr(lindblad, name)(*args, **kwargs), helper(*helper_args))
+
+
+# ---------------------------------------------------------------------------
+# Waveform conventions vs the Julia extension.
+#
+# The rest of this module compares the Python wrappers against the Python
+# helpers, and the Rust lowering against the Python plan. That is mutual
+# agreement, not correctness: `sawtooth_wave` was once offset by half a period
+# in BOTH backends and every test still passed. These tests pin the waveforms
+# against the Julia definitions they are ports of, transcribed from
+# Waveforms.jl and CeNTREX-TlF-julia-extension/.../julia_common.jl.
+# ---------------------------------------------------------------------------
+
+
+def _julia_sawtoothwave(x: float) -> float:
+    """Waveforms.jl: ``sawtoothwave(x) = rem2pi(x, RoundNearest) / pi``.
+
+    ``rem2pi(_, RoundNearest)`` is the zero-centred remainder, range (-pi, pi],
+    which Python's ``round`` (banker's rounding, like Julia's) reproduces.
+    """
+    return (x - 2.0 * math.pi * round(x / (2.0 * math.pi))) / math.pi
+
+
+def _julia_sawtooth_wave(t: float, omega: float, phase: float) -> float:
+    """julia_common.jl: ``0.5*(1 + sawtoothwave(omega*t + phase - pi))``."""
+    return 0.5 * (1.0 + _julia_sawtoothwave(omega * t + phase - math.pi))
+
+
+def _julia_square_wave(t: float, omega: float, phase: float) -> float:
+    """julia_common.jl: ``0.5*(1 + squarewave(omega*t + phase))``.
+
+    Waveforms.jl: ``squarewave(x) = ifelse(mod2pi(x) < pi, 1.0, -1.0)``.
+    """
+    return 1.0 if (omega * t + phase) % (2.0 * math.pi) < math.pi else 0.0
+
+
+# Spans many periods in both directions, so the floor-based `% 1.0` used in the
+# port is exercised against Julia's round-to-nearest `rem2pi` across wraps and
+# for negative arguments -- not just inside the first period.
+_WAVEFORM_TIMES = [i * 0.137 for i in range(-200, 201)]
+_WAVEFORM_OMEGA = 1.2
+_WAVEFORM_PHASE = 0.3
+
+
+def test_sawtooth_wave_matches_julia_reference() -> None:
+    for t in _WAVEFORM_TIMES:
+        expected = _julia_sawtooth_wave(t, _WAVEFORM_OMEGA, _WAVEFORM_PHASE)
+        actual = helper_functions.sawtooth_wave(t, _WAVEFORM_OMEGA, _WAVEFORM_PHASE)
+        assert actual == pytest.approx(expected, abs=1e-12), f"t={t}"
+
+
+def test_square_wave_matches_julia_reference() -> None:
+    """Agreement away from the switching points.
+
+    Julia switches on ``mod2pi(x) < pi``; the port switches on
+    ``sin(x) >= 0``. These agree everywhere except exactly at ``mod2pi(x)`` of
+    0 or pi, where the choice is arbitrary and floating-point ``sin`` is
+    unreliable besides. Points within ``_SWITCH_GUARD`` of a switch are skipped
+    rather than asserted on -- that boundary difference is a known, accepted
+    convention difference, not a defect.
+    """
+    switch_guard = 1e-9
+    checked = 0
+    for t in _WAVEFORM_TIMES:
+        x = (_WAVEFORM_OMEGA * t + _WAVEFORM_PHASE) % (2.0 * math.pi)
+        if min(x, abs(x - math.pi), abs(x - 2.0 * math.pi)) < switch_guard:
+            continue
+        expected = _julia_square_wave(t, _WAVEFORM_OMEGA, _WAVEFORM_PHASE)
+        actual = helper_functions.square_wave(t, _WAVEFORM_OMEGA, _WAVEFORM_PHASE)
+        assert actual == pytest.approx(expected, abs=1e-12), f"t={t}"
+        checked += 1
+    assert checked > 0.9 * len(_WAVEFORM_TIMES)
+
+
+@pytest.mark.parametrize(
+    ("wrapper_name", "reference"),
+    [
+        ("sawtooth_wave", _julia_sawtooth_wave),
+        ("square_wave", _julia_square_wave),
+    ],
+)
+def test_waveforms_match_julia_through_runtime_expression(
+    wrapper_name: str, reference: Callable[[float, float, float], float]
+) -> None:
+    """The evaluated RuntimeExpression path must agree with Julia too.
+
+    Guards against the two backends drifting back into agreeing with each
+    other while both disagree with the reference.
+    """
+    wrapper = getattr(parameters, wrapper_name)
+    expression = wrapper(Time(), _WAVEFORM_OMEGA, _WAVEFORM_PHASE)
+    for t in _WAVEFORM_TIMES[::7]:
+        x = (_WAVEFORM_OMEGA * t + _WAVEFORM_PHASE) % (2.0 * math.pi)
+        if min(x, abs(x - math.pi), abs(x - 2.0 * math.pi)) < 1e-9:
+            continue
+        expected = reference(t, _WAVEFORM_OMEGA, _WAVEFORM_PHASE)
+        actual = complex(expression.evaluate(t=t)).real
+        assert actual == pytest.approx(expected, abs=1e-12), f"t={t}"
+
+
+def _julia_variable_on_off_duty_invT(
+    t: float, duty: float, inv_period: float, phase: float
+) -> float:
+    """julia_common.jl: `mod1(t*invT + phase*INV_2PI, 1.0)`, then `frac < duty`.
+
+    `mod1(x, 1.0)` returns the half-open range (0, 1], so an exact 0 becomes
+    1.0. The Python and Rust ports spell that as `% 1.0` plus a `<= 0.0`
+    correction.
+    """
+    frac = (t * inv_period + phase / (2.0 * math.pi)) % 1.0
+    if frac <= 0.0:
+        frac += 1.0
+    return 1.0 if frac < duty else 0.0
+
+
+_DUTY_CASES = [(0.25, 0.4, 0.0), (0.5, 1.3, 0.7), (0.9, 0.31, -1.1)]
+
+
+def test_variable_on_off_duty_matches_julia_reference() -> None:
+    for duty, inv_period, phase in _DUTY_CASES:
+        for t in _WAVEFORM_TIMES:
+            expected = _julia_variable_on_off_duty_invT(t, duty, inv_period, phase)
+            assert helper_functions.variable_on_off_duty(t, duty, inv_period, phase) == expected
+
+
+def test_variable_on_off_duty_invT_is_an_alias_not_a_second_implementation() -> None:
+    """`_invT` exists only for Julia name parity; it must not drift.
+
+    The Julia backend spells this gate `variable_on_off_duty_invT`
+    (`julia_common.jl`), Python and Rust spell it `variable_on_off_duty`.
+    Both names are exported so an expression written against either
+    vocabulary lowers unchanged.
+    """
+    assert (
+        helper_functions.HELPER_FUNCTION_IDS["variable_on_off_duty_invT"]
+        is helper_functions.HELPER_FUNCTION_IDS["variable_on_off_duty"]
+    )
+    for duty, inv_period, phase in _DUTY_CASES:
+        for t in _WAVEFORM_TIMES[::3]:
+            assert helper_functions.variable_on_off_duty_invT(
+                t, duty, inv_period, phase
+            ) == helper_functions.variable_on_off_duty(t, duty, inv_period, phase)
+
+
+def test_helper_function_names_resolves_aliases_to_the_canonical_name() -> None:
+    """A plain inversion of HELPER_FUNCTION_IDS let the alias claim the id.
+
+    Both names map to the same HelperFunctionId, so inverting the dict made
+    whichever was declared last win -- previously `variable_on_off_duty_invT`,
+    and silently swappable by reordering. HELPER_FUNCTION_ALIASES now makes
+    the canonical choice explicit.
+    """
+    ids = helper_functions.HELPER_FUNCTION_IDS
+    names = helper_functions.HELPER_FUNCTION_NAMES
+    aliases = helper_functions.HELPER_FUNCTION_ALIASES
+
+    assert names[int(ids["variable_on_off_duty_invT"])] == "variable_on_off_duty"
+
+    for alias, canonical in aliases.items():
+        assert ids[alias] is ids[canonical]
+        assert canonical not in aliases, f"{canonical} is itself an alias"
+        assert names[int(ids[alias])] == canonical
+
+    # Every non-alias name must still round-trip, i.e. aliases are the only
+    # id collisions.
+    non_aliases = [name for name in ids if name not in aliases]
+    assert len(names) == len(non_aliases)
+    for name in non_aliases:
+        assert names[int(ids[name])] == name
+
+
+def test_variable_on_off_duty_alias_lowers_identically_through_rust() -> None:
+    duty, inv_period, phase = 0.25, 1.3, 0.7
+    canonical = parameters.variable_on_off_duty(Time(), duty, inv_period, phase)
+    alias = parameters.variable_on_off_duty_invT(Time(), duty, inv_period, phase)
+    for t in _WAVEFORM_TIMES[::7]:
+        expected = _julia_variable_on_off_duty_invT(t, duty, inv_period, phase)
+        assert complex(canonical.evaluate(t=t)).real == pytest.approx(expected, abs=1e-12)
+        assert complex(alias.evaluate(t=t)).real == pytest.approx(expected, abs=1e-12)
 
 
 def _function_name(expression: RuntimeExpression) -> str:
