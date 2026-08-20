@@ -4,6 +4,8 @@ from enum import IntEnum
 import math
 from typing import Callable, Iterable, Mapping
 
+from centrex_tlf.constants import ED_XtB
+
 __all__ = [
     "HelperFunctionId",
     "HELPER_FUNCTION_NAMES",
@@ -148,7 +150,7 @@ def multipass_2d_intensity(
 def rabi_from_intensity(
     intensity: float,
     coupling: float,
-    dipole_moment: float = 2.6675506e-30,
+    dipole_moment: float = ED_XtB,
 ) -> float:
     hbar = 1.0545718176461565e-34
     c = 299792458.0
@@ -166,7 +168,7 @@ def multipass_2d_rabi(
     sigma_x: float,
     sigma_y: float,
     main_coupling: float,
-    dipole_moment: float = 2.6675506e-30,
+    dipole_moment: float = ED_XtB,
 ) -> float:
     intensity = multipass_2d_intensity(x, y, intensities, xlocs, ylocs, sigma_x, sigma_y)
     return rabi_from_intensity(intensity, main_coupling, dipole_moment)
@@ -181,7 +183,7 @@ def gaussian_beam_rabi(
     sigma_x: float,
     sigma_y: float,
     main_coupling: float,
-    dipole_moment: float = 2.6675506e-30,
+    dipole_moment: float = ED_XtB,
 ) -> float:
     beam_intensity = gaussian_2d(x, y, intensity, xloc, yloc, sigma_x, sigma_y)
     return rabi_from_intensity(beam_intensity, main_coupling, dipole_moment)

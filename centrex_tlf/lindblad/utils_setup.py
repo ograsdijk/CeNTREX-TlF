@@ -288,7 +288,7 @@ def _build_obe_system(
     if verbose:
         logger.info("generate_OBE_system: 4/5 -> Generating the collapse matrices")
     C_array = couplings_tlf.collapse_matrices(
-        QN, ground_states, excited_states, gamma=Γ, qn_compact=qn_compact
+        QN, ground_states, excited_states, decay_rate=Γ, qn_compact=qn_compact
     )
 
     _decay_channels = _normalize_decay_channels(decay_channels)

@@ -74,6 +74,30 @@ class TestXStateHamiltonian:
         assert evals.shape[0] == len(qn)
         assert np.all(np.isfinite(evals))
 
+    def test_x_hamiltonian_includes_centrifugal_distortion(self):
+        """Rust and Python must both include the -D_rot*[J(J+1)]^2 term."""
+        qn = states.generate_uncoupled_states_ground(Js=[0, 1, 2, 3])
+        constants = XConstants()
+        assert constants.D_rot != 0.0
+
+        h_rust = rust.generate_uncoupled_hamiltonian_X_py(qn, constants)
+        h_python = _generate_uncoupled_hamiltonian_X_python(qn, constants)
+        np.testing.assert_allclose(h_rust.Hff, h_python.Hff, atol=1e-6)
+
+        constants_no_distortion = XConstants(D_rot=0.0)
+        h_rust_rigid = rust.generate_uncoupled_hamiltonian_X_py(
+            qn, constants_no_distortion
+        )
+        h_python_rigid = _generate_uncoupled_hamiltonian_X_python(
+            qn, constants_no_distortion
+        )
+        np.testing.assert_allclose(h_rust_rigid.Hff, h_python_rigid.Hff, atol=1e-6)
+
+        # With distortion switched off both backends must fall back to the
+        # pure rigid-rotor result, i.e. differ from the full model.
+        assert not np.allclose(h_rust.Hff, h_rust_rigid.Hff)
+        assert not np.allclose(h_python.Hff, h_python_rigid.Hff)
+
 
 class TestBStateHamiltonian:
     @pytest.fixture

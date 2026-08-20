@@ -52,17 +52,29 @@ pub fn h_c3b(psi: UncoupledBasisState, constants: &XConstants) -> UncoupledState
 }
 
 /// Hyperfine term c3c.
+///
+/// This algebraic identity is derived assuming the rigid-rotor B*J^2
+/// rotational operator; it must use `h_rot_rigid`, not the distorted
+/// `h_rot` (B*J^2 - D*J^4), or the c3 value would be silently altered.
 pub fn h_c3c(psi: UncoupledBasisState, constants: &XConstants) -> UncoupledState {
     let factor = -10.0 * constants.c3
         / constants.c4
         / constants.b_rot
         / ((2 * psi.j + 3) * (2 * psi.j - 1)) as f64;
-    factor * com(h_c4, h_rot, psi, constants)
+    factor * com(h_c4, h_rot_rigid, psi, constants)
 }
 
-/// Rotational Hamiltonian: B * J^2
-pub fn h_rot(psi: UncoupledBasisState, constants: &XConstants) -> UncoupledState {
+/// Rigid-rotor rotational Hamiltonian: B * J^2.
+///
+/// Kept separate from `h_rot` because the algebraic tensor-spin-spin
+/// identity `h_c3c` depends on this exact rigid-rotor factor.
+pub fn h_rot_rigid(psi: UncoupledBasisState, constants: &XConstants) -> UncoupledState {
     constants.b_rot * j2(psi, constants)
+}
+
+/// Rotational Hamiltonian: B * J^2 - D * [J(J+1)]^2
+pub fn h_rot(psi: UncoupledBasisState, constants: &XConstants) -> UncoupledState {
+    constants.b_rot * j2(psi, constants) - constants.d_rot * j4(psi, constants)
 }
 
 /// Helper for c3 term.

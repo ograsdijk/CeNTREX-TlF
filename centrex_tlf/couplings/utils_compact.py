@@ -84,7 +84,7 @@ def BR_to_C_array(BR: npt.NDArray[np.floating], Gamma: float) -> npt.NDArray[np.
     
     Args:
         BR (npt.NDArray[np.floating]): Branching ratio array
-        Gamma (float): Decay rate in rad/s
+        Gamma (float): Population decay rate in s^-1
     
     Returns:
         npt.NDArray[np.floating]: Collapse operator array
@@ -101,7 +101,7 @@ def C_array_to_BR(
     
     Args:
         C_array (npt.NDArray[np.floating]): Collapse operator array
-        Gamma (float): Decay rate in rad/s
+        Gamma (float): Population decay rate in s^-1
     
     Returns:
         npt.NDArray[np.floating]: Branching ratio array

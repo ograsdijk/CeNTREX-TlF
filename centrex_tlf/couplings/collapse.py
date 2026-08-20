@@ -17,30 +17,34 @@ def collapse_matrices(
     QN: Sequence[states.CoupledState],
     ground_states: Sequence[states.CoupledState],
     excited_states: Sequence[states.CoupledState],
-    gamma: float = 1,
+    decay_rate: Optional[float] = None,
     tol: float = 1e-4,
-    qn_compact: Optional[
-        Union[states.QuantumSelector, Sequence[states.QuantumSelector]]
-    ] = None,
+    qn_compact: Optional[Union[states.QuantumSelector, Sequence[states.QuantumSelector]]] = None,
+    *,
+    gamma: Optional[float] = None,
 ) -> npt.NDArray[np.floating]:
     """Generate collapse (jump) matrices for spontaneous emission from excited states.
 
     Creates Lindblad collapse operators C that describe spontaneous decay from excited
     states to ground states via electric dipole transitions. Each operator has the form:
-        C[i,j] = √(BR * γ)
-    where BR is the branching ratio and γ is the decay rate. Couplings smaller than
-    tol are set to zero for computational efficiency.
+        C[i,j] = √(BR * Γ)
+    where BR is the branching ratio and Γ is the excited-state population decay rate.
+    Couplings smaller than tol are set to zero for computational efficiency.
 
     Args:
         QN (Sequence[CoupledState]): Complete basis of states for the calculation
         ground_states (Sequence[CoupledState]): Ground states coupled to excited states
         excited_states (Sequence[CoupledState]): Excited states that can decay
-        gamma (float): Decay rate of excited states in rad/s. Defaults to 1.
+        decay_rate (float | None): Excited-state population decay rate Γ = 1/τ, in
+            s^-1. This is NOT the ordinary-frequency linewidth γ = Γ/(2π) in Hz.
+            Defaults to 1.
         tol (float): Threshold for keeping couplings. Couplings with √(BR) < tol are
             set to zero. Defaults to 1e-4.
         qn_compact (QuantumSelector | Sequence[QuantumSelector] | None): Quantum number
             selectors for compacting multiple states into single manifolds. Defaults to
             None.
+        gamma (float | None): Deprecated alias for `decay_rate`. Do not use both
+            `decay_rate` and `gamma` in the same call.
 
     Returns:
         npt.NDArray[np.floating]: Array of collapse matrices, shape (n_ops, n_states,
@@ -48,11 +52,36 @@ def collapse_matrices(
 
     Warns:
         UserWarning: If branching ratios sum to more than 1 (numerical error)
+        DeprecationWarning: If the deprecated `gamma` keyword is used
+
+    Raises:
+        TypeError: If both `decay_rate` and `gamma` are supplied
 
     Example:
-        >>> # Create collapse operators for X→B transitions
-        >>> C_array = collapse_matrices(QN, ground_states, excited_states, gamma=2π*36e6)
+        >>> # Create collapse operators for X→B transitions, with the B-state
+        >>> # population decay rate Γ = 1/τ (s^-1), not the linewidth γ = Γ/(2π).
+        >>> C_array = collapse_matrices(QN, ground_states, excited_states,
+        ...                             decay_rate=hamiltonian.Γ)
     """
+    if gamma is not None:
+        if decay_rate is not None:
+            raise TypeError(
+                "collapse_matrices() got both 'decay_rate' and the deprecated "
+                "'gamma' keyword; pass only 'decay_rate'."
+            )
+        warnings.warn(
+            "The 'gamma' keyword of collapse_matrices() has been renamed to "
+            "'decay_rate': the value is the population decay rate Γ = 1/τ "
+            "(s^-1), not the ordinary-frequency linewidth γ = Γ/(2π) (Hz). "
+            "Pass decay_rate=... instead; 'gamma' will be removed in a "
+            "future release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        decay_rate = gamma
+    elif decay_rate is None:
+        decay_rate = 1
+
     C_list: List[npt.NDArray[np.floating]] = []
 
     qn_index = {id(state): idx for idx, state in enumerate(QN)}
@@ -67,16 +96,14 @@ def collapse_matrices(
         j = qn_index[id(excited_state)]
         BRs = calculate_br(excited_state, ground_states)
         if not np.allclose(np.sum(BRs), 1.0):
-            warnings.warn(
-                f"Branching ratio sum > 1, difference = {np.sum(BRs) - 1:.2e}"
-            )
+            warnings.warn(f"Branching ratio sum > 1, difference = {np.sum(BRs) - 1:.2e}")
         for ground_state, BR in zip(ground_states, BRs):
             i = qn_index[id(ground_state)]
 
             if np.sqrt(BR) > tol:
                 # Initialize the coupling matrix
                 H = np.zeros((len(QN), len(QN)), dtype=np.float64)
-                H[i, j] = np.sqrt(BR * gamma)
+                H[i, j] = np.sqrt(BR * decay_rate)
 
                 C_list.append(H)
 
@@ -89,5 +116,5 @@ def collapse_matrices(
         for qnc in qn_compact:
             indices_compact = states.get_indices_quantumnumbers(qnc, QN_compact)
             QN_compact = states.compact_QN_coupled_indices(QN_compact, indices_compact)
-            C_array = compact_C_array_indices(C_array, gamma, indices_compact)
+            C_array = compact_C_array_indices(C_array, decay_rate, indices_compact)
     return C_array

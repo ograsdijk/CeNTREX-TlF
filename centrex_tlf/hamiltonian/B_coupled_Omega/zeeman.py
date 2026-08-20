@@ -63,7 +63,7 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
 
     Example:
         >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
-        >>> constants = BConstants(μ_B=1400000.0)
+        >>> constants = BConstants()  # μ_B: Bohr magneton in Hz/G
         >>> result_pi = mu_p(state, 0, constants)      # π component
         >>> result_sp = mu_p(state, +1, constants)     # σ⁺ component
         >>> result_sm = mu_p(state, -1, constants)     # σ⁻ component
@@ -162,7 +162,7 @@ def HZx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
     Example:
         >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
-        >>> constants = BConstants(μ_B=1400000.0)
+        >>> constants = BConstants()  # μ_B: Bohr magneton in Hz/G
         >>> result = HZx(state, constants)
     """
     return -(mu_p(psi, -1, constants) - mu_p(psi, +1, constants)) / np.sqrt(2)
@@ -197,7 +197,7 @@ def HZy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
     Example:
         >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
-        >>> constants = BConstants(μ_B=1400000.0)
+        >>> constants = BConstants()  # μ_B: Bohr magneton in Hz/G
         >>> result = HZy(state, constants)
         >>> # Result has complex amplitudes
     """
@@ -234,7 +234,7 @@ def HZz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
     Example:
         >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
-        >>> constants = BConstants(μ_B=1400000.0)
+        >>> constants = BConstants()  # μ_B: Bohr magneton in Hz/G
         >>> result = HZz(state, constants)
         >>> # All coupled states have mF=0
     """

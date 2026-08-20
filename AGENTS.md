@@ -42,7 +42,7 @@ default Windows console codec (cp1252) raises `UnicodeEncodeError`.
 | `lindblad` | OBE assembly (`generate_OBE_system_transitions`), runtime parameters (`LindbladParameters`), prepared problems, solvers, batch/grid scans, terminal events |
 | `effective_hamiltonian` | Lower-dimensional effective models — a **separate** path with its own API, not a drop-in replacement for the full OBE |
 | `utils` | Rabi/intensity/power conversions, Doppler helpers, multipass beam profiles, phase modulation, initial populations, level-diagram plotting |
-| `constants` | `XConstants`, `BConstants`, `TlFNuclearSpins`, `ED_XtB`, and `Γ` (the B-state decay rate, 9.80e6 rad/s = 2π × 1.56 MHz) |
+| `constants` | `XConstants`, `BConstants`, `TlFNuclearSpins`, `ED_XtB`, and `Γ` (the B-state decay rate, `1/B_LIFETIME` ≈ 1.0101e7 s⁻¹, from the measured τ = 99(9) ns lifetime; Γ/(2π) ≈ 1.608 MHz) |
 
 ## Conventions
 
@@ -55,6 +55,8 @@ default Windows console codec (cp1252) raises `UnicodeEncodeError`.
   parentheses: J=2 → J′=1 (P branch is ΔJ=−1).
 - X-state parity is `(-1)**J`; the optical `P_excited = -P_ground`.
 - Quantum numbers are floats where half-integral (`F1=3/2` is `1.5`).
+- `couplings.collapse_matrices` takes `decay_rate=` (the population decay rate Γ = 1/τ, s⁻¹).
+  The old `gamma=` keyword still works but emits a `DeprecationWarning`; passing both raises.
 
 ## The canonical OBE recipe
 
@@ -144,6 +146,14 @@ needed.
 
 Each of these produces plausible-looking but wrong output rather than an error.
 
+- **The X Hamiltonian changed; cached or pickled X Hamiltonians are stale.** X now carries a
+  quartic centrifugal-distortion term `-D_rot·[J(J+1)]²` (`D0_X = -Y02_X` ≈ 5.84 kHz), and
+  `B_rot` moved by ~24 kHz to the Dunham-derived `B0_X = Y01 + Y11/2 + Y21/4` ≈ 6.667355 GHz.
+  Anything rebuilt from a `.pkl` or an `@lru_cache` populated before this change will disagree
+  with a fresh build by tens of kHz in J=2 — enough to move a line position but not enough to
+  look broken. Regenerate cached Hamiltonians rather than reusing them. Both constants stay
+  derived from the Dunham coefficients `Y01_X`/`Y11_X`/`Y21_X`/`Y02_X`; do not hard-code them
+  separately, and note `rust/src/constants.rs` mirrors the same derivation.
 - **Read level positions from `H_symbolic`, not `H_int`.** The rotating-frame line positions are
   `complex(sympy.N(system.H_symbolic[i, i].subs({selector.δ: 0}))).real / (2*np.pi*1e6)`. The
   `H_int` B block sits in a different energy origin and gives numbers off by orders of magnitude.
@@ -272,6 +282,20 @@ Capabilities that already exist — check here before building something new.
   fields with `reorder_evecs` or `find_exact_states`. Examples in `examples/hamiltonian/`.
 - **Branching ratios and level diagrams.** `couplings.calculate_br`,
   `couplings.generate_br_dataframe`, `utils.plotting.plot_level_diagram`.
+- **Field-dressed X→B diagram for one optical transition.**
+  `utils.plotting.plot_transition_level_diagram(transitions.P2_F1_3o2_F1, E=170)`, or with
+  explicit quantum numbers (`J_ground=2, branch="P", F1_excited=1.5, F_excited=1`). Every
+  level is drawn as a bar segmented by its zero-field parent character — hyperfine `(F1, F)`
+  parents in X, the two Λ-doublet parity parents in B — so Stark mixing is visible directly.
+  `E` (V/cm) and `B` (Gauss) are both along z, so mF stays good and the calculation runs per
+  mF block; that is also why it needs no `B=[0,0,1e-5]` placeholder. Levels are matched to
+  parents by adiabatic tracking from zero field, so labels stay right above the fields where
+  one-shot matching breaks; the ramp is sized by `max_tracking_step_V_cm` (default 2.0) and
+  `max_tracking_step_G` (default 1.0), whichever demands more steps.
+  `utils.plotting.calculate_transition_level_structure` returns the
+  same numbers without plotting, and every plotted number is on the returned
+  `TransitionLevelStructure`. Cross-checked against an independent hand-rolled calculation in
+  `tests/utils/test_level_diagram.py`.
 - **Multi-transition systems.** Lasers and microwaves together — rotational cooling drives
   `P(2)` plus `MicrowaveTransition(1, 2)` and `(2, 3)` in one OBE system.
 - **Polarization switching.** Pass two polarizations for one transition
@@ -327,11 +351,13 @@ Capabilities that already exist — check here before building something new.
 | Fit simulations to digitized experimental data | `examples/lindblad/r2_nltl_scan_fit_differential_evolution_cached_field.ipynb` |
 | Run a 2-D Rust grid scan | `examples/lindblad/r0_f2_batch_grid_scan.ipynb` |
 | Rotational cooling (laser + microwaves) | `examples/lindblad/rotational_cooling.ipynb` |
+| Multi-line spectrum over a wide window, several branches at once | `examples/lindblad/r2_zero_field_s0_overlap_scan.ipynb` |
 | Polarization switching | `examples/lindblad/polarization_switching.ipynb` |
 | Terminal events / time-to-threshold | `examples/lindblad/rotational_cooling_terminal_event_scans.ipynb` |
 | Effective-Hamiltonian models | `examples/lindblad/q1_effective_fixed_basis_vs_static_regular_rust.ipynb` |
 | Stark curves vs field | `examples/hamiltonian/plot_StarkShift_TlF_J2.py`, `plot_StarkShift_B.py` |
 | Detailed field-dependent level analysis | `examples/hamiltonian/j2_mf0_crossing_analysis.ipynb` |
+| A field-dressed X→B diagram for one transition | `utils.plotting.plot_transition_level_diagram` |
 | Branching ratios | `examples/couplings/branching_ratios.ipynb` |
 | State preparation (SPA) | `examples/spa paper/state_prep_python_example.ipynb` |
 

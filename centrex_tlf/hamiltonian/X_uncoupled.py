@@ -17,7 +17,7 @@ import numpy as np
 from centrex_tlf.constants import XConstants
 from centrex_tlf.states import UncoupledBasisState, UncoupledState, parity_X
 
-from .general_uncoupled import Hrot
+from .general_uncoupled import Hrot, Hrot_rigid
 from .quantum_operators import (
     I1m,
     I1p,
@@ -159,6 +159,10 @@ def Hc3b(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
 def Hc3c(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
     """Third component of tensor spin-spin coupling: c3 term with I1·I2 and rotation.
 
+    This algebraic identity is derived assuming the rigid-rotor B·J²
+    rotational operator; it must use `Hrot_rigid`, not the distorted `Hrot`
+    (B·J² - D·J⁴), or the c3 value would be silently altered.
+
     Args:
         psi (UncoupledBasisState): Uncoupled basis state
         coefficients (XConstants): X state molecular constants
@@ -171,7 +175,7 @@ def Hc3c(psi: UncoupledBasisState, coefficients: XConstants) -> UncoupledState:
         * coefficients.c3
         / coefficients.c4
         / coefficients.B_rot
-        * com(Hc4, Hrot, psi, coefficients)
+        * com(Hc4, Hrot_rigid, psi, coefficients)
         / ((2 * psi.J + 3) * (2 * psi.J - 1))
     )
 

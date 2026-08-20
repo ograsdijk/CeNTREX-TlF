@@ -60,7 +60,7 @@ def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
 
     Example:
         >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
-        >>> constants = BConstants(μ_E=1147778.856512753)
+        >>> constants = BConstants()  # μ_E: B-state dipole moment in Hz/(V/cm)
         >>> result_pi = d_p(state, 0, constants)      # π polarization
         >>> result_sp = d_p(state, +1, constants)     # σ⁺ polarization
         >>> result_sm = d_p(state, -1, constants)     # σ⁻ polarization
@@ -153,7 +153,7 @@ def HSx(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
     Example:
         >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
-        >>> constants = BConstants(μ_E=1147778.856512753)
+        >>> constants = BConstants()  # μ_E: B-state dipole moment in Hz/(V/cm)
         >>> result = HSx(state, constants)
     """
     return -(d_p(psi, -1, constants) - d_p(psi, +1, constants)) / np.sqrt(2)
@@ -188,7 +188,7 @@ def HSy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
     Example:
         >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
-        >>> constants = BConstants(μ_E=1147778.856512753)
+        >>> constants = BConstants()  # μ_E: B-state dipole moment in Hz/(V/cm)
         >>> result = HSy(state, constants)
         >>> # Result has complex amplitudes
     """
@@ -224,7 +224,7 @@ def HSz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
     Example:
         >>> state = CoupledBasisState(F=1, mF=0, F1=0.5, J=1, I1=0.5, I2=0.5, Omega=1)
-        >>> constants = BConstants(μ_E=1147778.856512753)
+        >>> constants = BConstants()  # μ_E: B-state dipole moment in Hz/(V/cm)
         >>> result = HSz(state, constants)
         >>> # All coupled states have mF=0
     """

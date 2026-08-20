@@ -95,12 +95,41 @@ def test_bare_forbidden_transition_still_rejected_without_field():
     assert "|ΔF| must be ≤ 1" in message
 
 
-def test_zero_field_rule_violating_couplings_vanish_identically():
-    """The numeric test reduces exactly to the selection rules at zero field.
+def test_bare_state_rule_violating_matrix_elements_are_exactly_zero():
+    """At true zero field (E = B = 0) the bare selection rules are exact, not a limit.
 
-    Guards the claim that no field-strength branch is needed: at E = 0 every coupling that
-    violates the bare rules is a hard zero, while at 200 V/cm one reaches a sizeable
-    fraction of the strongest element in the matrix.
+    This checks the *bare* dipole matrix element ⟨e|D̂·ε|g⟩ between undressed basis
+    states directly (no Hamiltonian diagonalization, hence no near-degenerate
+    eigenvectors to be uncertain about): every ground/excited pair the selection
+    rules forbid must give a matrix element of exactly zero.
+    """
+    selector = couplings.generate_transition_selectors(
+        transitions=[TRANSITION], polarizations=[[POL_X]]
+    )[0]
+    chk = couplings.utils.check_transition_coupled_allowed_polarization
+    dmF = couplings.utils.ΔmF_allowed(POL_X.vector)
+
+    checked_a_violation = False
+    for ground in selector.ground:
+        for excited in selector.excited:
+            if chk(ground.largest, excited.largest, dmF, return_err=False):
+                continue
+            checked_a_violation = True
+            ME = hamiltonian.generate_ED_ME_mixed_state(excited, ground, pol_vec=POL_X.vector)
+            assert ME == 0j, (
+                f"rule-forbidden bare pair {ground.largest} -> {excited.largest} "
+                f"has nonzero matrix element {ME}"
+            )
+    assert checked_a_violation, "test setup must include at least one forbidden pair"
+
+
+def test_near_zero_field_rule_violating_couplings_strongly_suppressed():
+    """B_SMALL = [0, 0, 1e-5] G is a near-zero field, not exact zero.
+
+    It only exists to lift exact degeneracies for numerical state identification (see
+    AGENTS.md's B-field placeholder gotcha); it can still weakly mix F states, so
+    nominally forbidden couplings need not be mathematically zero here, only strongly
+    suppressed relative to the field-driven regime at 200 V/cm.
     """
     chk = couplings.utils.check_transition_coupled_allowed_polarization
     dmF = couplings.utils.ΔmF_allowed(POL_X.vector)
@@ -136,8 +165,15 @@ def test_zero_field_rule_violating_couplings_vanish_identically():
                     violating = max(violating, C[i, j])
         worst[E_z] = (violating, C.max())
 
-    assert worst[0.0][0] == 0.0, "rule-violating couplings must vanish at zero field"
-    # At field the effect is dominant, not a rounding-level artefact.
+    # At near-zero field (E=0, B=B_SMALL) rule-violating couplings must still be
+    # suppressed to at most a rounding-level artefact: B=[0,0,1e-5] G only just lifts
+    # the ±mF degeneracy, so the mixing angle within a ±mF pair is only determined to
+    # the ~1e-4..1e-2 level and is BLAS-build dependent (see AGENTS.md). This loose
+    # tolerance still cleanly separates this regime from the field-driven one below.
+    assert worst[0.0][0] / worst[0.0][1] < 1e-2, (
+        "rule-violating couplings must be at most a rounding-level artefact at near-zero field"
+    )
+    # At 200 V/cm the effect is dominant, not a rounding-level artefact.
     assert worst[200.0][0] / worst[200.0][1] > 0.5
 
 
@@ -273,17 +309,13 @@ def test_automatic_main_selection_falls_back_to_field_mixed_pairs():
     ground = [
         1 * s
         for s in states.generate_coupled_states_X(
-            states.QuantumSelector(
-                electronic=states.ElectronicState.X, J=2, F1=2.5, F=3, P=1
-            )
+            states.QuantumSelector(electronic=states.ElectronicState.X, J=2, F1=2.5, F=3, P=1)
         )
     ]
     excited = [
         1 * s
         for s in states.generate_coupled_states_B(
-            states.QuantumSelector(
-                electronic=states.ElectronicState.B, J=1, F1=1.5, F=1, P=-1, Ω=1
-            )
+            states.QuantumSelector(electronic=states.ElectronicState.B, J=1, F1=1.5, F=1, P=-1, Ω=1)
         )
     ]
     # Every pair here is ΔF = 2, so the bare selection rules admit none of them.
@@ -296,7 +328,12 @@ def test_automatic_main_selection_falls_back_to_field_mixed_pairs():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         field = couplings.generate_coupling_field_automatic(
-            ground, excited, H.QN_basis, H.H_int, H.QN, H.V_ref_int,
+            ground,
+            excited,
+            H.QN_basis,
+            H.H_int,
+            H.QN,
+            H.V_ref_int,
             pol_vecs=[POL_X.vector],
         )
 
