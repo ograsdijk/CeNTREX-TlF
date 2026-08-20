@@ -1,0 +1,32 @@
+[
+  {
+    "case": "A: R0_F1_3o2_F2 (65-state)",
+    "n_states": 105,
+    "build_s": 0.643,
+    "me_calls": 569,
+    "transform_calls": 21,
+    "distinct_transforms": 15,
+    "redundancy": 1.4,
+    "max_repeat_one_state": 3
+  },
+  {
+    "case": "B: R2_F1_7o2_F3 (r2-style)",
+    "n_states": 154,
+    "build_s": 2.758,
+    "me_calls": 1939,
+    "transform_calls": 57,
+    "distinct_transforms": 42,
+    "redundancy": 1.36,
+    "max_repeat_one_state": 3
+  },
+  {
+    "case": "C: Q1_F1_3o2_F2 compact (20-state)",
+    "n_states": 20,
+    "build_s": 0.497,
+    "me_calls": 573,
+    "transform_calls": 21,
+    "distinct_transforms": 15,
+    "redundancy": 1.4,
+    "max_repeat_one_state": 3
+  }
+]

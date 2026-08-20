@@ -93,6 +93,39 @@ where
     result
 }
 
+/// Linear-scan reference for `h_mat_elems_from_applied`, kept for benchmarking.
+///
+/// This is what the map-based version replaced: instead of hashing each applied
+/// state's terms into a `HashMap` once, it rescans the term list for every
+/// matrix element. Retained under `cfg(test)` so the equivalence test and the
+/// `bench_h_mat_elems_lookup_vs_linear_scan` measurement have something to
+/// compare against; it is not part of the shipped path.
+#[cfg(test)]
+fn h_mat_elems_from_applied_linear_scan<B, S>(qn: &[B], h_applied: &[S]) -> Vec<Complex64>
+where
+    B: Copy + Eq + Hash,
+    S: OperatorState<BasisState = B>,
+{
+    let n = qn.len();
+    debug_assert_eq!(n, h_applied.len());
+    let mut result = vec![Complex64::ZERO; n * n];
+    for (i, a) in qn.iter().enumerate() {
+        for j in i..n {
+            let mut val = Complex64::ZERO;
+            for &(amp, basis) in h_applied[j].terms() {
+                if basis == *a {
+                    val += amp;
+                }
+            }
+            result[i * n + j] = val;
+            if i != j {
+                result[j * n + i] = val.conj();
+            }
+        }
+    }
+    result
+}
+
 #[inline]
 pub fn h_mat_elems(
     h: fn(UncoupledBasisState, &XConstants) -> UncoupledState,
@@ -247,6 +280,304 @@ mod tests {
             }
         }
         states
+    }
+
+    /// Physically correct X uncoupled basis for J = 0..=jmax.
+    ///
+    /// `make_x_basis` above steps mj by 2, which drops half the mJ values --
+    /// harmless for a Hermiticity check, but it would misstate the basis size
+    /// the lookup benchmark is trying to characterize. Sizes here are the real
+    /// ones: 4*(jmax+1)^2, i.e. 4, 16, 36, 64, 100, 144, 196, 256.
+    fn make_full_x_basis(jmax: i32) -> Vec<UncoupledBasisState> {
+        let mut states = Vec::new();
+        for j in 0..=jmax {
+            for mj in -j..=j {
+                for m1 in [-1, 1] {
+                    for m2 in [-1, 1] {
+                        states.push(UncoupledBasisState {
+                            j,
+                            mj,
+                            i1: 1,
+                            m1,
+                            i2: 1,
+                            m2,
+                            omega: 0,
+                            parity: 1,
+                        });
+                    }
+                }
+            }
+        }
+        states
+    }
+
+    /// B coupled basis for J = 1..=jmax, Omega basis (parity None, omega = 1).
+    ///
+    /// F1 = J +- 1/2 and F = F1 +- 1/2, both stored doubled for F1 and single
+    /// for F, matching `CoupledBasisState`.
+    fn make_b_basis(jmax: i32) -> Vec<CoupledBasisState> {
+        let mut states = Vec::new();
+        for j in 1..=jmax {
+            for f1 in [2 * j - 1, 2 * j + 1] {
+                if f1 <= 0 {
+                    continue;
+                }
+                for f in [(f1 - 1) / 2, (f1 + 1) / 2] {
+                    for mf in -f..=f {
+                        states.push(CoupledBasisState {
+                            j,
+                            f,
+                            mf,
+                            i1: 1,
+                            i2: 1,
+                            f1,
+                            omega: 1,
+                            parity: None,
+                            electronic_state: ElectronicState::B,
+                        });
+                    }
+                }
+            }
+        }
+        states
+    }
+
+    #[test]
+    fn test_linear_scan_reference_matches_lookup_maps() {
+        // Pins the benchmark's baseline: if these ever disagree, the timing
+        // comparison below is meaningless.
+        let constants = XConstants::default();
+        let ops: [fn(UncoupledBasisState, &XConstants) -> UncoupledState; 4] = [
+            x_uncoupled::h_ff,
+            x_uncoupled::h_sx,
+            x_uncoupled::h_sy,
+            x_uncoupled::h_zz,
+        ];
+        for jmax in [0, 1, 2, 3] {
+            let qn = make_full_x_basis(jmax);
+            for op in ops {
+                let applied: Vec<UncoupledState> = qn.iter().map(|b| op(*b, &constants)).collect();
+                let mapped = h_mat_elems_from_applied(&qn, &applied);
+                let scanned = h_mat_elems_from_applied_linear_scan(&qn, &applied);
+                assert_eq!(mapped.len(), scanned.len());
+                for (idx, (a, b)) in mapped.iter().zip(scanned.iter()).enumerate() {
+                    assert!(
+                        (a - b).norm() < 1e-12,
+                        "jmax={jmax} idx={idx}: {a:?} vs {b:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Per-trial timings for both implementations, interleaved.
+    ///
+    /// Map and scan alternate *within* each trial rather than running as two
+    /// separate blocks, so slow drift (thermal throttling, a background task)
+    /// hits both roughly equally instead of loading onto whichever ran second.
+    /// Returns (map_us_per_call, scan_us_per_call) with one entry per trial.
+    #[cfg(test)]
+    fn time_map_vs_scan<B, S>(
+        qn: &[B],
+        applied: &[S],
+        reps: usize,
+        trials: usize,
+    ) -> (Vec<f64>, Vec<f64>)
+    where
+        B: Copy + Eq + std::hash::Hash,
+        S: OperatorState<BasisState = B>,
+    {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        let mut map_us = Vec::with_capacity(trials);
+        let mut scan_us = Vec::with_capacity(trials);
+        for _ in 0..trials {
+            // black_box on both the inputs and the whole result matrix:
+            // reading only m[0] would let LLVM strip the linear scan down to a
+            // single element while the opaque HashMap survives, which would
+            // fake a win for the scan.
+            let start = Instant::now();
+            for _ in 0..reps {
+                let m = h_mat_elems_from_applied(black_box(qn), black_box(applied));
+                black_box(&m);
+            }
+            map_us.push(start.elapsed().as_secs_f64() * 1e6 / reps as f64);
+
+            let start = Instant::now();
+            for _ in 0..reps {
+                let m = h_mat_elems_from_applied_linear_scan(black_box(qn), black_box(applied));
+                black_box(&m);
+            }
+            scan_us.push(start.elapsed().as_secs_f64() * 1e6 / reps as f64);
+        }
+        (map_us, scan_us)
+    }
+
+    #[cfg(test)]
+    fn median(values: &[f64]) -> f64 {
+        let mut sorted = values.to_vec();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let mid = sorted.len() / 2;
+        if sorted.len() % 2 == 0 {
+            0.5 * (sorted[mid - 1] + sorted[mid])
+        } else {
+            sorted[mid]
+        }
+    }
+
+    /// Spread as a fraction of the median, i.e. (max - min) / median.
+    #[cfg(test)]
+    fn rel_spread(values: &[f64]) -> f64 {
+        let lo = values.iter().cloned().fold(f64::INFINITY, f64::min);
+        let hi = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        (hi - lo) / median(values)
+    }
+
+    /// Measurement for the audit item "benchmark the h_mat_elems_generic
+    /// lookup maps against the old linear scan for very small bases".
+    ///
+    /// Ignored by default -- it is a timing report, not a pass/fail assertion.
+    /// Run with:
+    ///     cargo test --release -p centrex_tlf_rust h_mat_elems_lookup -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn bench_h_mat_elems_lookup_vs_linear_scan() {
+        const TRIALS: usize = 7;
+
+        let constants = XConstants::default();
+        let ops: [(&str, fn(UncoupledBasisState, &XConstants) -> UncoupledState); 3] = [
+            ("h_ff", x_uncoupled::h_ff),
+            ("h_sx", x_uncoupled::h_sx),
+            ("h_zz", x_uncoupled::h_zz),
+        ];
+
+        // The comparison hinges on terms-per-applied-state k: the map pays
+        // n hash-map builds plus n^2/2 hashed lookups, the scan pays
+        // n^2/2 * k struct compares. X operators have small k, so B (larger
+        // k from the F1'/F' sums) is measured too rather than assumed.
+        //
+        // Columns: median over TRIALS interleaved trials, each averaging over
+        // `reps` calls; "sprd" is (max - min) / median across trials, so it
+        // says how much the medians can be trusted. "ratio range" is the
+        // min..max of the per-trial scan/map ratio -- the honest bound on the
+        // headline number.
+        println!("trials = {TRIALS}, interleaved; times are us per call");
+        println!(
+            "{:>3} {:>5} {:>6} {:>10} {:>7} {:>11} {:>6} {:>11} {:>6} {:>8} {:>13}",
+            "sp",
+            "jmax",
+            "n",
+            "op",
+            "terms",
+            "map med",
+            "sprd",
+            "scan med",
+            "sprd",
+            "scan/map",
+            "ratio range"
+        );
+
+        let mut worst_ratio: f64 = 0.0;
+        let mut worst_spread: f64 = 0.0;
+
+        for jmax in [0, 1, 2, 3, 4, 5, 6, 7] {
+            let qn = make_full_x_basis(jmax);
+            let n = qn.len();
+            for (name, op) in ops {
+                let applied: Vec<UncoupledState> = qn.iter().map(|b| op(*b, &constants)).collect();
+                let terms: usize = applied.iter().map(|s| s.terms().len()).sum();
+                // Repeat enough that the smallest bases are not pure timer noise.
+                let reps = (2_000_000 / (n * n).max(1)).clamp(5, 20_000);
+                let (map_us, scan_us) = time_map_vs_scan(&qn, &applied, reps, TRIALS);
+                let ratios: Vec<f64> = map_us
+                    .iter()
+                    .zip(scan_us.iter())
+                    .map(|(m, s)| s / m)
+                    .collect();
+                let ratio_lo = ratios.iter().cloned().fold(f64::INFINITY, f64::min);
+                let ratio_hi = ratios.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                worst_ratio = worst_ratio.max(ratio_hi);
+                worst_spread = worst_spread
+                    .max(rel_spread(&map_us))
+                    .max(rel_spread(&scan_us));
+                println!(
+                    "{:>3} {:>5} {:>6} {:>10} {:>7.2} {:>11.3} {:>5.1}% {:>11.3} {:>5.1}% {:>8.2} {:>6.2}..{:<5.2}",
+                    "X",
+                    jmax,
+                    n,
+                    name,
+                    terms as f64 / n as f64,
+                    median(&map_us),
+                    100.0 * rel_spread(&map_us),
+                    median(&scan_us),
+                    100.0 * rel_spread(&scan_us),
+                    median(&scan_us) / median(&map_us),
+                    ratio_lo,
+                    ratio_hi
+                );
+            }
+        }
+
+        let b_constants = BConstants::default();
+        let b_ops: [(&str, fn(CoupledBasisState, &BConstants) -> CoupledState); 4] = [
+            ("h_mhf_tl", b_coupled::h_mhf_tl),
+            ("h_mhf_f", b_coupled::h_mhf_f),
+            ("h_c_tl", b_coupled::h_c_tl),
+            ("h_zz", b_coupled::h_zz),
+        ];
+        for jmax in [1, 2, 3, 4, 6, 8] {
+            let qn = make_b_basis(jmax);
+            let n = qn.len();
+            for (name, op) in b_ops {
+                let applied: Vec<CoupledState> = qn.iter().map(|b| op(*b, &b_constants)).collect();
+                let terms: usize = applied.iter().map(|s| s.terms().len()).sum();
+                let reps = (2_000_000 / (n * n).max(1)).clamp(5, 20_000);
+                let (map_us, scan_us) = time_map_vs_scan(&qn, &applied, reps, TRIALS);
+                let ratios: Vec<f64> = map_us
+                    .iter()
+                    .zip(scan_us.iter())
+                    .map(|(m, s)| s / m)
+                    .collect();
+                let ratio_lo = ratios.iter().cloned().fold(f64::INFINITY, f64::min);
+                let ratio_hi = ratios.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                worst_ratio = worst_ratio.max(ratio_hi);
+                worst_spread = worst_spread
+                    .max(rel_spread(&map_us))
+                    .max(rel_spread(&scan_us));
+                println!(
+                    "{:>3} {:>5} {:>6} {:>10} {:>7.2} {:>11.3} {:>5.1}% {:>11.3} {:>5.1}% {:>8.2} {:>6.2}..{:<5.2}",
+                    "B",
+                    jmax,
+                    n,
+                    name,
+                    terms as f64 / n as f64,
+                    median(&map_us),
+                    100.0 * rel_spread(&map_us),
+                    median(&scan_us),
+                    100.0 * rel_spread(&scan_us),
+                    median(&scan_us) / median(&map_us),
+                    ratio_lo,
+                    ratio_hi
+                );
+            }
+        }
+
+        println!();
+        println!(
+            "worst single-trial scan/map ratio: {worst_ratio:.3}               (>= 1.0 would mean the map won a trial)"
+        );
+        println!(
+            "worst per-cell relative spread across trials: {:.1}%",
+            100.0 * worst_spread
+        );
+        // The conclusion is "scan is faster everywhere", so the meaningful
+        // check is that no individual trial ever went the other way -- not
+        // that the medians happen to be separated.
+        assert!(
+            worst_ratio < 1.0,
+            "a trial had the map at least as fast (ratio {worst_ratio:.3});              the report's conclusion needs revisiting"
+        );
     }
 
     #[test]

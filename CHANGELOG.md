@@ -1,5 +1,128 @@
 # Changelog
 
+## 0.2.5
+
+### Fixed
+
+- **`sawtooth_wave` was offset by exactly half a period, in both backends.** Julia's
+  `Waveforms.sawtoothwave` is zero-centred (`rem2pi(x, RoundNearest)/π`, range (−π, π]);
+  the Python and Rust ports replaced it with a floor-based `% 1.0` / `rem_euclid(1.0)`
+  while keeping Julia's `− π`, applying the half-period shift twice. Consequence:
+  `phase=0` started halfway up the ramp and each period's discontinuity fell mid-period.
+  Anything driven by `sawtooth_wave` changes numerically. The bug survived because the
+  test suite only compared Python against Rust, and both were wrong identically; both
+  waveforms are now pinned against transcribed Julia references across many periods and
+  both signs of `t`. `square_wave` was checked the same way and is correct.
+- A single validity flag in the Rust `RhsWorkspace` guarded three disjoint Hamiltonian
+  caches, so interleaving the complex-matrix RHS (`rhs_matrix_py`, `rhs_split_py`,
+  `jacobian_split_sparse_py`) with the packed RHS on one evaluator made the second one
+  read an empty cache and raise `expanded RHS expected N cached term values, got 0`.
+  Both orders were affected, and only for time-independent plans. Not reachable through
+  `solve_lindblad`/`grid_scan`, which only use the packed path. The flag now records
+  *which* cache is valid.
+- `HELPER_FUNCTION_NAMES` was a plain inversion of `HELPER_FUNCTION_IDS`, so for an ID
+  shared by two names whichever was declared last won. Aliases are now declared in the
+  new `HELPER_FUNCTION_ALIASES` and skipped when inverting, so the canonical name wins
+  deterministically. No behaviour change today — both names resolved to the same callable.
+
+### Changed
+
+- Requesting `execution_mode="expanded_sparse"` (or any `experimental_expanded_sparse_*`
+  variant) against a problem prepared with `hamiltonian_representation="entrywise"` now
+  raises a `ValueError` from `solve_lindblad`, `solve_lindblad_batch` and `grid_scan`
+  instead of failing at the first RHS call, mid-solve. Same incompatibility, reported at
+  setup with a message naming the fix. `backend="python"` is unaffected: its reference
+  path maps every non-`"reference"` mode onto the structured RHS.
+- The exact Jacobian used by the SciPy stiff solvers (`solver="scipy_bdf"` /
+  `"scipy_radau"` with `jacobian="exact"`) is now transcribed directly from the sparse
+  Liouvillian instead of being recovered by probing one basis vector at a time. Results
+  are bitwise identical; the build is 133-3691x faster (154-state system: 822 ms -> 1.1 ms),
+  taking a stiff solve of the 65-state system from 31.1 ms to 7.4 ms. Problems prepared
+  with `hamiltonian_representation="entrywise"` keep the probe automatically.
+  `jacobian_packed_sparse_py` gained a `method` argument (`"auto"`, `"analytic"`,
+  `"probe"`) for anyone who needs to pin one path.
+- `hamiltonian.B_uncoupled.HZx` and `HZy` raise `NotImplementedError` instead of silently
+  returning the input state unchanged. Use the coupled-basis `B_coupled.HZx`/`HZy`.
+
+### Performance
+
+- Setup-path loops no longer redo loop-invariant work. `generate_ED_ME_mixed_state`
+  transforms its mixed (field-dressed) arguments to the Omega basis on every call, and its
+  callers invoke it from nested loops in which one argument is loop-invariant; the
+  transform is now hoisted at both live call sites (`hamiltonian.reduced_hamiltonian`'s
+  `minimum_coupling` discovery loop and `couplings.calculate_br`) via the new
+  `hamiltonian.to_omega_basis`. Omega-basis transforms per build drop 1231 -> 21,
+  4733 -> 57 and 1051 -> 21 across three representative systems, taking full OBE builds
+  from 0.784 to 0.633 s, 3.372 to 2.683 s and 0.610 to 0.502 s (**1.22-1.26x**, on the path
+  of *every* OBE build). Results are bitwise identical, not merely close. Note this is not
+  a caching change: `ED_ME_coupled` and friends were already `lru_cache`d.
+- `prepare_lindblad_safe_compact_interpolated_model` rebuilt every patch a second time
+  purely to recover its transition frequency, after `prepare_interpolated_effective_model`
+  had already built them. The frequency is now carried on the prepared model as
+  `patch_transition_frequencies`, computed during preparation. **1.5-1.6x** on that entry
+  point, scaling with the number of field points.
+- `_generate_coupling_matrix_python` indexed `QN` with `QN.index()` per state — a linear
+  scan whose every comparison is an `O(k^2)` `State.__eq__` with a per-amplitude
+  `np.allclose`. Now an identity-keyed map with an equality-scan fallback. This is the
+  Rust fallback path; `generate_coupling_matrix` uses the extension when available.
+
+### Removed
+
+- The duplicate, unweighted definition of `utils.population.generate_uniform_population_state_indices`.
+  The module defined it twice and listed it twice in `__all__`; the second definition
+  shadowed the first, so the surviving one — which takes `weights=` and handles NumPy
+  arrays — is the one that was already in use. Defensive
+  `inspect.signature(...)` guards in notebooks are no longer needed.
+
+## 0.2.4
+
+Molecular and fundamental constants are now sourced explicitly and derived rather than
+hard-coded, and `utils.plotting` gains a field-dressed X→B level diagram for a single
+optical transition. The X rotational energies change as a result: `B_rot` moves by
+24.15 kHz and X gains a quartic centrifugal-distortion term, so Hamiltonians cached before
+this release are stale.
+
+### Compatibility notes
+
+- **X rotational energies changed; cached or pickled X Hamiltonians are stale.** `B_rot`
+  and `D_rot` now derive from the NIST Dunham coefficients rather than from a
+  rigid-rotor `B_e - α_e/2`: `B0_X = Y01 + Y11/2 + Y21/4` ≈ 6.667355 GHz (a 24.15 kHz
+  move) and `D0_X = -Y02` ≈ 5.84 kHz, with X now carrying the quartic term
+  `-D_rot·[J(J+1)]²`. The net level shift is +24.9 kHz in J=1, −65.3 kHz in J=2 and
+  −551.2 kHz in J=3 — enough to move a line position, not enough to look broken.
+  Anything rebuilt from a `.pkl` or from an `@lru_cache` populated before this release
+  will silently disagree with a fresh build; regenerate rather than reuse. Both constants
+  stay derived from `Y01_X`/`Y11_X`/`Y21_X`/`Y02_X` — do not hard-code them separately.
+- `collapse_matrices()` takes `decay_rate=` (the population decay rate Γ = 1/τ, s⁻¹)
+  instead of `gamma=`. The old keyword still works and emits a `DeprecationWarning`;
+  passing both raises.
+
+### Added
+
+- `utils.plotting.plot_transition_level_diagram` and
+  `utils.plotting.calculate_transition_level_structure`: a field-dressed X→B diagram for
+  one optical transition. Every level is drawn as a bar segmented by its zero-field parent
+  character — hyperfine `(F1, F)` parents in X, the two Λ-doublet parity parents in B —
+  so Stark mixing is visible directly. Levels are matched to parents by adiabatic tracking
+  from zero field, so the labels stay correct above the fields where one-shot matching
+  breaks. `E` (V/cm) and `B` (Gauss) are both along z, so mF stays good and the
+  calculation runs per mF block. Cross-checked against an independent hand-rolled
+  calculation in `tests/utils/test_level_diagram.py`.
+- `tests/test_constants.py::test_rust_constants_match_scipy_derived_python`, which pins the
+  frozen literals in `rust/src/constants.rs` to the scipy-derived Python values. A CODATA
+  revision in a newer SciPy now fails loudly instead of silently desynchronising the two
+  backends.
+
+### Changed
+
+- Fundamental constants come from `scipy.constants` instead of being inlined, and Γ is
+  derived from the measured B³Π₁(v'=0) lifetime `B_LIFETIME` = 99(9) ns
+  (Γ = 1/τ ≈ 1.0101e7 s⁻¹, Γ/(2π) ≈ 1.608 MHz) rather than hard-coded.
+- `rust/src/constants.rs` mirrors the same derivations, and the X→B transition dipole is a
+  named `ED_XTB` constant rather than three inlined literals in `eval.rs`.
+- The golden Hamiltonian pickles under `tests/hamiltonian/` were regenerated to match the
+  new X rotational model.
+
 ## 0.2.3
 
 State identification now warns about assignments that are genuinely ambiguous instead of

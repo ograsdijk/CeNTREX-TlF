@@ -373,7 +373,10 @@ builders when any argument is expression-like. Current helper coverage includes:
 - Modulation/waveform helpers: `phase_modulation`, `square_wave`,
   `resonant_polarization_modulation`, `sawtooth_wave`, `variable_on_off`,
   `variable_on_off_duty`, `variable_on_off_duty_invT`, `square_wave_profile`,
-  `alternating_sign`, `linear`, `sine`.
+  `alternating_sign`, `linear`, `sine`. `variable_on_off_duty_invT` is an
+  alias of `variable_on_off_duty` -- the Julia backend uses the `_invT`
+  spelling, Python and Rust the shorter one, and both share a single
+  `HelperFunctionId` so either lowers to the same helper.
 - Intensity/Rabi helpers: `multipass_2d_intensity`, `rabi_from_intensity`,
   `multipass_2d_rabi`, `gaussian_beam_rabi`.
 - Interpolation helpers: `linear_interp`, `pchip_interp`, `tabulated`,
