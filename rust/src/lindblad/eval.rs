@@ -1,3 +1,4 @@
+use crate::constants::ED_XTB;
 use num_complex::Complex64;
 use std::f64::consts::PI;
 
@@ -407,7 +408,7 @@ fn apply_helper(function_id: i64, args: &[RuntimeValue]) -> Result<RuntimeValue,
                     if args.len() > 8 {
                         as_real(&args[8])?
                     } else {
-                        2.6675506e-30
+                        ED_XTB
                     },
                 ),
                 0.0,
@@ -730,7 +731,7 @@ fn apply_helper_scalar(function_id: i64, args: &[Complex64]) -> Result<Complex64
                 if args.len() > 2 {
                     scalar_arg(args, 2)
                 } else {
-                    2.6675506e-30
+                    ED_XTB
                 },
             ),
             0.0,
@@ -752,7 +753,7 @@ fn apply_helper_scalar(function_id: i64, args: &[Complex64]) -> Result<Complex64
                     if args.len() > 8 {
                         scalar_arg(args, 8)
                     } else {
-                        2.6675506e-30
+                        ED_XTB
                     },
                 ),
                 0.0,

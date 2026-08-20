@@ -31,7 +31,7 @@ from centrex_tlf.lindblad.plan_static import prepare_lindblad_problem
 from centrex_tlf.lindblad.solve import solve_lindblad
 from centrex_tlf.lindblad.utils_setup import OBESystem
 
-GAMMA = hamiltonian.Γ  # 2*pi*1.56e6 rad/s
+GAMMA = hamiltonian.Γ  # 1/B_LIFETIME ~= 1.0101e7 s^-1 (tau = 99 ns, Hunter et al. 2012)
 
 
 def _load_diagnose_step_size():
@@ -172,13 +172,14 @@ def test_r2_system_rotated_frame_matches_original(detuning_mhz: float) -> None:
     )
 
     result = solve_lindblad(prepared, rho0, (0.0, diagnose.T_END), **common_kwargs)
-    result_rotated = solve_lindblad(
-        prepared_rotated, rho0, (0.0, diagnose.T_END), **common_kwargs
-    )
+    result_rotated = solve_lindblad(prepared_rotated, rho0, (0.0, diagnose.T_END), **common_kwargs)
 
     np.testing.assert_allclose(
-        result_rotated.values, result.values, atol=1e-5, err_msg=(
+        result_rotated.values,
+        result.values,
+        atol=1e-5,
+        err_msg=(
             f"rotated-frame final populations disagree with original frame at "
             f"detuning={detuning_mhz} MHz"
-        )
+        ),
     )

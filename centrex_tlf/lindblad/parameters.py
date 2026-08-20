@@ -11,6 +11,7 @@ import sympy as smp
 from sympy.parsing import sympy_parser
 
 from centrex_tlf import hamiltonian
+from centrex_tlf.constants import ED_XtB
 
 from . import helper_functions as _helper_functions
 from .helper_functions import HELPER_FUNCTIONS
@@ -639,7 +640,7 @@ def multipass_2d_intensity(
 def rabi_from_intensity(
     intensity: ExpressionLike,
     coupling: ExpressionLike,
-    dipole_moment: ExpressionLike = 2.6675506e-30,
+    dipole_moment: ExpressionLike = ED_XtB,
 ) -> complex | float | RuntimeExpression:
     return _helper_or_expression(
         "rabi_from_intensity",
@@ -659,7 +660,7 @@ def multipass_2d_rabi(
     sigma_x: ExpressionLike,
     sigma_y: ExpressionLike,
     main_coupling: ExpressionLike,
-    dipole_moment: ExpressionLike = 2.6675506e-30,
+    dipole_moment: ExpressionLike = ED_XtB,
 ) -> complex | float | RuntimeExpression:
     return _helper_or_expression(
         "multipass_2d_rabi",
@@ -685,7 +686,7 @@ def gaussian_beam_rabi(
     sigma_x: ExpressionLike,
     sigma_y: ExpressionLike,
     main_coupling: ExpressionLike,
-    dipole_moment: ExpressionLike = 2.6675506e-30,
+    dipole_moment: ExpressionLike = ED_XtB,
 ) -> complex | float | RuntimeExpression:
     return _helper_or_expression(
         "gaussian_beam_rabi",

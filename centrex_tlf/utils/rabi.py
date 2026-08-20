@@ -246,7 +246,7 @@ def power_to_rabi_rectangular_beam(
         coupling (float): Reduced matrix element coupling strength (dimensionless).
         wx (float): Beam width in x-direction [m].
         wy (float): Beam width in y-direction [m].
-        D (float): Transition dipole moment [C·m]. Defaults to 2.6675506e-30 for
+        D (float): Transition dipole moment [C·m]. Defaults to ED_XtB for
             TlF B-X optical transition.
 
     Returns:
@@ -322,7 +322,7 @@ def power_to_rabi_gaussian_beam(
         coupling (float): Reduced matrix element coupling strength (dimensionless).
         sigma_x (float): Gaussian standard deviation in x [m].
         sigma_y (float): Gaussian standard deviation in y [m].
-        D (float): Transition dipole moment [C·m]. Defaults to 2.6675506e-30 for
+        D (float): Transition dipole moment [C·m]. Defaults to ED_XtB for
             TlF B-X optical transition at 272 nm.
 
     Returns:
@@ -430,7 +430,7 @@ def rabi_to_power_gaussian_beam(
         coupling (float): Reduced matrix element coupling strength (dimensionless).
         sigma_x (float): Gaussian standard deviation in x [m].
         sigma_y (float): Gaussian standard deviation in y [m].
-        D (float): Transition dipole moment [C·m]. Defaults to 2.6675506e-30 for
+        D (float): Transition dipole moment [C·m]. Defaults to ED_XtB for
             TlF B-X optical transition.
 
     Returns:

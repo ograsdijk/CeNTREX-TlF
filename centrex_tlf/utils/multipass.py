@@ -9,6 +9,8 @@ from typing import List, Sequence, cast, overload
 import numpy as np
 import numpy.typing as npt
 
+from centrex_tlf.constants import ED_XtB
+
 from .rabi import intensity_to_rabi
 
 __all__ = [
@@ -318,7 +320,7 @@ def generate_2d_multipass_gaussian_rabi(
     sigma_x: float,
     sigma_y: float,
     coupling: float,
-    D: float = 2.6675506e-30,
+    D: float = ED_XtB,
 ) -> npt.NDArray[np.floating]:
     """Generate 2D spatial Rabi frequency distribution for a multipass beam arrangement.
 
@@ -335,7 +337,7 @@ def generate_2d_multipass_gaussian_rabi(
         sigma_x (float): Gaussian standard deviation in x [m].
         sigma_y (float): Gaussian standard deviation in y [m].
         coupling (float): Reduced matrix element coupling strength [C·m].
-        D (float): Transition dipole moment [C·m]. Defaults to 2.6675506e-30 for
+        D (float): Transition dipole moment [C·m]. Defaults to ED_XtB for
             TlF B-X transition.
 
     Returns:

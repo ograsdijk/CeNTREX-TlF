@@ -115,6 +115,7 @@ fn parse_coupled_state(s: &Bound<'_, PyAny>) -> PyResult<CoupledState> {
 fn parse_x_constants(constants: &Bound<'_, PyAny>) -> PyResult<XConstants> {
     Ok(XConstants {
         b_rot: constants.getattr("B_rot")?.extract()?,
+        d_rot: constants.getattr("D_rot")?.extract()?,
         c1: constants.getattr("c1")?.extract()?,
         c2: constants.getattr("c2")?.extract()?,
         c3: constants.getattr("c3")?.extract()?,

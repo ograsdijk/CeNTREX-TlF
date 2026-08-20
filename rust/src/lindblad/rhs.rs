@@ -1035,6 +1035,25 @@ fn mirror_upper_to_lower(matrix: &mut [Complex64], n: usize) {
     }
 }
 
+/// Reads the clock only when profiling is enabled. `Instant::now()` maps to
+/// QueryPerformanceCounter on Windows (~20-30 ns); the packed RHS takes a few
+/// microseconds, so the unconditional timers were a measurable share of it.
+#[inline(always)]
+fn profile_timer(profile: &Option<&mut RhsProfileStats>) -> Option<Instant> {
+    if profile.is_some() {
+        Some(Instant::now())
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+fn add_elapsed(slot: &mut f64, start: Option<Instant>) {
+    if let Some(start) = start {
+        *slot += start.elapsed().as_secs_f64();
+    }
+}
+
 pub struct RhsWorkspace {
     upper_layout: UpperTriLayout,
     rho: Vec<Complex64>,
@@ -1239,16 +1258,16 @@ fn rhs_from_workspace_rho(
             "execution_mode='expanded_sparse' requires a decomposed Hamiltonian plan".to_string(),
         );
     }
-    let total_start = Instant::now();
+    let total_start = profile_timer(&profile);
     let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
-    let parameter_start = Instant::now();
+    let parameter_start = profile_timer(&profile);
     if !can_skip {
         workspace.evaluate_parameter_graph(plan, t)?;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.parameter_eval_seconds += parameter_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.parameter_eval_seconds, parameter_start);
     }
-    let hamiltonian_start = Instant::now();
+    let hamiltonian_start = profile_timer(&profile);
     if !can_skip {
         match mode {
             ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
@@ -1318,9 +1337,9 @@ fn rhs_from_workspace_rho(
         workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.hamiltonian_fill_seconds += hamiltonian_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.hamiltonian_fill_seconds, hamiltonian_start);
     }
-    let commutator_start = Instant::now();
+    let commutator_start = profile_timer(&profile);
     match mode {
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
             workspace.drho.fill(Complex64::ZERO);
@@ -1374,9 +1393,9 @@ fn rhs_from_workspace_rho(
         }
     }
     if let Some(stats) = profile.as_mut() {
-        stats.commutator_seconds += commutator_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.commutator_seconds, commutator_start);
     }
-    let dissipator_start = Instant::now();
+    let dissipator_start = profile_timer(&profile);
     match mode {
         ExecutionMode::ReferenceDense => add_dense_dissipator(
             plan,
@@ -1403,8 +1422,8 @@ fn rhs_from_workspace_rho(
     }
     if let Some(stats) = profile.as_mut() {
         stats.calls += 1;
-        stats.dissipator_seconds += dissipator_start.elapsed().as_secs_f64();
-        stats.total_seconds += total_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.dissipator_seconds, dissipator_start);
+        add_elapsed(&mut stats.total_seconds, total_start);
     }
     Ok(())
 }
@@ -1632,17 +1651,17 @@ fn rhs_packed_expanded_sparse_into_with_profile(
         ));
     }
 
-    let total_start = Instant::now();
-    let parameter_start = Instant::now();
+    let total_start = profile_timer(&profile);
+    let parameter_start = profile_timer(&profile);
     let initialize_static = !workspace.hamiltonian_valid;
     if initialize_static || plan.is_time_dependent {
         workspace.evaluate_parameter_graph(plan, t)?;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.parameter_eval_seconds += parameter_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.parameter_eval_seconds, parameter_start);
     }
 
-    let hamiltonian_start = Instant::now();
+    let hamiltonian_start = profile_timer(&profile);
     if initialize_static || plan.is_time_dependent {
         plan.hamiltonian_plan
             .evaluate_decomposed_coefficients_into(
@@ -1670,10 +1689,10 @@ fn rhs_packed_expanded_sparse_into_with_profile(
         workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.hamiltonian_fill_seconds += hamiltonian_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.hamiltonian_fill_seconds, hamiltonian_start);
     }
 
-    let commutator_start = Instant::now();
+    let commutator_start = profile_timer(&profile);
     add_expanded_sparse_rhs_packed_partitioned(
         &workspace.partitioned_expanded_packed_inputs,
         workspace.expanded_term_values_re.as_slice(),
@@ -1683,9 +1702,9 @@ fn rhs_packed_expanded_sparse_into_with_profile(
         out,
     )?;
     if let Some(stats) = profile.as_mut() {
-        stats.commutator_seconds += commutator_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.commutator_seconds, commutator_start);
         stats.calls += 1;
-        stats.total_seconds += total_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.total_seconds, total_start);
     }
     Ok(())
 }
@@ -1717,22 +1736,22 @@ fn rhs_packed_expanded_sparse_current_into_with_profile(
         ));
     }
 
-    let total_start = Instant::now();
-    let unpack_start = Instant::now();
+    let total_start = profile_timer(&profile);
+    let unpack_start = profile_timer(&profile);
     if let Some(stats) = profile.as_mut() {
-        stats.unpack_seconds += unpack_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.unpack_seconds, unpack_start);
     }
 
     let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
-    let parameter_start = Instant::now();
+    let parameter_start = profile_timer(&profile);
     if !can_skip {
         workspace.evaluate_parameter_graph(plan, t)?;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.parameter_eval_seconds += parameter_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.parameter_eval_seconds, parameter_start);
     }
 
-    let hamiltonian_start = Instant::now();
+    let hamiltonian_start = profile_timer(&profile);
     if !can_skip {
         plan.hamiltonian_plan
             .evaluate_decomposed_coefficients_into(
@@ -1752,10 +1771,10 @@ fn rhs_packed_expanded_sparse_current_into_with_profile(
         workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.hamiltonian_fill_seconds += hamiltonian_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.hamiltonian_fill_seconds, hamiltonian_start);
     }
 
-    let commutator_start = Instant::now();
+    let commutator_start = profile_timer(&profile);
     if options.use_split_input_rhs {
         add_expanded_sparse_rhs_packed_split_inputs(
             rhs_plan,
@@ -1778,14 +1797,14 @@ fn rhs_packed_expanded_sparse_current_into_with_profile(
         )?;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.commutator_seconds += commutator_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.commutator_seconds, commutator_start);
     }
 
-    let dissipator_start = Instant::now();
+    let dissipator_start = profile_timer(&profile);
     if let Some(stats) = profile.as_mut() {
         stats.calls += 1;
-        stats.dissipator_seconds += dissipator_start.elapsed().as_secs_f64();
-        stats.total_seconds += total_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.dissipator_seconds, dissipator_start);
+        add_elapsed(&mut stats.total_seconds, total_start);
     }
     Ok(())
 }
@@ -1817,22 +1836,22 @@ fn rhs_packed_expanded_sparse_experimental_into_with_profile(
         ));
     }
 
-    let total_start = Instant::now();
-    let unpack_start = Instant::now();
+    let total_start = profile_timer(&profile);
+    let unpack_start = profile_timer(&profile);
     if let Some(stats) = profile.as_mut() {
-        stats.unpack_seconds += unpack_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.unpack_seconds, unpack_start);
     }
 
     let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
-    let parameter_start = Instant::now();
+    let parameter_start = profile_timer(&profile);
     if !can_skip {
         workspace.evaluate_parameter_graph(plan, t)?;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.parameter_eval_seconds += parameter_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.parameter_eval_seconds, parameter_start);
     }
 
-    let hamiltonian_start = Instant::now();
+    let hamiltonian_start = profile_timer(&profile);
     if !can_skip {
         plan.hamiltonian_plan
             .evaluate_decomposed_coefficients_into(
@@ -1852,10 +1871,10 @@ fn rhs_packed_expanded_sparse_experimental_into_with_profile(
         workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {
-        stats.hamiltonian_fill_seconds += hamiltonian_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.hamiltonian_fill_seconds, hamiltonian_start);
     }
 
-    let commutator_start = Instant::now();
+    let commutator_start = profile_timer(&profile);
     match mode {
         ExecutionMode::ExperimentalExpandedSparseSplitCoefficients => {
             add_expanded_sparse_rhs_packed_split_coefficients(
@@ -1897,14 +1916,14 @@ fn rhs_packed_expanded_sparse_experimental_into_with_profile(
         }
     }
     if let Some(stats) = profile.as_mut() {
-        stats.commutator_seconds += commutator_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.commutator_seconds, commutator_start);
     }
 
-    let dissipator_start = Instant::now();
+    let dissipator_start = profile_timer(&profile);
     if let Some(stats) = profile.as_mut() {
         stats.calls += 1;
-        stats.dissipator_seconds += dissipator_start.elapsed().as_secs_f64();
-        stats.total_seconds += total_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.dissipator_seconds, dissipator_start);
+        add_elapsed(&mut stats.total_seconds, total_start);
     }
     Ok(())
 }
@@ -1968,7 +1987,7 @@ pub fn rhs_packed_into_with_profile(
             profile,
         );
     }
-    let unpack_start = Instant::now();
+    let unpack_start = profile_timer(&profile);
     match mode {
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
             plan.layout
@@ -1987,10 +2006,10 @@ pub fn rhs_packed_into_with_profile(
         }
     }
     if let Some(stats) = profile.as_mut() {
-        stats.unpack_seconds += unpack_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.unpack_seconds, unpack_start);
     }
     rhs_from_workspace_rho(plan, t, mode, workspace, profile.as_deref_mut())?;
-    let pack_start = Instant::now();
+    let pack_start = profile_timer(&profile);
     match mode {
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
             plan.layout.pack_into(workspace.drho.as_slice(), out)?;
@@ -2008,7 +2027,7 @@ pub fn rhs_packed_into_with_profile(
         }
     }
     if let Some(stats) = profile.as_mut() {
-        stats.pack_seconds += pack_start.elapsed().as_secs_f64();
+        add_elapsed(&mut stats.pack_seconds, pack_start);
     }
     Ok(())
 }

@@ -182,7 +182,7 @@ def time_stages(
     # Stage 4: collapse matrices.
     t0 = time.perf_counter()
     C_array = couplings.collapse_matrices(
-        QN, ground_states, excited_states, gamma=hamiltonian.Γ, qn_compact=None
+        QN, ground_states, excited_states, decay_rate=hamiltonian.Γ, qn_compact=None
     )
     timings["4_collapse_matrices"] = time.perf_counter() - t0
 
