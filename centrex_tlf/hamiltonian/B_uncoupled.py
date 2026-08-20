@@ -312,13 +312,18 @@ def HZx(psi: UncoupledBasisState) -> UncoupledState:
         psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
     
     Returns:
-        UncoupledState: Zeeman interaction for Bₓ (currently placeholder)
+        UncoupledState: never returns; see Raises.
     
-    Note:
-        TODO: Full implementation needed
+    Raises:
+        NotImplementedError: always. The transverse Zeeman terms have no
+            uncoupled-basis B state implementation; only HZz does. Use the
+            coupled-basis B_coupled.HZx, which is what the Hamiltonian
+            generators actually call.
     """
-    # TODO
-    return UncoupledState([(1.0, psi)])
+    raise NotImplementedError(
+        "B state HZx is not implemented in the uncoupled basis; use the "
+        "coupled-basis centrex_tlf.hamiltonian.B_coupled.HZx instead"
+    )
 
 
 def HZy(psi: UncoupledBasisState) -> UncoupledState:
@@ -328,13 +333,18 @@ def HZy(psi: UncoupledBasisState) -> UncoupledState:
         psi (UncoupledBasisState): Uncoupled basis state |J,mJ,I₁,m₁,I₂,m₂,Ω⟩
     
     Returns:
-        UncoupledState: Zeeman interaction for Bᵧ (currently placeholder)
+        UncoupledState: never returns; see Raises.
     
-    Note:
-        TODO: Full implementation needed
+    Raises:
+        NotImplementedError: always. The transverse Zeeman terms have no
+            uncoupled-basis B state implementation; only HZz does. Use the
+            coupled-basis B_coupled.HZy, which is what the Hamiltonian
+            generators actually call.
     """
-    # TODO
-    return UncoupledState([(1.0, psi)])
+    raise NotImplementedError(
+        "B state HZy is not implemented in the uncoupled basis; use the "
+        "coupled-basis centrex_tlf.hamiltonian.B_coupled.HZy instead"
+    )
 
 
 def HZz(psi: UncoupledBasisState, coefficients: BConstants) -> UncoupledState:

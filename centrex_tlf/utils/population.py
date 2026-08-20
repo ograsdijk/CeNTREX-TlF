@@ -20,7 +20,6 @@ __all__ = [
     "generate_uniform_population_states",
     "generate_thermal_population_states",
     "get_diagonal_indices_flattened",
-    "generate_uniform_population_state_indices",
 ]
 
 # Define a TypeVar that can be either an int or a n
@@ -115,51 +114,6 @@ def thermal_population(
     # Compute the population for both scalar and array inputs
     result = J_levels(J) * np.exp(a(J)) / Z
     return result
-
-
-def generate_uniform_population_state_indices(
-    state_indices: Sequence[int], levels: int
-) -> npt.NDArray[np.complex128]:
-    """Create uniform population density matrix over specified state indices.
-
-    Generates a diagonal density matrix with equal population distributed across
-    the given states. Useful for initializing uniform superpositions.
-
-    Args:
-        state_indices (Sequence[int]): State indices to populate (0-indexed). Must be
-            in range [0, levels).
-        levels (int): Total dimension of the Hilbert space (total number of states).
-
-    Returns:
-        npt.NDArray[np.complex128]: Normalized density matrix of shape (levels, levels).
-            Diagonal elements sum to 1, with equal weight on specified states.
-
-    Raises:
-        ValueError: If levels is non-positive, state_indices is empty, or any index
-            is out of bounds.
-
-    Example:
-        >>> ρ = generate_uniform_population_state_indices([0, 2, 4], 5)
-        >>> np.diag(ρ)  # Only indices 0, 2, 4 have population
-        array([0.33333333+0.j, 0.        +0.j, 0.33333333+0.j, 0.        +0.j,
-               0.33333333+0.j])
-    """
-    if levels <= 0:
-        raise ValueError(f"levels must be positive, got {levels}")
-    if not state_indices:
-        raise ValueError("state_indices cannot be empty")
-
-    state_indices_array = np.asarray(state_indices)
-    if np.any(state_indices_array < 0) or np.any(state_indices_array >= levels):
-        raise ValueError(
-            f"All indices must be in range [0, {levels}), "
-            f"got min={state_indices_array.min()}, max={state_indices_array.max()}"
-        )
-
-    ρ = np.zeros([levels, levels], dtype=complex)
-    for ids in state_indices:
-        ρ[ids, ids] = 1
-    return ρ / np.trace(ρ)
 
 
 def generate_uniform_population_states(
