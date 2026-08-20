@@ -185,6 +185,7 @@ def prepare_interpolated_effective_model(
 
     patch_systems: list[lindblad.utils_setup.OBESystem] = []
     patch_bundles: list[OperatorBundle] = []
+    patch_transition_frequencies: list[float] = []
     for field_z in unique_sorted.tolist():
         electric = np.array([0.0, 0.0, float(field_z)], dtype=np.float64)
         system, bundle = build_compact_reference_decomposed_bundle(
@@ -195,6 +196,17 @@ def prepare_interpolated_effective_model(
         )
         patch_systems.append(system)
         patch_bundles.append(bundle)
+        # Cheap given the system is already built (an index lookup plus a
+        # diagonal read). Computing it here spares
+        # prepare_lindblad_safe_compact_interpolated_model a second full
+        # rebuild of every patch.
+        patch_transition_frequencies.append(
+            _compact_transition_frequency(
+                system,
+                transition=transition,
+                optical_polarization=optical_polarization,
+            )
+        )
 
     master_index = int(np.where(unique_sorted == master_value)[0][0])
     ground_indices, sink_indices, excited_indices, sink_union_keys, reference_ground_basis, reference_excited_basis = _build_compact_union_layout(
@@ -335,6 +347,9 @@ def prepare_interpolated_effective_model(
         excited_indices=np.asarray(excited_indices, dtype=np.int64),
         ground_main_index=int(_optically_bright_ground_index(raw_bundles[master_index], excited_indices)),
         patches=patches,
+        patch_transition_frequencies=np.asarray(
+            patch_transition_frequencies, dtype=np.float64
+        ),
         keep_diagnostics=bool(keep_diagnostics),
         grid_variation_diagnostics=grid_variation_diagnostics,
     )
@@ -361,23 +376,39 @@ def prepare_lindblad_safe_compact_interpolated_model(
         keep_diagnostics=keep_diagnostics,
         grid_variation_warning_threshold=None,
     )
-    patch_transition_frequencies: list[float] = []
-    for field_z in np.asarray(base_model.field_points, dtype=np.float64).tolist():
-        electric = np.array([0.0, 0.0, float(field_z)], dtype=np.float64)
-        system, _ = build_compact_reference_decomposed_bundle(
-            transition=transition,
-            optical_polarization=optical_polarization,
-            electric_field=electric,
-            magnetic_field=magnetic_field,
-        )
-        patch_transition_frequencies.append(
-            _compact_transition_frequency(
-                system,
+    stored_frequencies = base_model.patch_transition_frequencies
+    if stored_frequencies is None:
+        # Fallback for a model that did not come from
+        # prepare_interpolated_effective_model and so carries no frequencies.
+        # Rebuilds every patch, which is what this function used to do
+        # unconditionally.
+        rebuilt_frequencies: list[float] = []
+        for field_z in np.asarray(base_model.field_points, dtype=np.float64).tolist():
+            electric = np.array([0.0, 0.0, float(field_z)], dtype=np.float64)
+            system, _ = build_compact_reference_decomposed_bundle(
                 transition=transition,
                 optical_polarization=optical_polarization,
+                electric_field=electric,
+                magnetic_field=magnetic_field,
             )
+            rebuilt_frequencies.append(
+                _compact_transition_frequency(
+                    system,
+                    transition=transition,
+                    optical_polarization=optical_polarization,
+                )
+            )
+        patch_transition_frequencies_arr = np.asarray(
+            rebuilt_frequencies, dtype=np.float64
         )
-    patch_transition_frequencies_arr = np.asarray(patch_transition_frequencies, dtype=np.float64)
+    else:
+        patch_transition_frequencies_arr = np.asarray(
+            stored_frequencies, dtype=np.float64
+        )
+    if patch_transition_frequencies_arr.shape[0] != len(base_model.field_points):
+        raise ValueError(
+            "patch_transition_frequencies does not match the number of field points"
+        )
     master_index = int(np.argmin(np.abs(np.asarray(base_model.field_points, dtype=np.float64) - float(base_model.master_field))))
     common_omega_reference = float(patch_transition_frequencies_arr[master_index])
     target_indices = np.concatenate([base_model.ground_indices, base_model.sink_indices]).astype(np.int64)

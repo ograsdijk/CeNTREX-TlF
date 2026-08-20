@@ -97,12 +97,19 @@ def _generate_coupling_matrix_python(
 
     H = np.zeros((len(QN), len(QN)), dtype=complex)
 
-    idx_mapping_ground = dict(
-        [(idg, QN.index(gs)) for idg, gs in enumerate(ground_states)]
-    )
-    idx_mapping_excited = dict(
-        [(ide, QN.index(es)) for ide, es in enumerate(excited_states)]
-    )
+    # Index by object identity, falling back to an equality scan for states
+    # that are equal to but not identical with an entry of QN. Same pattern as
+    # hamiltonian/utils.py, lindblad/generate_hamiltonian.py and collapse.py.
+    # QN.index() alone is a linear scan per state, each comparison an O(k^2)
+    # State.__eq__ with a per-amplitude np.allclose.
+    qn_index = {id(state): idx for idx, state in enumerate(QN)}
+
+    def _index_of(state: states.CoupledState) -> int:
+        idx = qn_index.get(id(state))
+        return QN.index(state) if idx is None else idx
+
+    idx_mapping_ground = {idg: _index_of(gs) for idg, gs in enumerate(ground_states)}
+    idx_mapping_excited = {ide: _index_of(es) for ide, es in enumerate(excited_states)}
 
     # start looping over ground and excited states
     for idg, ground_state in enumerate(ground_states):

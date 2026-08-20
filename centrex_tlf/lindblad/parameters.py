@@ -605,6 +605,12 @@ def variable_on_off_duty_invT(
     inv_period: ExpressionLike,
     phase: ExpressionLike,
 ) -> complex | float | RuntimeExpression:
+    """Alias of `variable_on_off_duty`, matching the Julia backend's spelling.
+
+    See `helper_functions.variable_on_off_duty_invT`: both names share
+    `HelperFunctionId.VARIABLE_ON_OFF_DUTY`, so the two builders produce
+    equivalent expressions and identical lowered IR.
+    """
     return _helper_or_expression(
         "variable_on_off_duty_invT",
         _helper_functions.variable_on_off_duty_invT,

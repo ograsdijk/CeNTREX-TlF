@@ -1,0 +1,86 @@
+[
+  {
+    "system": "A",
+    "transition": "R(0) F1'=3/2 F'=2",
+    "n_states": 65,
+    "entrywise_temps": 1,
+    "entrywise_entries": 2145,
+    "entrywise_cost": 2146,
+    "decomposed_coefficients": 2,
+    "basis_term_count": 7,
+    "has_static": true,
+    "decomposed_cost": 4.05,
+    "auto_selects": "decomposed",
+    "lowering_seconds": {
+      "entrywise": 0.03087020000384655,
+      "decomposed": 0.025329200012492947
+    },
+    "prepare_seconds": {
+      "entrywise": 0.045466199997463264,
+      "decomposed": 0.042284399998607114
+    },
+    "rhs": {
+      "entrywise": {
+        "structured": {
+          "solve_seconds": 0.0030925000028219074,
+          "rhs_calls": null,
+          "us_per_rhs": null
+        }
+      },
+      "decomposed": {
+        "structured": {
+          "solve_seconds": 0.003311199994641356,
+          "rhs_calls": null,
+          "us_per_rhs": null
+        },
+        "expanded_sparse": {
+          "solve_seconds": 0.0017582000000402331,
+          "rhs_calls": null,
+          "us_per_rhs": null
+        }
+      }
+    }
+  },
+  {
+    "system": "B",
+    "transition": "R(2) F1'=7/2 F'=3",
+    "n_states": 154,
+    "entrywise_temps": 1,
+    "entrywise_entries": 11935,
+    "entrywise_cost": 11936,
+    "decomposed_coefficients": 2,
+    "basis_term_count": 47,
+    "has_static": true,
+    "decomposed_cost": 10.05,
+    "auto_selects": "decomposed",
+    "lowering_seconds": {
+      "entrywise": 0.21778720000293106,
+      "decomposed": 0.1718410000030417
+    },
+    "prepare_seconds": {
+      "entrywise": 0.8365597000083653,
+      "decomposed": 0.8111651999934111
+    },
+    "rhs": {
+      "entrywise": {
+        "structured": {
+          "solve_seconds": 0.01374260000011418,
+          "rhs_calls": null,
+          "us_per_rhs": null
+        }
+      },
+      "decomposed": {
+        "structured": {
+          "solve_seconds": 0.01624189999711234,
+          "rhs_calls": null,
+          "us_per_rhs": null
+        },
+        "expanded_sparse": {
+          "solve_seconds": 0.01187950000166893,
+          "rhs_calls": null,
+          "us_per_rhs": null
+        }
+      }
+    }
+  }
+]

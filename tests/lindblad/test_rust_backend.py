@@ -235,6 +235,106 @@ def test_hamiltonian_representations_match(representation: str) -> None:
         np.testing.assert_allclose(other_h, entrywise_h)
 
 
+def test_entrywise_plan_rejects_expanded_sparse_at_solve_entry() -> None:
+    """An entrywise plan cannot serve expanded_sparse; fail before integrating.
+
+    `lower_expanded_sparse_rhs` returns None for a non-decomposed plan, and the
+    Rust RHS used to be the first thing to notice, raising on its first call --
+    after the solve had started, and inside a parallel scan far from the cause.
+    """
+    system = _make_two_level_system()
+    parameters = LindbladParameters.from_kwargs(Ω=1.1, δ=0.15)
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="rust",
+        hamiltonian_representation="entrywise",
+    )
+    assert prepared.expanded_rhs_plan is None
+
+    rho0 = np.zeros((2, 2), dtype=np.complex128)
+    rho0[0, 0] = 1.0
+    with pytest.raises(ValueError, match="requires a decomposed Hamiltonian plan"):
+        solve_lindblad(
+            prepared,
+            rho0,
+            (0.0, 1e-6),
+            solver="dopri5",
+            execution_mode="expanded_sparse",
+        )
+
+    rho0_batch = rho0[None, ...]
+    with pytest.raises(ValueError, match="requires a decomposed Hamiltonian plan"):
+        solve_lindblad_batch(
+            prepared,
+            rho0_batch,
+            (0.0, 1e-6),
+            solver="dopri5",
+            execution_mode="expanded_sparse",
+        )
+
+    with pytest.raises(ValueError, match="requires a decomposed Hamiltonian plan"):
+        grid_scan(
+            prepared,
+            rho0,
+            (0.0, 1e-6),
+            scan={"δ": np.array([0.1, 0.2])},
+            solver="dopri5",
+            execution_mode="expanded_sparse",
+        )
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "expanded_sparse",
+        "experimental_expanded_sparse_split_inputs",
+        "experimental_expanded_sparse_baseline_packed",
+    ],
+)
+def test_entrywise_plan_rejects_every_expanded_sparse_variant(mode: str) -> None:
+    """All `experimental_expanded_sparse_*` modes read the same missing plan.
+
+    `ExecutionMode::is_expanded_sparse_like` (rust/src/lindblad/rhs.rs) covers
+    six names; the Python-side check keys on the shared `expanded_sparse`
+    substring, so it must reject the experimental variants too.
+    """
+    system = _make_two_level_system()
+    parameters = LindbladParameters.from_kwargs(Ω=1.1, δ=0.15)
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="rust",
+        hamiltonian_representation="entrywise",
+    )
+    with pytest.raises(ValueError, match="requires a decomposed Hamiltonian plan"):
+        prepared.check_execution_mode(mode)
+
+
+def test_execution_mode_check_passes_for_decomposed_and_structured() -> None:
+    system = _make_two_level_system()
+    parameters = LindbladParameters.from_kwargs(Ω=1.1, δ=0.15)
+    decomposed = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="rust",
+        hamiltonian_representation="decomposed",
+    )
+    assert decomposed.expanded_rhs_plan is not None
+    for mode in ("reference", "structured", "structured_upper", "expanded_sparse"):
+        decomposed.check_execution_mode(mode)
+
+    entrywise = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="rust",
+        hamiltonian_representation="entrywise",
+    )
+    # Only the expanded-sparse family needs the extra plan.
+    for mode in ("reference", "structured", "structured_upper"):
+        entrywise.check_execution_mode(mode)
+
+
 def test_decomposed_hamiltonian_diagnostics_present() -> None:
     system = _make_two_level_system()
     prepared = prepare_lindblad_problem(
@@ -1840,6 +1940,133 @@ def test_rust_rhs_evaluator_profile_summary_tracks_calls() -> None:
     assert summary["dissipator_seconds"] >= 0.0
     assert summary["unpack_seconds"] >= 0.0
     assert summary["pack_seconds"] >= 0.0
+
+
+def _packed_jacobian_dense(evaluator, t: float, dim: int, method: str) -> np.ndarray:
+    rows, cols, values = evaluator.jacobian_packed_sparse_py(t, 0.0, method)
+    return (
+        scipy.sparse.csc_matrix(
+            (
+                np.asarray(values, dtype=np.float64),
+                (np.asarray(rows, dtype=np.int64), np.asarray(cols, dtype=np.int64)),
+            ),
+            shape=(dim, dim),
+        )
+        .toarray()
+    )
+
+
+@pytest.mark.parametrize("mode", ["structured", "expanded_sparse"])
+def test_analytic_packed_jacobian_matches_probe_bitwise(mode: str) -> None:
+    """The analytic Jacobian must reproduce the probe exactly, not merely closely.
+
+    The Lindblad RHS is linear in rho and the packed encoding is real-linear, so the
+    basis-vector probe is already an exact derivative. Transcribing the same terms
+    out of the expanded sparse plan sums the identical floating-point products, so
+    the two agree bit for bit -- anything less means the transcription reassociated
+    something.
+    """
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}
+    prepared = prepare_lindblad_problem(system, parameters, backend="python")
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    evaluator = rust.create_lindblad_rhs_evaluator_py(rust_plan, mode)
+    dim = 2 * 2
+
+    probed = _packed_jacobian_dense(evaluator, 0.2, dim, "probe")
+    analytic = _packed_jacobian_dense(evaluator, 0.2, dim, "analytic")
+    np.testing.assert_array_equal(analytic, probed)
+    assert np.abs(probed).max() > 0.0
+
+    # "auto" must select the analytic path when the plan supports it.
+    auto = _packed_jacobian_dense(evaluator, 0.2, dim, "auto")
+    np.testing.assert_array_equal(auto, probed)
+
+
+def test_analytic_packed_jacobian_reproduces_the_rhs() -> None:
+    """J @ x must equal rhs(x) for arbitrary x, not just for basis vectors."""
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}
+    prepared = prepare_lindblad_problem(system, parameters, backend="python")
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    evaluator = rust.create_lindblad_rhs_evaluator_py(rust_plan, "expanded_sparse")
+    dim = 2 * 2
+
+    analytic = _packed_jacobian_dense(evaluator, 0.2, dim, "analytic")
+    rng = np.random.default_rng(20260820)
+    for _ in range(5):
+        x = rng.standard_normal(dim)
+        expected = np.asarray(evaluator.rhs_packed_py(x, 0.2), dtype=np.float64)
+        np.testing.assert_allclose(analytic @ x, expected, atol=1e-12, rtol=1e-12)
+
+
+def test_analytic_packed_jacobian_requires_a_decomposed_plan() -> None:
+    """An entrywise plan has no expanded terms, so 'auto' must fall back to probing."""
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}
+    prepared = prepare_lindblad_problem(
+        system, parameters, backend="python", hamiltonian_representation="entrywise"
+    )
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    evaluator = rust.create_lindblad_rhs_evaluator_py(rust_plan, "structured")
+    dim = 2 * 2
+
+    with pytest.raises(ValueError, match="decomposed"):
+        evaluator.jacobian_packed_sparse_py(0.2, 0.0, "analytic")
+
+    probed = _packed_jacobian_dense(evaluator, 0.2, dim, "probe")
+    auto = _packed_jacobian_dense(evaluator, 0.2, dim, "auto")
+    np.testing.assert_array_equal(auto, probed)
+
+
+def test_hamiltonian_cache_is_not_shared_between_rhs_flavours() -> None:
+    """Regression: one validity flag used to guard three disjoint Hamiltonian caches.
+
+    The complex-matrix path fills `expanded_term_values`; the packed path fills
+    `expanded_term_values_re`/`_im`. Both used to set the same `hamiltonian_valid`
+    flag, so whichever ran second skipped filling its own cache and then read it
+    empty. Only reachable for time-independent plans, where the cache is reused.
+    Both interleavings must now work and must agree with a fresh evaluator.
+    """
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}
+    prepared = prepare_lindblad_problem(system, parameters, backend="python")
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    flat = np.array([0.7, 0.1 + 0.05j, 0.1 - 0.05j, 0.3], dtype=np.complex128)
+    packed = np.array([0.7, 0.3, 0.1, 0.05], dtype=np.float64)
+
+    def fresh():
+        return rust.create_lindblad_rhs_evaluator_py(rust_plan, "expanded_sparse")
+
+    reference_matrix = np.asarray(fresh().rhs_matrix_py(flat, 0.2), dtype=np.complex128)
+    reference_packed = np.asarray(fresh().rhs_packed_py(packed, 0.2), dtype=np.float64)
+
+    # matrix first, then packed, then matrix again
+    evaluator = fresh()
+    np.testing.assert_allclose(
+        np.asarray(evaluator.rhs_matrix_py(flat, 0.2), dtype=np.complex128),
+        reference_matrix,
+        atol=1e-12,
+        rtol=1e-12,
+    )
+    np.testing.assert_allclose(
+        np.asarray(evaluator.rhs_packed_py(packed, 0.2), dtype=np.float64),
+        reference_packed,
+        atol=1e-12,
+        rtol=1e-12,
+    )
+    np.testing.assert_allclose(
+        np.asarray(evaluator.rhs_matrix_py(flat, 0.2), dtype=np.complex128),
+        reference_matrix,
+        atol=1e-12,
+        rtol=1e-12,
+    )
+
+    # packed first, then the complex-matrix path via the split Jacobian
+    evaluator = fresh()
+    evaluator.rhs_packed_py(packed, 0.2)
+    rows, cols, values = evaluator.jacobian_split_sparse_py(0.2)
+    assert len(values) > 0
 
 
 def test_rust_split_rhs_and_jacobian_match_matrix_rhs() -> None:

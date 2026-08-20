@@ -17,12 +17,32 @@ from centrex_tlf import couplings, states
 from .wigner import sixj_f, threej_f
 
 __all__ = [
+    "to_omega_basis",
     "generate_ED_ME_mixed_state",
     "generate_ED_ME_mixed_state_uncoupled",
     "ED_ME_coupled",
     "ED_ME_uncoupled",
     "angular_part",
 ]
+
+
+def to_omega_basis(state: states.CoupledState) -> states.CoupledState:
+    """Return ``state`` in the Omega basis, or unchanged if already in it.
+
+    This mirrors the guard inside :func:`generate_ED_ME_mixed_state` so that
+    callers can hoist the transform out of a loop without duplicating the basis
+    test. ``generate_ED_ME_mixed_state`` re-checks the basis and skips its own
+    transform for a state that has already been converted, so passing the
+    result through is behaviour-preserving.
+
+    Worth hoisting because the transform is not cheap:
+    ``State.transform_to_omega_basis`` rebuilds the state by repeated ``+=``.
+    In the nested loops that call the ME function, one argument is typically
+    loop-invariant and would otherwise be rebuilt once per pair.
+    """
+    if state.largest.basis is states.Basis.CoupledP:
+        return state.transform_to_omega_basis()
+    return state
 
 
 def generate_ED_ME_mixed_state(

@@ -1081,8 +1081,34 @@ pub struct RhsWorkspace {
     precomputed_expanded_packed_inputs: PrecomputedPackedInputs,
     partitioned_expanded_packed_inputs: PartitionedPackedInputs,
     pchip_hints: Vec<usize>,
-    hamiltonian_valid: bool,
+    hamiltonian_valid_for: Option<HamiltonianCache>,
     h_sparse_valid: bool,
+}
+
+/// Which of the workspace's mutually exclusive Hamiltonian caches currently holds
+/// values for the cached time.
+///
+/// These caches are disjoint -- filling one leaves the others untouched -- so a
+/// single `hamiltonian_valid: bool` was not enough to describe the state. Whichever
+/// RHS flavour ran first set the flag, and the next flavour then skipped filling
+/// *its own* cache and read it empty (or, for the partitioned variant, read
+/// static coefficients that were still zero, which is silently wrong rather than
+/// an error). Only reachable for time-independent plans, since a time-dependent
+/// plan refills unconditionally.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum HamiltonianCache {
+    /// Dense `n x n` matrix in `hamiltonian`.
+    Dense,
+    /// Upper triangle in `hamiltonian_upper`.
+    Upper,
+    /// Complex per-term values in `expanded_term_values`.
+    ExpandedComplex,
+    /// Split real/imaginary per-term values in `expanded_term_values_re`/`_im`.
+    ExpandedSplit,
+    /// `ExpandedSplit`, plus the resolved static coefficients inside
+    /// `partitioned_expanded_packed_inputs`. A superset, but kept distinct so
+    /// arriving from `ExpandedSplit` still refreshes the static terms.
+    ExpandedSplitPartitioned,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1142,7 +1168,7 @@ impl RhsWorkspace {
             precomputed_expanded_packed_inputs,
             partitioned_expanded_packed_inputs,
             pchip_hints: vec![0; plan.parameter_graph.pchip_tables.len()],
-            hamiltonian_valid: false,
+            hamiltonian_valid_for: None,
             h_sparse_valid: false,
         }
     }
@@ -1165,7 +1191,7 @@ impl RhsWorkspace {
             self.parameter_overrides
                 .push((slot, RuntimeValue::Scalar(value)));
         }
-        self.hamiltonian_valid = false;
+        self.hamiltonian_valid_for = None;
         self.h_sparse_valid = false;
         Ok(())
     }
@@ -1259,7 +1285,13 @@ fn rhs_from_workspace_rho(
         );
     }
     let total_start = profile_timer(&profile);
-    let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
+    // Which cache this mode is about to fill; see `HamiltonianCache`.
+    let cache_kind = match mode {
+        ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => HamiltonianCache::Dense,
+        ExecutionMode::StructuredUpper => HamiltonianCache::Upper,
+        _ => HamiltonianCache::ExpandedComplex,
+    };
+    let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid_for == Some(cache_kind);
     let parameter_start = profile_timer(&profile);
     if !can_skip {
         workspace.evaluate_parameter_graph(plan, t)?;
@@ -1333,7 +1365,7 @@ fn rhs_from_workspace_rho(
                 )?;
             }
         }
-        workspace.hamiltonian_valid = true;
+        workspace.hamiltonian_valid_for = Some(cache_kind);
         workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {
@@ -1591,6 +1623,130 @@ pub fn build_split_jacobian_sparse(
     Ok((rows, cols, values))
 }
 
+/// Assemble the packed-real Jacobian directly from the expanded sparse plan.
+///
+/// The Lindblad RHS is linear in rho and the packed Hermitian encoding is real-linear,
+/// so `build_packed_jacobian_sparse` recovers an exact Jacobian by probing basis
+/// vectors. That is correct but costs `packed_len()` full RHS evaluations -- O(n^4) --
+/// to recover a matrix with only ~1-2 nonzeros per column.
+///
+/// The superoperator is already assembled, though: `ExpandedSparseRhsPlan` is a
+/// CSR-style sparse Liouvillian whose term indices are upper-triangle indices, and
+/// `upper_to_packed` maps those to packed real slots. Each term is therefore a
+/// Jacobian entry, and the whole matrix can be transcribed in O(nnz).
+///
+/// The dissipator is folded into the expanded terms (its arm in `rhs_from_workspace_rho`
+/// is empty for the expanded modes), so walking `terms` covers the complete RHS.
+///
+/// Returns `Ok(None)` when the plan has no expanded representation -- an entrywise
+/// Hamiltonian plan -- in which case only probing is possible.
+pub fn build_packed_jacobian_analytic(
+    plan: &PreparedLindbladPlan,
+    t: f64,
+    workspace: &mut RhsWorkspace,
+    tol: f64,
+) -> Result<Option<(Vec<i64>, Vec<i64>, Vec<f64>)>, String> {
+    let Some(rhs_plan) = plan.expanded_rhs_plan.as_ref() else {
+        return Ok(None);
+    };
+
+    // Same preamble the expanded RHS runs. This writes `parameter_values` and
+    // `expanded_coeff_values` but none of the per-term caches, so it does not disturb
+    // `hamiltonian_valid_for`: for a time-independent plan the coefficients are the
+    // same at every t, and a time-dependent plan refills unconditionally anyway.
+    workspace.evaluate_parameter_graph(plan, t)?;
+    let mut coeff_values = std::mem::take(&mut workspace.expanded_coeff_values);
+    let filled = plan.hamiltonian_plan.evaluate_decomposed_coefficients_into(
+        workspace.parameter_values.as_slice(),
+        t,
+        &mut workspace.eval_stack,
+        &mut workspace.scalar_stack,
+        &mut coeff_values,
+    );
+    if let Err(err) = filled {
+        workspace.expanded_coeff_values = coeff_values;
+        return Err(err);
+    }
+
+    let upper_to_packed = workspace.upper_to_packed.as_slice();
+    let output_len = rhs_plan.output_ptrs.len().saturating_sub(1);
+    if output_len != upper_to_packed.len() {
+        workspace.expanded_coeff_values = coeff_values;
+        return Err(format!(
+            "expanded RHS output_ptrs describe {} outputs, upper-triangle layout has {}",
+            output_len,
+            upper_to_packed.len()
+        ));
+    }
+
+    let tol_abs = tol.abs();
+    let mut rows: Vec<i64> = Vec::with_capacity(2 * rhs_plan.terms.len());
+    let mut cols: Vec<i64> = Vec::with_capacity(2 * rhs_plan.terms.len());
+    let mut values: Vec<f64> = Vec::with_capacity(2 * rhs_plan.terms.len());
+
+    // Accumulate per output row before emitting, so terms sharing a (row, col) are
+    // summed and thresholded exactly as a probed column would be.
+    let mut row_re_entries: BTreeMap<usize, f64> = BTreeMap::new();
+    let mut row_im_entries: BTreeMap<usize, f64> = BTreeMap::new();
+
+    let mut result = Ok(());
+    'outputs: for output_index in 0..output_len {
+        row_re_entries.clear();
+        row_im_entries.clear();
+        let row = upper_to_packed[output_index];
+        for term_index in rhs_plan.output_ptrs[output_index]..rhs_plan.output_ptrs[output_index + 1]
+        {
+            let coefficient =
+                match expanded_sparse_term_value(rhs_plan, term_index, coeff_values.as_slice()) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        result = Err(err);
+                        break 'outputs;
+                    }
+                };
+            let term = &rhs_plan.terms[term_index];
+            let input = upper_to_packed[term.input];
+            if input.im == NO_PACKED_IMAG_INDEX {
+                // Diagonal input: purely real, contributes only through its re slot.
+                //   acc_re += c_re * v_re;  acc_im += c_im * v_re
+                *row_re_entries.entry(input.re).or_insert(0.0) += coefficient.re;
+                *row_im_entries.entry(input.re).or_insert(0.0) += coefficient.im;
+            } else {
+                // Off-diagonal input: v = v_re + i*s*v_im with s = -1 for a conjugated
+                // input, and (c_re + i c_im) * v split into real and imaginary parts.
+                let sign = if term.input_conj { -1.0 } else { 1.0 };
+                *row_re_entries.entry(input.re).or_insert(0.0) += coefficient.re;
+                *row_re_entries.entry(input.im).or_insert(0.0) += -coefficient.im * sign;
+                *row_im_entries.entry(input.re).or_insert(0.0) += coefficient.im;
+                *row_im_entries.entry(input.im).or_insert(0.0) += coefficient.re * sign;
+            }
+        }
+
+        for (&col, &value) in row_re_entries.iter() {
+            if value.abs() > tol_abs {
+                rows.push(row.re as i64);
+                cols.push(col as i64);
+                values.push(value);
+            }
+        }
+        // A diagonal output has no imaginary slot; `write_packed_upper_parts` drops
+        // acc_im there, so the Jacobian must drop those rows too.
+        if row.im != NO_PACKED_IMAG_INDEX {
+            for (&col, &value) in row_im_entries.iter() {
+                if value.abs() > tol_abs {
+                    rows.push(row.im as i64);
+                    cols.push(col as i64);
+                    values.push(value);
+                }
+            }
+        }
+    }
+
+    workspace.expanded_coeff_values = coeff_values;
+    result?;
+    Ok(Some((rows, cols, values)))
+}
+
 pub fn build_packed_jacobian_sparse(
     plan: &PreparedLindbladPlan,
     t: f64,
@@ -1653,7 +1809,8 @@ fn rhs_packed_expanded_sparse_into_with_profile(
 
     let total_start = profile_timer(&profile);
     let parameter_start = profile_timer(&profile);
-    let initialize_static = !workspace.hamiltonian_valid;
+    let initialize_static =
+        workspace.hamiltonian_valid_for != Some(HamiltonianCache::ExpandedSplitPartitioned);
     if initialize_static || plan.is_time_dependent {
         workspace.evaluate_parameter_graph(plan, t)?;
     }
@@ -1685,7 +1842,7 @@ fn rhs_packed_expanded_sparse_into_with_profile(
             &mut workspace.expanded_term_values_re,
             &mut workspace.expanded_term_values_im,
         )?;
-        workspace.hamiltonian_valid = true;
+        workspace.hamiltonian_valid_for = Some(HamiltonianCache::ExpandedSplitPartitioned);
         workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {
@@ -1742,7 +1899,8 @@ fn rhs_packed_expanded_sparse_current_into_with_profile(
         add_elapsed(&mut stats.unpack_seconds, unpack_start);
     }
 
-    let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
+    let can_skip = !plan.is_time_dependent
+        && workspace.hamiltonian_valid_for == Some(HamiltonianCache::ExpandedSplit);
     let parameter_start = profile_timer(&profile);
     if !can_skip {
         workspace.evaluate_parameter_graph(plan, t)?;
@@ -1767,7 +1925,7 @@ fn rhs_packed_expanded_sparse_current_into_with_profile(
             &mut workspace.expanded_term_values_re,
             &mut workspace.expanded_term_values_im,
         )?;
-        workspace.hamiltonian_valid = true;
+        workspace.hamiltonian_valid_for = Some(HamiltonianCache::ExpandedSplit);
         workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {
@@ -1842,7 +2000,8 @@ fn rhs_packed_expanded_sparse_experimental_into_with_profile(
         add_elapsed(&mut stats.unpack_seconds, unpack_start);
     }
 
-    let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid;
+    let can_skip = !plan.is_time_dependent
+        && workspace.hamiltonian_valid_for == Some(HamiltonianCache::ExpandedSplit);
     let parameter_start = profile_timer(&profile);
     if !can_skip {
         workspace.evaluate_parameter_graph(plan, t)?;
@@ -1867,7 +2026,7 @@ fn rhs_packed_expanded_sparse_experimental_into_with_profile(
             &mut workspace.expanded_term_values_re,
             &mut workspace.expanded_term_values_im,
         )?;
-        workspace.hamiltonian_valid = true;
+        workspace.hamiltonian_valid_for = Some(HamiltonianCache::ExpandedSplit);
         workspace.h_sparse_valid = false;
     }
     if let Some(stats) = profile.as_mut() {

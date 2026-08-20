@@ -1,8 +1,8 @@
 use crate::lindblad::ode_impl::{LindbladRhs, LindbladStopEvent};
 use crate::lindblad::plan::{parse_expression, parse_plan_payload, PreparedLindbladPlan};
 use crate::lindblad::rhs::{
-    build_packed_jacobian_sparse, build_split_jacobian_sparse, rhs_matrix_into,
-    rhs_matrix_into_with_profile, rhs_packed, rhs_packed_into_with_profile,
+    build_packed_jacobian_analytic, build_packed_jacobian_sparse, build_split_jacobian_sparse,
+    rhs_matrix_into, rhs_matrix_into_with_profile, rhs_packed, rhs_packed_into_with_profile,
     rhs_split_into_with_profile, ExecutionMode, RhsOptions, RhsProfileStats, RhsWorkspace,
 };
 use crate::ode::batch::{solve_single, OdeSolver};
@@ -210,20 +210,47 @@ impl LindbladRhsEvaluator {
         ))
     }
 
-    #[pyo3(signature = (t, tol = 0.0))]
+    /// Packed-real Jacobian as (rows, cols, values).
+    ///
+    /// `method` selects how it is assembled:
+    /// * `"auto"` (default) -- transcribe it from the expanded sparse plan when the
+    ///   plan has one, else fall back to probing.
+    /// * `"analytic"` -- transcribe, and error if the plan has no expanded form.
+    /// * `"probe"` -- the O(n^4) basis-vector probe. Exact, and retained as the
+    ///   reference the analytic path is tested against.
+    #[pyo3(signature = (t, tol = 0.0, method = "auto"))]
     pub fn jacobian_packed_sparse_py<'py>(
         &self,
         py: Python<'py>,
         t: f64,
         tol: f64,
+        method: &str,
     ) -> PyResult<(
         Bound<'py, PyArray1<i64>>,
         Bound<'py, PyArray1<i64>>,
         Bound<'py, PyArray1<f64>>,
     )> {
         let mut workspace = self.workspace.borrow_mut();
-        let (rows, cols, values) =
-            build_packed_jacobian_sparse(
+        let analytic = match method {
+            "auto" | "analytic" => {
+                build_packed_jacobian_analytic(&self.plan, t, &mut workspace, tol)
+                    .map_err(PyValueError::new_err)?
+            }
+            "probe" => None,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "jacobian method must be 'auto', 'analytic' or 'probe', got {other:?}"
+                )))
+            }
+        };
+        if analytic.is_none() && method == "analytic" {
+            return Err(PyValueError::new_err(
+                "jacobian method='analytic' requires a decomposed Hamiltonian plan",
+            ));
+        }
+        let (rows, cols, values) = match analytic {
+            Some(triplets) => triplets,
+            None => build_packed_jacobian_sparse(
                 &self.plan,
                 t,
                 self.mode,
@@ -231,7 +258,8 @@ impl LindbladRhsEvaluator {
                 &mut workspace,
                 tol,
             )
-                .map_err(PyValueError::new_err)?;
+            .map_err(PyValueError::new_err)?,
+        };
         Ok((
             PyArray1::from_vec(py, rows),
             PyArray1::from_vec(py, cols),
@@ -435,8 +463,8 @@ pub fn solve_lindblad_ode_py<'py>(
     let rhs_options = RhsOptions {
         use_split_input_rhs,
     };
-    let mut rhs =
-        LindbladRhs::new_with_rhs_options(&plan, execution_mode, rhs_options).with_stop_event(event);
+    let mut rhs = LindbladRhs::new_with_rhs_options(&plan, execution_mode, rhs_options)
+        .with_stop_event(event);
     let result = match output {
         "populations" => {
             let mut out = PopulationsOutput::new((0..n).collect(), capacity);

@@ -243,10 +243,11 @@ Each of these produces plausible-looking but wrong output rather than an error.
   the 1e-5 placeholder.**
 - **`method=` on the OBE builders is deprecated and does nothing.** Several committed notebooks
   still pass `method="matrix"`. Drop it in new code.
-- **`generate_uniform_population_state_indices` is defined twice** in
-  `centrex_tlf/utils/population.py` (once without a `weights` argument, once with) and listed
-  twice in `__all__`; the second shadows the first. Notebooks defensively guard with
-  `inspect.signature(...)`. This is a real bug worth fixing on its own.
+- **`generate_uniform_population_state_indices` used to be defined twice** in
+  `centrex_tlf/utils/population.py` — the second definition shadowed the first. Fixed in
+  0.2.5; the surviving one takes `weights=` and handles NumPy arrays. Committed notebooks
+  still carry defensive `inspect.signature(...)` guards around it, which are now dead
+  weight and can be dropped when you next touch them.
 - **`QuantumSelector.Ω` is ignored by `get_indices`.** It only affects state *generation*.
 - **`check_B_basis` raises if you ask for multiple `P` and multiple `Ω` at once.** Pick a basis:
   parity basis is `P=[-1, 1], Ω=1`; omega basis is `P=None, Ω=[-1, 1]`. Convert with
