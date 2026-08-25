@@ -416,6 +416,18 @@ def find_exact_states_indices(
           strong (in X above roughly 20 kV/cm). Track states adiabatically instead:
           step the field up from ~0 in small increments and match each set of
           eigenvectors to the previous set
+        - Adiabatic tracking has its own, separate failure mode, and it is not the
+          one this margin detects. Where two levels cross, the population follows
+          its diabatic branch while the overlap matching follows the adiabatic one,
+          so the label ends up on the wrong state. In TlF this is not exotic: mF=0
+          levels cross exactly when B is perpendicular to E, and a small B parallel
+          to E opens a gap of only about 1620 Hz/G, which is traversed
+          diabatically. Note the direction -- a *finer* step makes the adiabatic
+          label MORE likely to be wrong, not less, because it resolves a crossing
+          that a coarse step jumps over, and each step's assignment is unambiguous
+          throughout so no margin fires. Where the answer matters, identify states
+          by their quantum numbers at the field of interest rather than by any
+          carried index
         - For n approximate states and m eigenstates with n ≤ m, guarantees unique assignment
         - V_ref helps maintain consistent eigenstate ordering across parameter sweeps
     """
