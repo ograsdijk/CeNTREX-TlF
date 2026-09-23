@@ -179,11 +179,28 @@ solve to solver accuracy. This option is available on `solve_lindblad`,
 solver). For example, a two-point `saveat=[t0, t1]` returns the initial and
 total integrated values without reducing the quadrature to one trapezoid.
 
-Set `integral_method="sampled"` to deliberately use trapezoidal quadrature on
-the output sampling points. In this mode the chosen sampling grid controls the
-quadrature accuracy. For `output_when="final"`, an explicit `saveat` grid is
-used and `t1` is included; without `saveat`, quadrature uses accepted solver
-steps.
+Set `integral_method="sampled"` and provide `integral_saveat` to deliberately
+use trapezoidal quadrature on a separate integration grid. The interval
+endpoints are included automatically. `saveat` continues to control only the
+times returned (`output_when="saveat"` requires explicit `saveat` values):
+`output_when="saveat"` returns an array at those times, while
+`output_when="final"` returns only the final value, regardless of the
+integration method. Changing `saveat` does not change the sampled quadrature.
+For example, keep output sparse while integrating on a finer grid:
+
+```python
+signal = solve_lindblad(
+    prepared,
+    rho0,
+    (0.0, 100e-6),
+    output="photon_integral",
+    integral_weights=photon_weights,
+    output_when="saveat",
+    saveat=np.array([0.0, 100e-6]),
+    integral_method="sampled",
+    integral_saveat=np.linspace(0.0, 100e-6, 1001),
+)
+```
 
 ## Terminal Events
 
