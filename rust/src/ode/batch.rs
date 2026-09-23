@@ -2,7 +2,7 @@ use crate::ode::dopri5::solve_dopri5;
 use crate::ode::fixed::{solve_fixed_step, FixedStepper};
 use crate::ode::output::OdeOutput;
 use crate::ode::tsit5::solve_tsit5;
-use crate::ode::{OdeOptions, OdeRhs, OdeStats};
+use crate::ode::{IntegralAugmentedRhs, OdeOptions, OdeRhs, OdeStats};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OdeSolver {
@@ -37,6 +37,56 @@ pub fn solve_single<R: OdeRhs, O: OdeOutput>(
     output: &mut O,
     solver: OdeSolver,
 ) -> Result<OdeStats, String> {
+    let physical_dim = rhs.dim();
+    if y0.len() != physical_dim {
+        return Err(format!("expected {physical_dim}, got {}", y0.len()));
+    }
+    output.initialize(t0, y0);
+    if let Some(weights) = output.solver_integral_weights().map(|w| w.to_vec()) {
+        let mut augmented_y0 = Vec::with_capacity(physical_dim + 1);
+        augmented_y0.extend_from_slice(y0);
+        augmented_y0.push(0.0);
+        let mut augmented_rhs = IntegralAugmentedRhs {
+            inner: rhs,
+            weights,
+            physical_dim,
+        };
+        return match solver {
+            OdeSolver::Dopri5 => {
+                solve_dopri5(&mut augmented_rhs, &augmented_y0, t0, t1, options, output)
+            }
+            OdeSolver::Tsit5 => {
+                solve_tsit5(&mut augmented_rhs, &augmented_y0, t0, t1, options, output)
+            }
+            OdeSolver::FixedDopri5 => solve_fixed_step(
+                &mut augmented_rhs,
+                &augmented_y0,
+                t0,
+                t1,
+                options,
+                output,
+                FixedStepper::Dopri5,
+            ),
+            OdeSolver::FixedRk2 => solve_fixed_step(
+                &mut augmented_rhs,
+                &augmented_y0,
+                t0,
+                t1,
+                options,
+                output,
+                FixedStepper::Rk2,
+            ),
+            OdeSolver::FixedRk4 => solve_fixed_step(
+                &mut augmented_rhs,
+                &augmented_y0,
+                t0,
+                t1,
+                options,
+                output,
+                FixedStepper::Rk4,
+            ),
+        };
+    }
     match solver {
         OdeSolver::Dopri5 => solve_dopri5(rhs, y0, t0, t1, options, output),
         OdeSolver::Tsit5 => solve_tsit5(rhs, y0, t0, t1, options, output),

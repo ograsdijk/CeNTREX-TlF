@@ -414,6 +414,7 @@ def _solve_rust_native(
     output_when: str,
     dense_output: bool,
     integral_weights: Sequence[tuple[int, float]] | None = None,
+    integral_method: str = "solver",
     event_spec: dict[str, Any] | None = None,
 ) -> LindbladResult | LindbladObservableResult:
     from ..centrex_tlf_rust import solve_lindblad_ode_py
@@ -424,7 +425,17 @@ def _solve_rust_native(
     effective_saveat = saveat
     effective_save_start = save_start
     final_integral = output in integral_outputs
-    if output_when == "final" and not final_integral:
+    if output_when == "final" and final_integral and integral_method == "solver":
+        # The solver-native cumulative state is independent of the user's
+        # requested sampling grid. Save only the terminal point for final-only
+        # output while the RK stages integrate the observable on every step.
+        effective_saveat = np.array([t_span[1]], dtype=np.float64)
+        effective_save_start = False
+    elif output_when == "final" and final_integral and saveat is not None:
+        # Sampled quadrature deliberately uses saveat as its quadrature grid;
+        # include the terminal time so the returned value is cumulative to t1.
+        effective_saveat = np.unique(np.append(saveat, t_span[1]))
+    elif output_when == "final" and not final_integral:
         effective_saveat = np.array([t_span[1]], dtype=np.float64)
         effective_save_start = False
 
@@ -448,6 +459,7 @@ def _solve_rust_native(
         None if integral_weights is None else list(integral_weights),
         event_spec,
         bool(use_split_input_rhs),
+        integral_method,
     )
     elapsed = time.perf_counter() - start
 
@@ -525,8 +537,17 @@ def solve_lindblad(
     output_when: str = "saveat",
     dense_output: bool = True,
     integral_weights: Sequence[tuple[int, float]] | None = None,
+    integral_method: str = "solver",
     stop_event: Any | None = None,
 ) -> LindbladResult | LindbladMatrixResult | LindbladObservableResult:
+    """Solve one Lindblad trajectory.
+
+    For integral outputs (``weighted_integral``, ``photon_integral``, and
+    ``excited_population``), ``saveat`` controls when cumulative values are
+    returned. It does not set the integration grid when
+    ``integral_method="solver"`` (the default). Set ``integral_method="sampled"``
+    to use trapezoidal quadrature over sampled output values instead.
+    """
     if solver is None:
         solver = "python_rk45" if backend == "python" else "dopri5"
     if solver not in {
@@ -561,6 +582,8 @@ def solve_lindblad(
         )
     if output_when not in {"saveat", "final"}:
         raise NotImplementedError("output_when must be 'saveat' or 'final'")
+    if integral_method not in {"solver", "sampled"}:
+        raise ValueError("integral_method must be 'solver' or 'sampled'")
     rust_reduced_output_solvers = {
         "dopri5",
         "tsit5",
@@ -670,6 +693,7 @@ def solve_lindblad(
             output_when=output_when,
             dense_output=dense_output,
             integral_weights=integral_weights,
+            integral_method=integral_method,
             event_spec=event_spec,
         )
     if backend == "rust" and solver == "python_rk45":
