@@ -1808,25 +1808,104 @@ def test_solver_integral_is_independent_of_saveat_for_single_batch_and_grid(solv
     np.testing.assert_allclose(grid_sparse.values[:, -1], grid_final.values, rtol=1e-7)
     np.testing.assert_allclose(grid_dense.values[:, -1], grid_final.values, rtol=1e-7)
 
-    sampled = solve_lindblad(
-        prepared,
-        rho0,
-        (0.0, 0.5),
+    integral_saveat = np.linspace(0.0, 0.5, 17)
+    sampled_common = {
         **common,
-        output_when="saveat",
-        saveat=sparse_saveat,
-        integral_method="sampled",
-    )
-    rate = solve_lindblad(
+        "integral_method": "sampled",
+        "integral_saveat": integral_saveat,
+    }
+    sampled_sparse = solve_lindblad(
         prepared,
         rho0,
         (0.0, 0.5),
-        **{**common, "output": "photon_rate"},
+        **sampled_common,
         output_when="saveat",
         saveat=sparse_saveat,
     )
-    sampled_expected = np.trapezoid(rate.values[:, 0], x=sparse_saveat)
-    np.testing.assert_allclose(sampled.values[-1, 0], sampled_expected, rtol=1e-12)
+    sampled_dense = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        **sampled_common,
+        output_when="saveat",
+        saveat=dense_saveat,
+    )
+    sampled_final = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        **sampled_common,
+        output_when="final",
+        saveat=None,
+        dense_output=False,
+    )
+    assert sampled_sparse.values.shape == (sparse_saveat.size, 1)
+    assert sampled_dense.values.shape == (dense_saveat.size, 1)
+    assert sampled_final.values.shape == (1,)
+    np.testing.assert_allclose(sampled_sparse.values[-1], sampled_final.values[0], rtol=1e-12)
+    np.testing.assert_allclose(sampled_dense.values[-1], sampled_final.values[0], rtol=1e-12)
+
+    sampled_batch_sparse = solve_lindblad_batch(
+        prepared,
+        batch_rho0,
+        (0.0, 0.5),
+        **sampled_common,
+        output_when="saveat",
+        saveat=sparse_saveat,
+        parallel=False,
+    )
+    sampled_batch_final = solve_lindblad_batch(
+        prepared,
+        batch_rho0,
+        (0.0, 0.5),
+        **sampled_common,
+        output_when="final",
+        saveat=None,
+        dense_output=False,
+        parallel=False,
+    )
+    assert sampled_batch_sparse.values.shape == (1, sparse_saveat.size, 1)
+    assert sampled_batch_final.values.shape == (1, 1)
+    np.testing.assert_allclose(
+        sampled_batch_sparse.values[:, -1], sampled_batch_final.values, rtol=1e-12
+    )
+
+    sampled_grid_sparse = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        **sampled_common,
+        output_when="saveat",
+        saveat=sparse_saveat,
+        parallel=False,
+    )
+    sampled_grid_final = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        **sampled_common,
+        output_when="final",
+        saveat=None,
+        dense_output=False,
+        parallel=False,
+    )
+    assert sampled_grid_sparse.values.shape == (1, sparse_saveat.size, 1)
+    assert sampled_grid_final.values.shape == (1, 1)
+    np.testing.assert_allclose(
+        sampled_grid_sparse.values[:, -1], sampled_grid_final.values, rtol=1e-12
+    )
+
+    with pytest.raises(ValueError, match="requires integral_saveat"):
+        solve_lindblad(
+            prepared,
+            rho0,
+            (0.0, 0.5),
+            **common,
+            output_when="final",
+            integral_method="sampled",
+        )
 
 
 def test_grid_integral_trace_shape_and_rate_validation() -> None:

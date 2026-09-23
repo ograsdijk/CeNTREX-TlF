@@ -10,6 +10,12 @@ import numpy.typing as npt
 import sympy as smp
 
 from .events import normalize_stop_event
+from .integral_output import (
+    INTEGRAL_OUTPUTS,
+    INTEGRAL_RATE_OUTPUTS,
+    cumulative_trapezoid_at,
+    normalize_integral_saveat,
+)
 from .parameters import Parameter
 from .plan_static import PreparedLindbladProblem
 
@@ -162,6 +168,7 @@ def solve_lindblad_batch(
     output_when: str = "final",
     integral_weights: Sequence[tuple[int, float]] | None = None,
     integral_method: str = "solver",
+    integral_saveat: None | float | Sequence[float] | npt.NDArray[np.floating] = None,
     dense_output: bool = True,
     parallel: bool = True,
     threads: int | None = None,
@@ -172,9 +179,9 @@ def solve_lindblad_batch(
 
     For integral outputs, ``saveat`` controls when cumulative values are
     returned. The default ``integral_method="solver"`` integrates the
-    observable along the solver stages independently of ``saveat``;
-    ``integral_method="sampled"`` uses trapezoidal quadrature over sampled
-    output values.
+    observable along the solver stages independently of ``saveat``. Set
+    ``integral_method="sampled"`` and provide ``integral_saveat`` to choose an
+    independent trapezoidal integration grid.
     """
     if prepared.rust_plan is None:
         raise RuntimeError("solve_lindblad_batch requires a Rust prepared plan")
@@ -185,7 +192,7 @@ def solve_lindblad_batch(
             "batch solving currently supports 'dopri5', 'tsit5', 'fixed_dopri5', "
             "'fixed_rk2', and 'fixed_rk4'"
         )
-    integral_outputs = {"weighted_integral", "photon_integral", "excited_population"}
+    integral_outputs = INTEGRAL_OUTPUTS
     rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
     weighted_outputs = integral_outputs | rate_outputs
     if output not in {"populations", "selected", *weighted_outputs}:
@@ -206,6 +213,14 @@ def solve_lindblad_batch(
         raise ValueError("output_when must be 'final' or 'saveat'")
     if integral_method not in {"solver", "sampled"}:
         raise ValueError("integral_method must be 'solver' or 'sampled'")
+    if integral_saveat is not None and output not in integral_outputs:
+        raise ValueError("integral_saveat is only valid with an integral output")
+    if integral_saveat is not None and integral_method != "sampled":
+        raise ValueError("integral_saveat requires integral_method='sampled'")
+    if output in integral_outputs and integral_method == "sampled" and integral_saveat is None:
+        raise ValueError("integral_method='sampled' requires integral_saveat")
+    if output in integral_outputs and integral_method == "sampled" and stop_event is not None:
+        raise ValueError("sampled integral outputs with stop_event are not supported in batch mode")
     if output_when == "saveat" and saveat is None:
         raise ValueError("batch output_when='saveat' requires explicit saveat values")
     if stop_event is not None and output_when != "final":
@@ -238,11 +253,19 @@ def solve_lindblad_batch(
         raise ValueError("parameter_slots were provided without parameter_batch")
 
     saveat_values = _normalize_saveat(saveat, t_span_tuple, save_start)
-    if output_when == "final" and output in integral_outputs:
-        if integral_method == "solver":
-            saveat_values = np.asarray([t_span_tuple[1]], dtype=np.float64)
-        elif saveat_values is not None:
-            saveat_values = np.unique(np.append(saveat_values, t_span_tuple[1]))
+    sampled_integral = output in integral_outputs and integral_method == "sampled"
+    rust_output = output
+    rust_output_when = output_when
+    rust_integral_method = integral_method
+    rust_save_start = save_start
+    if sampled_integral:
+        saveat_values = normalize_integral_saveat(integral_saveat, t_span_tuple)
+        rust_output = INTEGRAL_RATE_OUTPUTS[output]
+        rust_output_when = "saveat"
+        rust_integral_method = "solver"
+        rust_save_start = True
+    elif output_when == "final" and output in integral_outputs:
+        saveat_values = np.asarray([t_span_tuple[1]], dtype=np.float64)
     if not dense_output and output_when == "saveat" and saveat_values is not None:
         raise ValueError("dense_output=False is only supported with output_when='final'")
 
@@ -260,13 +283,13 @@ def solve_lindblad_batch(
         float(reltol),
         float(dt),
         None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
-        bool(save_start),
+        bool(rust_save_start),
         int(maxiters),
         execution_mode,
         solver,
-        output,
+        rust_output,
         None if output_indices is None else list(output_indices),
-        output_when,
+        rust_output_when,
         None if integral_weights is None else list(integral_weights),
         slot_indices or None,
         parameter_values,
@@ -274,13 +297,30 @@ def solve_lindblad_batch(
         threads,
         event_spec,
         bool(use_split_input_rhs),
-        integral_method,
+        rust_integral_method,
     )
     elapsed = time.perf_counter() - start
 
     dtype = np.float64 if output in {"populations", *weighted_outputs} else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
-    if output_when == "final":
+    if sampled_integral:
+        rate_values = values.reshape((trajectory_count, int(time_count), int(width)))[..., 0]
+        if output_when == "saveat":
+            query_times = (
+                np.asarray(saveat_values, dtype=np.float64)
+                if saveat is None
+                else _normalize_saveat(saveat, t_span_tuple, save_start)
+            )
+        else:
+            query_times = np.asarray([t_span_tuple[1]], dtype=np.float64)
+        cumulative_values = cumulative_trapezoid_at(np.asarray(times), rate_values, query_times)
+        values = (
+            cumulative_values[..., np.newaxis]
+            if output_when == "saveat"
+            else cumulative_values[..., :1]
+        )
+        times = query_times
+    elif output_when == "final":
         values = values.reshape((trajectory_count, int(width)))
     else:
         values = values.reshape((trajectory_count, int(time_count), int(width)))
@@ -308,7 +348,7 @@ def solve_lindblad_batch(
             _solver_stats_dict(
                 solver_stats,
                 solver=solver,
-                saved_points=int(time_count),
+                saved_points=int(values.shape[1] if output_when == "saveat" else 1),
                 elapsed_seconds=elapsed,
             )
             if collect_stats
@@ -370,8 +410,8 @@ def grid_scan(
     Solver options are forwarded to :func:`solve_lindblad_batch`. In
     particular, for integral outputs ``integral_method="solver"`` is the
     default and ``saveat`` only controls returned cumulative-integral samples;
-    pass ``integral_method="sampled"`` for trapezoidal quadrature on sampled
-    output values.
+    pass ``integral_method="sampled"`` with ``integral_saveat`` to choose a
+    separate trapezoidal integration grid.
     """
     if not scan:
         raise ValueError("scan must contain at least one parameter")
@@ -409,6 +449,7 @@ def grid_scan(
     output_when = kwargs.pop("output_when", "final")
     integral_weights = kwargs.pop("integral_weights", None)
     integral_method = kwargs.pop("integral_method", "solver")
+    integral_saveat = kwargs.pop("integral_saveat", None)
     dense_output = bool(kwargs.pop("dense_output", True))
     parallel = bool(kwargs.pop("parallel", True))
     threads = kwargs.pop("threads", None)
@@ -426,7 +467,7 @@ def grid_scan(
             "grid_scan currently supports 'dopri5', 'tsit5', 'fixed_dopri5', 'fixed_rk2', "
             "and 'fixed_rk4'"
         )
-    integral_outputs = {"weighted_integral", "photon_integral", "excited_population"}
+    integral_outputs = INTEGRAL_OUTPUTS
     rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
     weighted_outputs = integral_outputs | rate_outputs
     if output not in {"populations", "selected", *weighted_outputs}:
@@ -443,17 +484,20 @@ def grid_scan(
         raise ValueError(f"output={output!r} requires integral_weights")
     if output not in weighted_outputs and integral_weights is not None:
         raise ValueError("integral_weights are only valid with weighted output modes")
-    if output_when == "final" and output in integral_outputs:
-        if integral_method == "solver":
-            saveat_values = np.asarray([t_span_tuple[1]], dtype=np.float64)
-        elif saveat_values is not None:
-            saveat_values = np.unique(np.append(saveat_values, t_span_tuple[1]))
     if output_when == "saveat" and saveat_values is None:
         raise ValueError("grid_scan output_when='saveat' requires explicit saveat values")
     if output_when not in {"final", "saveat"}:
         raise ValueError("output_when must be 'final' or 'saveat'")
     if integral_method not in {"solver", "sampled"}:
         raise ValueError("integral_method must be 'solver' or 'sampled'")
+    if integral_saveat is not None and output not in integral_outputs:
+        raise ValueError("integral_saveat is only valid with an integral output")
+    if integral_saveat is not None and integral_method != "sampled":
+        raise ValueError("integral_saveat requires integral_method='sampled'")
+    if output in integral_outputs and integral_method == "sampled" and integral_saveat is None:
+        raise ValueError("integral_method='sampled' requires integral_saveat")
+    if output in integral_outputs and integral_method == "sampled" and stop_event is not None:
+        raise ValueError("sampled integral outputs with stop_event are not supported in grid_scan")
     if stop_event is not None and output_when != "final":
         raise ValueError("grid_scan stop_event is only supported with output_when='final'")
     if output in rate_outputs and output_when != "saveat":
@@ -464,6 +508,21 @@ def grid_scan(
         raise ValueError("dense_output=False is only supported with output_when='final'")
     if threads is not None and threads <= 0:
         raise ValueError("threads must be positive when provided")
+
+    output_saveat_values = saveat_values
+    sampled_integral = output in integral_outputs and integral_method == "sampled"
+    rust_output = output
+    rust_output_when = output_when
+    rust_integral_method = integral_method
+    rust_save_start = save_start
+    if sampled_integral:
+        saveat_values = normalize_integral_saveat(integral_saveat, t_span_tuple)
+        rust_output = INTEGRAL_RATE_OUTPUTS[output]
+        rust_output_when = "saveat"
+        rust_integral_method = "solver"
+        rust_save_start = True
+    elif output_when == "final" and output in integral_outputs:
+        saveat_values = np.asarray([t_span_tuple[1]], dtype=np.float64)
 
     axis_lengths = [int(axis.size) for axis in axes]
     trajectory_count = int(np.prod(axis_lengths, dtype=np.int64))
@@ -486,25 +545,38 @@ def grid_scan(
             flat_axes,
             axis_lengths,
             None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
-            save_start,
+            rust_save_start,
             maxiters,
             execution_mode,
             solver,
-            output,
+            rust_output,
             None if output_indices is None else list(output_indices),
-            output_when,
+            rust_output_when,
             None if integral_weights is None else list(integral_weights),
             parallel,
             threads,
             event_spec,
             use_split_input_rhs,
-            integral_method,
+            rust_integral_method,
         )
     )
     elapsed = time.perf_counter() - start
     dtype = np.float64 if output in {"populations", *weighted_outputs} else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
-    if output_when == "final":
+    if sampled_integral:
+        rate_values = values.reshape((trajectory_count, int(time_count), int(width)))[..., 0]
+        if output_when == "saveat":
+            query_times = np.asarray(output_saveat_values, dtype=np.float64)
+        else:
+            query_times = np.asarray([t_span_tuple[1]], dtype=np.float64)
+        cumulative_values = cumulative_trapezoid_at(np.asarray(times), rate_values, query_times)
+        values = (
+            cumulative_values[..., np.newaxis]
+            if output_when == "saveat"
+            else cumulative_values[..., :1]
+        )
+        times = query_times
+    elif output_when == "final":
         values = values.reshape((trajectory_count, int(width)))
     else:
         values = values.reshape((trajectory_count, int(time_count), int(width)))
@@ -532,7 +604,7 @@ def grid_scan(
             _solver_stats_dict(
                 solver_stats,
                 solver=solver,
-                saved_points=int(time_count),
+                saved_points=int(values.shape[1] if output_when == "saveat" else 1),
                 elapsed_seconds=elapsed,
             )
             if collect_stats
