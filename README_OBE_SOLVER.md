@@ -167,6 +167,24 @@ records only the final value. Use `dense_output=False` only when no interior
 save points are needed; it is intended for final-only work and rejects interior
 `saveat` points.
 
+Integral outputs use `integral_method="solver"` by default. The solver
+integrates the weighted population as an auxiliary state using the same
+Runge-Kutta stages as the density matrix. This auxiliary state is excluded from
+adaptive error control, so it does not change step selection for the physical
+state. `saveat` only samples the cumulative integral; changing its spacing does
+not change the terminal integral. `output_when="saveat"` returns the cumulative
+integral at each requested time, and its last value agrees with a final-only
+solve to solver accuracy. This option is available on `solve_lindblad`,
+`solve_lindblad_batch`, and `grid_scan` (as a keyword forwarded to the batch
+solver). For example, a two-point `saveat=[t0, t1]` returns the initial and
+total integrated values without reducing the quadrature to one trapezoid.
+
+Set `integral_method="sampled"` to deliberately use trapezoidal quadrature on
+the output sampling points. In this mode the chosen sampling grid controls the
+quadrature accuracy. For `output_when="final"`, an explicit `saveat` grid is
+used and `t1` is included; without `saveat`, quadrature uses accepted solver
+steps.
+
 ## Terminal Events
 
 Full OBE solves support one terminal `stop_event`. Without `stop_event`, solver

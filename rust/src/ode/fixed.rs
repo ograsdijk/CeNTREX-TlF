@@ -161,6 +161,8 @@ pub fn solve_fixed_step<R: OdeRhs, O: OdeOutput>(
 
     let sp = build_save_plan(opt.saveat.as_deref(), t0, t1, opt.save_start)?;
     let save_times = sp.as_ref().map(|plan| plan.times.as_slice());
+    let solver_integral = output.solver_integral_weights().is_some();
+    let step_save_times = if solver_integral { None } else { save_times };
     let mut st = OdeStats::default();
     let mut y = y0.to_vec();
     let mut yn = vec![0.0; dim];
@@ -189,7 +191,7 @@ pub fn solve_fixed_step<R: OdeRhs, O: OdeOutput>(
         if steps >= opt.maxiters {
             return Err(format!("Stopped at x={x}. Need more than {steps} steps."));
         }
-        let h = next_step_limit(save_times, si, x, t1, opt.dt);
+        let h = next_step_limit(step_save_times, si, x, t1, opt.dt);
         if h <= 0.0 || 0.1 * h <= f64::EPSILON * x.abs().max(1.0) {
             return Err(format!("Stopped at x={x}. Step size underflow."));
         }
@@ -224,7 +226,12 @@ pub fn solve_fixed_step<R: OdeRhs, O: OdeOutput>(
         if let Some(times) = save_times {
             let stop_time = if event_hit { st.event_time } else { x };
             while si < times.len() && times[si] <= stop_time + time_tol(stop_time) {
-                output.push(times[si], &yn);
+                let ts = times[si];
+                if solver_integral && ts > xo + time_tol(xo) && ts < x - time_tol(x) {
+                    output.push_solver_integral_interpolated(ts, &y, &yn, h, (ts - xo) / h);
+                } else {
+                    output.push(ts, &yn);
+                }
                 si += 1;
             }
         } else if !event_hit {

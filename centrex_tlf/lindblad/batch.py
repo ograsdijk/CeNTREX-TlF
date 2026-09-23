@@ -161,12 +161,21 @@ def solve_lindblad_batch(
     output_indices: Sequence[tuple[int, int]] | None = None,
     output_when: str = "final",
     integral_weights: Sequence[tuple[int, float]] | None = None,
+    integral_method: str = "solver",
     dense_output: bool = True,
     parallel: bool = True,
     threads: int | None = None,
     metadata: Mapping[str, Any] | None = None,
     stop_event: Any | None = None,
 ) -> LindbladBatchResult:
+    """Solve a batch of Lindblad trajectories.
+
+    For integral outputs, ``saveat`` controls when cumulative values are
+    returned. The default ``integral_method="solver"`` integrates the
+    observable along the solver stages independently of ``saveat``;
+    ``integral_method="sampled"`` uses trapezoidal quadrature over sampled
+    output values.
+    """
     if prepared.rust_plan is None:
         raise RuntimeError("solve_lindblad_batch requires a Rust prepared plan")
     prepared.check_execution_mode(execution_mode)
@@ -195,6 +204,8 @@ def solve_lindblad_batch(
         raise ValueError("integral_weights are only valid with weighted output modes")
     if output_when not in {"final", "saveat"}:
         raise ValueError("output_when must be 'final' or 'saveat'")
+    if integral_method not in {"solver", "sampled"}:
+        raise ValueError("integral_method must be 'solver' or 'sampled'")
     if output_when == "saveat" and saveat is None:
         raise ValueError("batch output_when='saveat' requires explicit saveat values")
     if stop_event is not None and output_when != "final":
@@ -227,6 +238,11 @@ def solve_lindblad_batch(
         raise ValueError("parameter_slots were provided without parameter_batch")
 
     saveat_values = _normalize_saveat(saveat, t_span_tuple, save_start)
+    if output_when == "final" and output in integral_outputs:
+        if integral_method == "solver":
+            saveat_values = np.asarray([t_span_tuple[1]], dtype=np.float64)
+        elif saveat_values is not None:
+            saveat_values = np.unique(np.append(saveat_values, t_span_tuple[1]))
     if not dense_output and output_when == "saveat" and saveat_values is not None:
         raise ValueError("dense_output=False is only supported with output_when='final'")
 
@@ -258,6 +274,7 @@ def solve_lindblad_batch(
         threads,
         event_spec,
         bool(use_split_input_rhs),
+        integral_method,
     )
     elapsed = time.perf_counter() - start
 
@@ -348,6 +365,14 @@ def grid_scan(
     scan: Mapping[ParameterSlot, Sequence[complex] | npt.NDArray[np.complexfloating]],
     **kwargs: Any,
 ) -> LindbladBatchResult:
+    """Run a parameter grid scan.
+
+    Solver options are forwarded to :func:`solve_lindblad_batch`. In
+    particular, for integral outputs ``integral_method="solver"`` is the
+    default and ``saveat`` only controls returned cumulative-integral samples;
+    pass ``integral_method="sampled"`` for trapezoidal quadrature on sampled
+    output values.
+    """
     if not scan:
         raise ValueError("scan must contain at least one parameter")
     parameter_slots = list(scan)
@@ -383,6 +408,7 @@ def grid_scan(
     output_indices = kwargs.pop("output_indices", None)
     output_when = kwargs.pop("output_when", "final")
     integral_weights = kwargs.pop("integral_weights", None)
+    integral_method = kwargs.pop("integral_method", "solver")
     dense_output = bool(kwargs.pop("dense_output", True))
     parallel = bool(kwargs.pop("parallel", True))
     threads = kwargs.pop("threads", None)
@@ -417,10 +443,17 @@ def grid_scan(
         raise ValueError(f"output={output!r} requires integral_weights")
     if output not in weighted_outputs and integral_weights is not None:
         raise ValueError("integral_weights are only valid with weighted output modes")
+    if output_when == "final" and output in integral_outputs:
+        if integral_method == "solver":
+            saveat_values = np.asarray([t_span_tuple[1]], dtype=np.float64)
+        elif saveat_values is not None:
+            saveat_values = np.unique(np.append(saveat_values, t_span_tuple[1]))
     if output_when == "saveat" and saveat_values is None:
         raise ValueError("grid_scan output_when='saveat' requires explicit saveat values")
     if output_when not in {"final", "saveat"}:
         raise ValueError("output_when must be 'final' or 'saveat'")
+    if integral_method not in {"solver", "sampled"}:
+        raise ValueError("integral_method must be 'solver' or 'sampled'")
     if stop_event is not None and output_when != "final":
         raise ValueError("grid_scan stop_event is only supported with output_when='final'")
     if output in rate_outputs and output_when != "saveat":
@@ -465,6 +498,7 @@ def grid_scan(
             threads,
             event_spec,
             use_split_input_rhs,
+            integral_method,
         )
     )
     elapsed = time.perf_counter() - start

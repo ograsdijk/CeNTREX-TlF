@@ -4,8 +4,8 @@ use crate::lindblad::rhs::{ExecutionMode, RhsOptions};
 use crate::ode::batch::{solve_single, OdeSolver};
 use crate::ode::common::build_save_plan;
 use crate::ode::output::{
-    FullOutput, OdeOutputResult, OdeOutputValues, PopulationsOutput, SelectedExtraction,
-    SelectedOutput, WeightedIntegralOutput, WeightedRateOutput,
+    FullOutput, IntegralMethod, OdeOutputResult, OdeOutputValues, PopulationsOutput,
+    SelectedExtraction, SelectedOutput, WeightedIntegralOutput, WeightedRateOutput,
 };
 use crate::ode::{OdeOptions, OdeRhs, OdeStats};
 use num_complex::Complex64;
@@ -114,6 +114,7 @@ enum OutputSpec {
     WeightedIntegral {
         weights: Vec<(usize, f64)>,
         store_trace: bool,
+        method: IntegralMethod,
     },
     WeightedRate {
         weights: Vec<(usize, f64)>,
@@ -133,10 +134,12 @@ impl OutputSpec {
             Self::WeightedIntegral {
                 weights,
                 store_trace,
+                method,
             } => ConcreteOutput::WeightedIntegral(WeightedIntegralOutput::new_with_trace(
                 weights.clone(),
                 *store_trace,
                 capacity,
+                *method,
             )),
             Self::WeightedRate { weights } => {
                 ConcreteOutput::WeightedRate(WeightedRateOutput::new(weights.clone(), capacity))
@@ -187,6 +190,7 @@ pub fn solve_batch_ode(
     output_when: &str,
     output_indices: Option<&[(usize, usize)]>,
     integral_weights: Option<&[(usize, f64)]>,
+    integral_method: IntegralMethod,
     parameter_slot_indices: &[usize],
     parameter_batch: Option<&[Complex64]>,
     stop_event: Option<LindbladStopEvent>,
@@ -225,6 +229,7 @@ pub fn solve_batch_ode(
             OutputSpec::WeightedIntegral {
                 weights: weights.to_vec(),
                 store_trace: output_when == "saveat",
+                method: integral_method,
             }
         }
         "weighted_rate" | "photon_rate" | "excited_population_rate" => {
@@ -264,7 +269,15 @@ pub fn solve_batch_ode(
         } else {
             None
         };
-        worker.solve_batch(y0, t0, t1, options, solver, parameter_slot_indices, param_values)
+        worker.solve_batch(
+            y0,
+            t0,
+            t1,
+            options,
+            solver,
+            parameter_slot_indices,
+            param_values,
+        )
     };
 
     let results: Vec<Result<(OdeOutputResult, OdeStats), String>> =
@@ -783,13 +796,13 @@ fn solve_grid_ode_direct(
                 .enumerate()
                 .map_init(
                     || {
-                            GridWorker::new(
-                                plan,
-                                execution_mode,
-                                rhs_options,
-                                output_spec,
-                                capacity,
-                                parameter_slot_indices.len(),
+                        GridWorker::new(
+                            plan,
+                            execution_mode,
+                            rhs_options,
+                            output_spec,
+                            capacity,
+                            parameter_slot_indices.len(),
                         )
                     },
                     |worker, (trajectory, chunk)| {
@@ -873,6 +886,7 @@ pub fn solve_grid_ode(
     output_when: &str,
     output_indices: Option<&[(usize, usize)]>,
     integral_weights: Option<&[(usize, f64)]>,
+    integral_method: IntegralMethod,
     parameter_slot_indices: &[usize],
     axes: &[Complex64],
     axis_offsets: &[usize],
@@ -905,6 +919,7 @@ pub fn solve_grid_ode(
             OutputSpec::WeightedIntegral {
                 weights: weights.to_vec(),
                 store_trace: output_when == "saveat",
+                method: integral_method,
             }
         }
         "weighted_rate" | "photon_rate" | "excited_population_rate" => {

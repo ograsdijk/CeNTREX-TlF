@@ -1693,6 +1693,142 @@ def test_batch_integral_trace_and_rate_trace_match_populations() -> None:
     np.testing.assert_allclose(trace.values[:, -1, :], final_from_same_grid.values)
 
 
+@pytest.mark.parametrize("solver", ["dopri5", "tsit5", "fixed_rk4"])
+def test_solver_integral_is_independent_of_saveat_for_single_batch_and_grid(solver: str) -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(system, {omega: 0.6, delta: 0.0}, backend="rust")
+    rho0 = _ground_state_density()
+    weights = [(1, 0.3)]
+    sparse_saveat = np.array([0.0, 0.5])
+    dense_saveat = np.linspace(0.0, 0.5, 77)
+    common = {
+        "solver": solver,
+        "execution_mode": "expanded_sparse",
+        "output": "photon_integral",
+        "integral_weights": weights,
+        "dt": 7e-3,
+        "reltol": 1e-8,
+        "abstol": 1e-10,
+    }
+
+    single_sparse = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        **common,
+        output_when="saveat",
+        saveat=sparse_saveat,
+    )
+    single_dense = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        **common,
+        output_when="saveat",
+        saveat=dense_saveat,
+    )
+    single_final = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        **common,
+        output_when="final",
+        saveat=None,
+        dense_output=False,
+    )
+    np.testing.assert_allclose(single_sparse.values[-1], single_final.values[0], rtol=1e-7)
+    np.testing.assert_allclose(single_dense.values[-1], single_final.values[0], rtol=1e-7)
+
+    batch_rho0 = np.stack([rho0])
+    batch_sparse = solve_lindblad_batch(
+        prepared,
+        batch_rho0,
+        (0.0, 0.5),
+        **common,
+        output_when="saveat",
+        saveat=sparse_saveat,
+        parallel=False,
+    )
+    batch_dense = solve_lindblad_batch(
+        prepared,
+        batch_rho0,
+        (0.0, 0.5),
+        **common,
+        output_when="saveat",
+        saveat=dense_saveat,
+        parallel=False,
+    )
+    batch_final = solve_lindblad_batch(
+        prepared,
+        batch_rho0,
+        (0.0, 0.5),
+        **common,
+        output_when="final",
+        saveat=None,
+        dense_output=False,
+        parallel=False,
+    )
+    np.testing.assert_allclose(batch_sparse.values[:, -1], batch_final.values, rtol=1e-7)
+    np.testing.assert_allclose(batch_dense.values[:, -1], batch_final.values, rtol=1e-7)
+
+    scan = {omega: np.array([0.6])}
+    grid_sparse = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        **common,
+        output_when="saveat",
+        saveat=sparse_saveat,
+        parallel=False,
+    )
+    grid_dense = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        **common,
+        output_when="saveat",
+        saveat=dense_saveat,
+        parallel=False,
+    )
+    grid_final = grid_scan(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        scan=scan,
+        **common,
+        output_when="final",
+        saveat=None,
+        dense_output=False,
+        parallel=False,
+    )
+    np.testing.assert_allclose(grid_sparse.values[:, -1], grid_final.values, rtol=1e-7)
+    np.testing.assert_allclose(grid_dense.values[:, -1], grid_final.values, rtol=1e-7)
+
+    sampled = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        **common,
+        output_when="saveat",
+        saveat=sparse_saveat,
+        integral_method="sampled",
+    )
+    rate = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        **{**common, "output": "photon_rate"},
+        output_when="saveat",
+        saveat=sparse_saveat,
+    )
+    sampled_expected = np.trapezoid(rate.values[:, 0], x=sparse_saveat)
+    np.testing.assert_allclose(sampled.values[-1, 0], sampled_expected, rtol=1e-12)
+
+
 def test_grid_integral_trace_shape_and_rate_validation() -> None:
     system = _make_two_level_system()
     omega = str(system.coupling_symbols[0])

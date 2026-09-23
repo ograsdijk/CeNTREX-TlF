@@ -1,8 +1,40 @@
 use num_complex::Complex64;
 
 pub trait OdeOutput: Send {
+    fn initialize(&mut self, _t: f64, _y: &[f64]) {}
     fn push(&mut self, t: f64, y: &[f64]);
+    fn push_solver_integral_interpolated(
+        &mut self,
+        t: f64,
+        _y0: &[f64],
+        y1: &[f64],
+        _h: f64,
+        _theta: f64,
+    ) {
+        self.push(t, y1);
+    }
     fn times(&self) -> &[f64];
+    fn solver_integral_weights(&self) -> Option<&[(usize, f64)]> {
+        None
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntegralMethod {
+    Solver,
+    Sampled,
+}
+
+impl IntegralMethod {
+    pub fn from_str(value: &str) -> Result<Self, String> {
+        match value {
+            "solver" => Ok(Self::Solver),
+            "sampled" => Ok(Self::Sampled),
+            other => Err(format!(
+                "integral_method must be 'solver' or 'sampled', got {other:?}"
+            )),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -258,14 +290,20 @@ pub struct WeightedIntegralOutput {
     times: Vec<f64>,
     values: Vec<f64>,
     store_trace: bool,
+    method: IntegralMethod,
 }
 
 impl WeightedIntegralOutput {
     pub fn new(weights: Vec<(usize, f64)>) -> Self {
-        Self::new_with_trace(weights, false, 1)
+        Self::new_with_trace(weights, false, 1, IntegralMethod::Solver)
     }
 
-    pub fn new_with_trace(weights: Vec<(usize, f64)>, store_trace: bool, capacity: usize) -> Self {
+    pub fn new_with_trace(
+        weights: Vec<(usize, f64)>,
+        store_trace: bool,
+        capacity: usize,
+        method: IntegralMethod,
+    ) -> Self {
         Self {
             weights,
             integral: 0.0,
@@ -274,6 +312,7 @@ impl WeightedIntegralOutput {
             times: Vec::with_capacity(if store_trace { capacity } else { 1 }),
             values: Vec::with_capacity(if store_trace { capacity } else { 1 }),
             store_trace,
+            method,
         }
     }
 
@@ -312,13 +351,24 @@ impl WeightedIntegralOutput {
 }
 
 impl OdeOutput for WeightedIntegralOutput {
-    fn push(&mut self, t: f64, y: &[f64]) {
-        let value: f64 = self.weights.iter().map(|&(i, w)| w * y[i]).sum();
-        if self.last_t.is_finite() {
-            self.integral += 0.5 * (self.last_value + value) * (t - self.last_t);
+    fn initialize(&mut self, t: f64, y: &[f64]) {
+        if self.method == IntegralMethod::Sampled {
+            self.last_t = t;
+            self.last_value = self.weights.iter().map(|&(i, w)| w * y[i]).sum();
         }
-        self.last_t = t;
-        self.last_value = value;
+    }
+
+    fn push(&mut self, t: f64, y: &[f64]) {
+        if self.method == IntegralMethod::Solver {
+            self.integral = *y.last().expect("solver integral state is appended");
+        } else {
+            let value: f64 = self.weights.iter().map(|&(i, w)| w * y[i]).sum();
+            if self.last_t.is_finite() {
+                self.integral += 0.5 * (self.last_value + value) * (t - self.last_t);
+            }
+            self.last_t = t;
+            self.last_value = value;
+        }
         if self.store_trace {
             self.times.push(t);
             self.values.push(self.integral);
@@ -331,6 +381,38 @@ impl OdeOutput for WeightedIntegralOutput {
 
     fn times(&self) -> &[f64] {
         &self.times
+    }
+
+    fn solver_integral_weights(&self) -> Option<&[(usize, f64)]> {
+        (self.method == IntegralMethod::Solver).then_some(&self.weights)
+    }
+
+    fn push_solver_integral_interpolated(
+        &mut self,
+        t: f64,
+        y0: &[f64],
+        y1: &[f64],
+        h: f64,
+        theta: f64,
+    ) {
+        let theta2 = theta * theta;
+        let theta3 = theta2 * theta;
+        let h00 = 2.0 * theta3 - 3.0 * theta2 + 1.0;
+        let h10 = theta3 - 2.0 * theta2 + theta;
+        let h01 = -2.0 * theta3 + 3.0 * theta2;
+        let h11 = theta3 - theta2;
+        let rate0: f64 = self.weights.iter().map(|&(i, w)| w * y0[i]).sum();
+        let rate1: f64 = self.weights.iter().map(|&(i, w)| w * y1[i]).sum();
+        self.integral =
+            h00 * y0[y0.len() - 1] + h10 * h * rate0 + h01 * y1[y1.len() - 1] + h11 * h * rate1;
+        if self.store_trace {
+            self.times.push(t);
+            self.values.push(self.integral);
+        } else if self.times.is_empty() {
+            self.times.push(t);
+        } else {
+            self.times[0] = t;
+        }
     }
 }
 

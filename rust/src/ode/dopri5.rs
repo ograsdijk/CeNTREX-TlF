@@ -85,9 +85,18 @@ fn fill_solution(y: &[f64], h: f64, k: &[f64], dim: usize, out: &mut [f64]) {
     }
 }
 
-fn error_norm(y: &[f64], yn: &[f64], h: f64, k: &[f64], dim: usize, atol: f64, rtol: f64) -> f64 {
+fn error_norm(
+    y: &[f64],
+    yn: &[f64],
+    h: f64,
+    k: &[f64],
+    dim: usize,
+    control_dim: usize,
+    atol: f64,
+    rtol: f64,
+) -> f64 {
     let mut err = 0.0;
-    for i in 0..y.len() {
+    for i in 0..control_dim {
         let sc = atol + y[i].abs().max(yn[i].abs()) * rtol;
         let ei = h
             * (E1 * k[i]
@@ -98,7 +107,7 @@ fn error_norm(y: &[f64], yn: &[f64], h: f64, k: &[f64], dim: usize, atol: f64, r
                 + E7 * k[6 * dim + i]);
         err += (ei / sc) * (ei / sc);
     }
-    (err / y.len() as f64).sqrt()
+    (err / control_dim as f64).sqrt()
 }
 
 fn fill_dense_rcont4(h: f64, k: &[f64], out: &mut [f64]) {
@@ -166,6 +175,7 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
     output: &mut O,
 ) -> Result<OdeStats, String> {
     let dim = rhs.dim();
+    let control_dim = rhs.error_control_dim().min(dim);
     if y0.len() != dim {
         return Err(format!("expected {dim}, got {}", y0.len()));
     }
@@ -248,14 +258,14 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
         fill_solution(&y, h, &k, dim, &mut yn);
         rhs.eval(x + h * C7, &yn, &mut k[6 * dim..7 * dim])?;
         st.rhs_calls += 6;
-        let err = error_norm(&y, &yn, h, &k, dim, opt.abstol, opt.reltol);
+        let err = error_norm(&y, &yn, h, &k, dim, control_dim, opt.abstol, opt.reltol);
         let (acc, hn) = ctrl.accept(err, h);
         if acc {
             st.accepted_steps += 1;
             if st.accepted_steps % 1000 == 0 || ia > 0 {
                 let mut n2 = 0.0;
                 let mut d2 = 0.0;
-                for i in 0..dim {
+                for i in 0..control_dim {
                     let dk = k[6 * dim + i] - k[5 * dim + i];
                     let dy = yn[i] - ys[i];
                     n2 += dk * dk;

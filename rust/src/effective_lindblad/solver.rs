@@ -87,13 +87,21 @@ pub fn solve_effective_lindblad(
 ) -> Result<OdeOutputResult, String> {
     let mut rhs = EffectiveLindbladRhs::new(plan);
     let solver = OdeSolver::from_str(&options.solver)?;
+    let integral_output = matches!(
+        output_mode,
+        "weighted_integral" | "photon_integral" | "excited_population"
+    );
     let ode_options = OdeOptions {
         abstol: options.abstol,
         reltol: options.reltol,
         dt: options.dt,
         maxiters: options.maxiters,
         save_start: options.save_start,
-        saveat: options.saveat.clone(),
+        saveat: if integral_output {
+            Some(vec![t1])
+        } else {
+            options.saveat.clone()
+        },
     };
     let capacity = options
         .saveat
@@ -170,13 +178,21 @@ pub fn solve_effective_lindblad_batch(
     }
 
     let solver = OdeSolver::from_str(&options.solver)?;
+    let integral_output = matches!(
+        output_mode,
+        "weighted_integral" | "photon_integral" | "excited_population"
+    );
     let ode_options = OdeOptions {
         abstol: options.abstol,
         reltol: options.reltol,
         dt: options.dt,
         maxiters: options.maxiters,
         save_start: options.save_start,
-        saveat: options.saveat.clone(),
+        saveat: if integral_output {
+            Some(vec![t1])
+        } else {
+            options.saveat.clone()
+        },
     };
     let capacity = options.saveat.as_ref().map_or(1, |s| s.len() + 1);
 

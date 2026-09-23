@@ -81,11 +81,12 @@ pub fn hinit<R: OdeRhs>(
     y_tmp: &mut [f64],
 ) -> Result<f64, String> {
     rhs.eval(x, y, f0)?;
+    let control_dim = rhs.error_control_dim().min(y.len());
     let posneg = sign(1.0, x_end - x);
     let h_max = (x_end - x).abs();
     let mut d0 = 0.0;
     let mut d1 = 0.0;
-    for i in 0..y.len() {
+    for i in 0..control_dim {
         let sci = abstol + y[i].abs() * reltol;
         d0 += (y[i] / sci) * (y[i] / sci);
         d1 += (f0[i] / sci) * (f0[i] / sci);
@@ -104,7 +105,7 @@ pub fn hinit<R: OdeRhs>(
     rhs.eval(x + h0, y_tmp, f1)?;
 
     let mut d2 = 0.0;
-    for i in 0..y.len() {
+    for i in 0..control_dim {
         let sci = abstol + y[i].abs() * reltol;
         d2 += ((f1[i] - f0[i]) / sci) * ((f1[i] - f0[i]) / sci);
     }

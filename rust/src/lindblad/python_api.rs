@@ -7,8 +7,8 @@ use crate::lindblad::rhs::{
 };
 use crate::ode::batch::{solve_single, OdeSolver};
 use crate::ode::output::{
-    FullOutput, OdeOutputValues, PopulationsOutput, SelectedExtraction, SelectedOutput,
-    WeightedIntegralOutput, WeightedRateOutput,
+    FullOutput, IntegralMethod, OdeOutputValues, PopulationsOutput, SelectedExtraction,
+    SelectedOutput, WeightedIntegralOutput, WeightedRateOutput,
 };
 use num_complex::Complex64;
 use numpy::{
@@ -419,7 +419,7 @@ fn parse_stop_event(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<LindbladS
     }
 }
 
-#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat", integral_weights = None, stop_event = None, use_split_input_rhs = true))]
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat", integral_weights = None, stop_event = None, use_split_input_rhs = true, integral_method = "solver"))]
 pub fn solve_lindblad_ode_py<'py>(
     py: Python<'py>,
     plan: PyRef<'py, PreparedLindbladPlan>,
@@ -440,15 +440,36 @@ pub fn solve_lindblad_ode_py<'py>(
     integral_weights: Option<Vec<(usize, f64)>>,
     stop_event: Option<&Bound<'py, PyAny>>,
     use_split_input_rhs: bool,
+    integral_method: &str,
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Py<PyAny>, usize, Py<PyDict>)> {
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
+    let integral_method =
+        IntegralMethod::from_str(integral_method).map_err(PyValueError::new_err)?;
     let n = plan.layout.n;
     let dim = plan.layout.packed_len();
     let saveat_vec = saveat
         .map(|a| a.as_slice().map(|s| s.to_vec()))
         .transpose()
         .map_err(PyValueError::new_err)?;
+    let integral_output = matches!(
+        output,
+        "weighted_integral" | "photon_integral" | "excited_population"
+    );
+    let saveat_vec = if output_when == "final" && integral_output {
+        if integral_method == IntegralMethod::Solver {
+            Some(vec![t1])
+        } else {
+            saveat_vec.map(|mut times| {
+                if !times.iter().any(|&time| time == t1) {
+                    times.push(t1);
+                }
+                times
+            })
+        }
+    } else {
+        saveat_vec
+    };
     let capacity = saveat_vec.as_ref().map_or(maxiters + 1, |s| s.len() + 1);
     let y0 = packed_rho0.as_slice().map_err(PyValueError::new_err)?;
     let options = crate::ode::OdeOptions {
@@ -485,8 +506,12 @@ pub fn solve_lindblad_ode_py<'py>(
             let weights = integral_weights.ok_or_else(|| {
                 PyValueError::new_err(format!("output='{output}' requires integral_weights"))
             })?;
-            let mut out =
-                WeightedIntegralOutput::new_with_trace(weights, output_when == "saveat", capacity);
+            let mut out = WeightedIntegralOutput::new_with_trace(
+                weights,
+                output_when == "saveat",
+                capacity,
+                integral_method,
+            );
             let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
                 .map_err(PyValueError::new_err)?;
             (out.finish(), s)
@@ -527,7 +552,7 @@ pub fn solve_lindblad_ode_py<'py>(
     Ok((times_array, values, r.width, d.unbind()))
 }
 
-#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None, stop_event = None, use_split_input_rhs = true))]
+#[pyfunction(signature = (plan, packed_rho0_batch, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parameter_slot_indices = None, parameter_batch = None, parallel = true, threads = None, stop_event = None, use_split_input_rhs = true, integral_method = "solver"))]
 #[allow(clippy::too_many_arguments)]
 pub fn solve_lindblad_batch_ode_py<'py>(
     py: Python<'py>,
@@ -553,6 +578,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     threads: Option<usize>,
     stop_event: Option<&Bound<'py, PyAny>>,
     use_split_input_rhs: bool,
+    integral_method: &str,
 ) -> PyResult<(
     Bound<'py, PyArray1<f64>>,
     Py<PyAny>,
@@ -566,6 +592,8 @@ pub fn solve_lindblad_batch_ode_py<'py>(
         use_split_input_rhs,
     };
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
+    let integral_method =
+        IntegralMethod::from_str(integral_method).map_err(PyValueError::new_err)?;
     let rho0_shape = packed_rho0_batch.shape();
     if rho0_shape.len() != 2 {
         return Err(PyValueError::new_err("packed_rho0_batch must be 2D"));
@@ -591,7 +619,15 @@ pub fn solve_lindblad_batch_ode_py<'py>(
             output,
             "weighted_integral" | "photon_integral" | "excited_population"
         );
-    if output_when == "final" && !final_integral {
+    if output_when == "final" && final_integral {
+        if integral_method == IntegralMethod::Solver {
+            saveat_vec = Some(vec![t1]);
+        } else if let Some(times) = &mut saveat_vec {
+            if !times.iter().any(|&time| time == t1) {
+                times.push(t1);
+            }
+        }
+    } else if output_when == "final" {
         saveat_vec = Some(vec![t1]);
     }
     let slot_indices = parameter_slot_indices.unwrap_or_default();
@@ -612,7 +648,9 @@ pub fn solve_lindblad_batch_ode_py<'py>(
         reltol,
         dt,
         maxiters,
-        save_start: (output_when != "final" || final_integral) && save_start,
+        save_start: (output_when != "final"
+            || (final_integral && integral_method == IntegralMethod::Sampled))
+            && save_start,
         saveat: saveat_vec,
     };
     let result = py
@@ -631,6 +669,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
                 output_when,
                 output_indices.as_deref(),
                 integral_weights.as_deref(),
+                integral_method,
                 &slot_indices,
                 param_values.as_deref(),
                 event,
@@ -668,7 +707,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     Ok((times, values, result.width, result.time_count, d.unbind()))
 }
 
-#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parallel = true, threads = None, stop_event = None, use_split_input_rhs = true))]
+#[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, parameter_slot_indices, parameter_axes, parameter_axis_lengths, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "populations", output_indices = None, output_when = "final", integral_weights = None, parallel = true, threads = None, stop_event = None, use_split_input_rhs = true, integral_method = "solver"))]
 #[allow(clippy::too_many_arguments)]
 pub fn solve_lindblad_grid_ode_py<'py>(
     py: Python<'py>,
@@ -695,6 +734,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
     threads: Option<usize>,
     stop_event: Option<&Bound<'py, PyAny>>,
     use_split_input_rhs: bool,
+    integral_method: &str,
 ) -> PyResult<(
     Bound<'py, PyArray1<f64>>,
     Py<PyAny>,
@@ -708,6 +748,8 @@ pub fn solve_lindblad_grid_ode_py<'py>(
         use_split_input_rhs,
     };
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
+    let integral_method =
+        IntegralMethod::from_str(integral_method).map_err(PyValueError::new_err)?;
     let y0 = packed_rho0
         .as_slice()
         .map_err(PyValueError::new_err)?
@@ -725,7 +767,15 @@ pub fn solve_lindblad_grid_ode_py<'py>(
             output,
             "weighted_integral" | "photon_integral" | "excited_population"
         );
-    if output_when == "final" && !final_integral {
+    if output_when == "final" && final_integral {
+        if integral_method == IntegralMethod::Solver {
+            saveat_vec = Some(vec![t1]);
+        } else if let Some(times) = &mut saveat_vec {
+            if !times.iter().any(|&time| time == t1) {
+                times.push(t1);
+            }
+        }
+    } else if output_when == "final" {
         saveat_vec = Some(vec![t1]);
     }
     let mut axis_offsets = Vec::with_capacity(parameter_axis_lengths.len());
@@ -741,7 +791,9 @@ pub fn solve_lindblad_grid_ode_py<'py>(
         reltol,
         dt,
         maxiters,
-        save_start: (output_when != "final" || final_integral) && save_start,
+        save_start: (output_when != "final"
+            || (final_integral && integral_method == IntegralMethod::Sampled))
+            && save_start,
         saveat: saveat_vec,
     };
     let result = py
@@ -759,6 +811,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
                 output_when,
                 output_indices.as_deref(),
                 integral_weights.as_deref(),
+                integral_method,
                 &parameter_slot_indices,
                 &axes,
                 &axis_offsets,
