@@ -1,0 +1,2 @@
+system,kind,parameter_count,initial_count,accepted_steps,rejected_steps,controlling_trajectory,controlling_fraction,distinct_controllers,min_dt,median_dt,max_dt,controller_counts
+q1_velocity_envelope,velocity_dynamic,8,1,1794,19,0,0.4815223386651958,5,1e-10,2.4716754271708158e-08,5e-08,"[873, 0, 0, 0, 22, 657, 140, 121]"

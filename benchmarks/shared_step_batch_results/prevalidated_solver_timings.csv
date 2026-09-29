@@ -1,0 +1,4 @@
+system,kind,parameter_count,initial_count,trajectories,repeat,method,threads,output,save_count,seconds,accepted_steps,rejected_steps,rhs_calls,trajectories_per_second
+q1_velocity_envelope,velocity_dynamic,8,1,8,0,independent_serial,1,photon_integral,1,0.05715130013413727,4458,93,27314,139.97931772721805
+q1_velocity_envelope,velocity_dynamic,8,1,8,0,independent_rayon,4,photon_integral,1,0.015932700131088495,4458,93,27314,502.1120045051305
+q1_velocity_envelope,velocity_dynamic,8,1,8,0,shared_serial,1,photon_integral,1,0.14466980006545782,1794,19,10879,55.29834143947314
