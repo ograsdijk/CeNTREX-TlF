@@ -1,0 +1,65 @@
+{
+  "name": "q1_velocity_envelope",
+  "rabi_slot": "omega_peak",
+  "detuning_slot": "\u03b40",
+  "rabi": 1609029.8488844754,
+  "span": [
+    0.0,
+    5e-05
+  ],
+  "dt": 1e-10,
+  "gamma": 10101010.1010101,
+  "weights": [
+    [
+      15,
+      10101010.1010101
+    ],
+    [
+      16,
+      10101010.1010101
+    ]
+  ],
+  "n": 17,
+  "transition": "Q(1) F1'=1/2 F'=0",
+  "E": [
+    0.0,
+    0.0,
+    200.0
+  ],
+  "B": [
+    0.0,
+    0.0,
+    1e-05
+  ],
+  "polarization": "X",
+  "retained": true,
+  "velocity": 184.0,
+  "velocity_sigma": 1.4,
+  "forward_velocity_sigma": 18.400000000000002,
+  "field_envelope": "Gaussian along z=-5 mm+v*t; center=2 mm; sigma=0.2 mm",
+  "detuning_range": [
+    -80.0,
+    80.0
+  ],
+  "packed_dim": 289,
+  "population_basis_states": [
+    4,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "reltol": 1e-07,
+  "abstol": 1e-09,
+  "solver": "dopri5",
+  "output": "photon_integral",
+  "save_points": 0,
+  "maximum_step": 2e-07
+}

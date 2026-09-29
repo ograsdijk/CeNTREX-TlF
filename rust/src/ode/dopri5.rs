@@ -215,6 +215,13 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
         )?
     };
     let mut ctrl = Controller::new(t0, t1);
+    if let Some(limit) = rhs.maximum_step() {
+        if !limit.is_finite() || limit <= 0.0 {
+            return Err("maximum_step must be finite and positive".into());
+        }
+        ctrl.h_max = ctrl.h_max.min(limit);
+        h = h.min(limit);
+    }
     let pn = sign(1.0, t1 - t0);
     rhs.eval(x, &y, &mut k[..dim])?;
     st.rhs_calls += 1;
@@ -258,7 +265,8 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
         fill_solution(&y, h, &k, dim, &mut yn);
         rhs.eval(x + h * C7, &yn, &mut k[6 * dim..7 * dim])?;
         st.rhs_calls += 6;
-        let err = error_norm(&y, &yn, h, &k, dim, control_dim, opt.abstol, opt.reltol);
+        let err = rhs.adaptive_error_norm(&y, &yn, h, &k, dim, opt.abstol, opt.reltol)
+            .unwrap_or_else(|| error_norm(&y, &yn, h, &k, dim, control_dim, opt.abstol, opt.reltol));
         let (acc, hn) = ctrl.accept(err, h);
         if acc {
             st.accepted_steps += 1;

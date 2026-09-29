@@ -1,0 +1,41 @@
+{
+  "name": "two_level",
+  "rabi_slot": "Omega",
+  "detuning_slot": "delta",
+  "rabi": 0.8,
+  "span": [
+    0.0,
+    0.8
+  ],
+  "dt": 0.001,
+  "gamma": 0.3,
+  "weights": [
+    [
+      1,
+      0.3
+    ]
+  ],
+  "n": 2,
+  "transition": "synthetic",
+  "E": null,
+  "B": null,
+  "polarization": "synthetic",
+  "retained": false,
+  "velocity": 184.0,
+  "velocity_sigma": 1.4,
+  "detuning_range": [
+    -2.0,
+    2.0
+  ],
+  "packed_dim": 4,
+  "population_basis_states": [
+    0,
+    1
+  ],
+  "reltol": 1e-07,
+  "abstol": 1e-09,
+  "solver": "dopri5",
+  "output": "photon_integral",
+  "save_points": 0,
+  "maximum_step": null
+}

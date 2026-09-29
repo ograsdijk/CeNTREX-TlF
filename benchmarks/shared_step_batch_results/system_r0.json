@@ -1,0 +1,67 @@
+{
+  "name": "r0",
+  "rabi_slot": "\u03a90",
+  "detuning_slot": "\u03b40",
+  "rabi": 9801769.079200154,
+  "span": [
+    0.0,
+    1e-05
+  ],
+  "dt": 1e-10,
+  "gamma": 9801769.079200154,
+  "weights": [
+    [
+      60,
+      9801769.079200154
+    ],
+    [
+      61,
+      9801769.079200154
+    ],
+    [
+      62,
+      9801769.079200154
+    ],
+    [
+      63,
+      9801769.079200154
+    ],
+    [
+      64,
+      9801769.079200154
+    ]
+  ],
+  "n": 65,
+  "transition": "R0_F1_3o2_F2",
+  "E": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "B": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "polarization": "Z",
+  "retained": false,
+  "velocity": 184.0,
+  "velocity_sigma": 1.4,
+  "detuning_range": [
+    -30.0,
+    30.0
+  ],
+  "packed_dim": 4225,
+  "population_basis_states": [
+    1,
+    2,
+    3,
+    0
+  ],
+  "reltol": 1e-07,
+  "abstol": 1e-09,
+  "solver": "dopri5",
+  "output": "photon_integral",
+  "save_points": 0,
+  "maximum_step": null
+}

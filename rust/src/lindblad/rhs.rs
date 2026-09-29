@@ -2191,6 +2191,205 @@ pub fn rhs_packed_into_with_profile(
     Ok(())
 }
 
+/// Benchmark-only batched expanded-sparse evaluator. Parameters are flattened,
+/// and each parameter point owns `initial_count` complete packed density matrices.
+/// The compiled topology is shared; coefficients are evaluated once per point
+/// and RK stage, then each output row traverses its terms across initial states.
+pub struct ExperimentalBatchRhs<'a> {
+    plan: &'a PreparedLindbladPlan,
+    workspaces: Vec<RhsWorkspace>,
+    initial_count: usize,
+}
+
+impl<'a> ExperimentalBatchRhs<'a> {
+    pub fn new(
+        plan: &'a PreparedLindbladPlan,
+        parameter_count: usize,
+        initial_count: usize,
+        parameter_slots: &[usize],
+        parameter_values: &[Complex64],
+    ) -> Result<Self, String> {
+        if parameter_count == 0 || initial_count == 0 {
+            return Err("batch dimensions must be positive".into());
+        }
+        if parameter_values.len() != parameter_count * parameter_slots.len() {
+            return Err("parameter value dimensions do not match".into());
+        }
+        if plan.expanded_rhs_plan.is_none() {
+            return Err("experimental batch requires a decomposed expanded-sparse plan".into());
+        }
+        let mut workspaces = Vec::with_capacity(parameter_count);
+        for point in 0..parameter_count {
+            let mut workspace = RhsWorkspace::new(plan);
+            let start = point * parameter_slots.len();
+            workspace.set_scalar_parameter_overrides(
+                parameter_slots,
+                &parameter_values[start..start + parameter_slots.len()],
+            )?;
+            workspaces.push(workspace);
+        }
+        Ok(Self { plan, workspaces, initial_count })
+    }
+
+    pub fn eval(&mut self, t: f64, state: &[f64], out: &mut [f64]) -> Result<(), String> {
+        let dim = self.plan.layout.packed_len();
+        let group_len = dim * self.initial_count;
+        if state.len() != self.workspaces.len() * group_len || out.len() != state.len() {
+            return Err("experimental batch state dimension mismatch".into());
+        }
+        let rhs_plan = self.plan.expanded_rhs_plan.as_ref().unwrap();
+        for (point, workspace) in self.workspaces.iter_mut().enumerate() {
+            let base = point * group_len;
+            if self.plan.n_states() <= PARTITIONED_PACKED_MAX_STATES {
+                rhs_packed_expanded_sparse_into_with_profile(
+                    self.plan, &state[base..base + dim], t,
+                    RhsOptions::default(), workspace, &mut out[base..base + dim], None,
+                )?;
+                if self.initial_count > 1 {
+                    let inputs = &workspace.partitioned_expanded_packed_inputs;
+                    let upper = &workspace.upper_to_packed;
+                    let mut ar = vec![0.0; self.initial_count - 1];
+                    let mut ai = vec![0.0; self.initial_count - 1];
+                    for output_index in 0..upper.len() {
+                        ar.fill(0.0);
+                        ai.fill(0.0);
+                        for term in &inputs.static_real_terms[inputs.static_real_ptrs[output_index]..inputs.static_real_ptrs[output_index + 1]] {
+                            for initial in 1..self.initial_count {
+                                let x = state[base + initial * dim + term.re];
+                                ar[initial - 1] += term.coefficient_re * x;
+                                ai[initial - 1] += term.coefficient_im * x;
+                            }
+                        }
+                        for term in &inputs.static_complex_terms[inputs.static_complex_ptrs[output_index]..inputs.static_complex_ptrs[output_index + 1]] {
+                            for initial in 1..self.initial_count {
+                                let offset = base + initial * dim;
+                                let re = state[offset + term.re];
+                                let im = term.imag_sign * state[offset + term.im];
+                                ar[initial - 1] += term.coefficient_re * re - term.coefficient_im * im;
+                                ai[initial - 1] += term.coefficient_re * im + term.coefficient_im * re;
+                            }
+                        }
+                        for term in &inputs.dynamic_real_terms[inputs.dynamic_real_ptrs[output_index]..inputs.dynamic_real_ptrs[output_index + 1]] {
+                            for initial in 1..self.initial_count {
+                                let x = state[base + initial * dim + term.re];
+                                ar[initial - 1] += workspace.expanded_term_values_re[term.term_index] * x;
+                                ai[initial - 1] += workspace.expanded_term_values_im[term.term_index] * x;
+                            }
+                        }
+                        for term in &inputs.dynamic_complex_terms[inputs.dynamic_complex_ptrs[output_index]..inputs.dynamic_complex_ptrs[output_index + 1]] {
+                            for initial in 1..self.initial_count {
+                                let offset = base + initial * dim;
+                                let re = state[offset + term.re];
+                                let im = term.imag_sign * state[offset + term.im];
+                                let cr = workspace.expanded_term_values_re[term.term_index];
+                                let ci = workspace.expanded_term_values_im[term.term_index];
+                                ar[initial - 1] += cr * re - ci * im;
+                                ai[initial - 1] += cr * im + ci * re;
+                            }
+                        }
+                        for initial in 1..self.initial_count {
+                            write_packed_upper_parts(
+                                &mut out[base + initial * dim..base + (initial + 1) * dim],
+                                upper, output_index, ar[initial - 1], ai[initial - 1],
+                            );
+                        }
+                    }
+                }
+                continue;
+            }
+            // Use the existing coefficient/parameter-graph path for every stage.
+            rhs_packed_expanded_sparse_current_into_with_profile(
+                self.plan,
+                &state[base..base + dim],
+                t,
+                RhsOptions::default(),
+                workspace,
+                &mut out[base..base + dim],
+                None,
+            )?;
+            if self.initial_count == 1 { continue; }
+            let inputs = &workspace.grouped_expanded_packed_inputs;
+            let cr = &workspace.expanded_term_values_re;
+            let ci = &workspace.expanded_term_values_im;
+            let upper = &workspace.upper_to_packed;
+            let mut acc_re = vec![0.0; self.initial_count - 1];
+            let mut acc_im = vec![0.0; self.initial_count - 1];
+            for output_index in 0..upper.len() {
+                acc_re.fill(0.0);
+                acc_im.fill(0.0);
+                for term in &inputs.real_terms[inputs.real_ptrs[output_index]..inputs.real_ptrs[output_index + 1]] {
+                    for initial in 1..self.initial_count {
+                        let x = state[base + initial * dim + term.re];
+                        acc_re[initial - 1] += cr[term.term_index] * x;
+                        acc_im[initial - 1] += ci[term.term_index] * x;
+                    }
+                }
+                for term in &inputs.complex_terms[inputs.complex_ptrs[output_index]..inputs.complex_ptrs[output_index + 1]] {
+                    for initial in 1..self.initial_count {
+                        let offset = base + initial * dim;
+                        let re = state[offset + term.re];
+                        let im = term.imag_sign * state[offset + term.im];
+                        acc_re[initial - 1] += cr[term.term_index] * re - ci[term.term_index] * im;
+                        acc_im[initial - 1] += cr[term.term_index] * im + ci[term.term_index] * re;
+                    }
+                }
+                for initial in 1..self.initial_count {
+                    write_packed_upper_parts(
+                        &mut out[base + initial * dim..base + (initial + 1) * dim],
+                        upper,
+                        output_index,
+                        acc_re[initial - 1],
+                        acc_im[initial - 1],
+                    );
+                }
+            }
+            debug_assert_eq!(rhs_plan.output_ptrs.len(), upper.len() + 1);
+        }
+        Ok(())
+    }
+
+    /// RHS-only layout comparison for static systems. Coefficients must first
+    /// be populated by `eval`; this measures sparse traversal without transposes.
+    pub fn eval_state_major_cached(&self, state: &[f64], out: &mut [f64]) -> Result<(), String> {
+        if self.plan.n_states() <= PARTITIONED_PACKED_MAX_STATES {
+            return Err("state-major microbenchmark requires the grouped (>40-state) plan".into());
+        }
+        let dim = self.plan.layout.packed_len();
+        let batch = self.workspaces.len() * self.initial_count;
+        if state.len() != dim * batch || out.len() != state.len() {
+            return Err("state-major dimensions do not match".into());
+        }
+        for (point, workspace) in self.workspaces.iter().enumerate() {
+            let inputs = &workspace.grouped_expanded_packed_inputs;
+            let cr = &workspace.expanded_term_values_re;
+            let ci = &workspace.expanded_term_values_im;
+            for (output_index, target) in workspace.upper_to_packed.iter().enumerate() {
+                for initial in 0..self.initial_count {
+                    let column = point * self.initial_count + initial;
+                    let mut re = 0.0;
+                    let mut im = 0.0;
+                    for term in &inputs.real_terms[inputs.real_ptrs[output_index]..inputs.real_ptrs[output_index + 1]] {
+                        let x = state[term.re * batch + column];
+                        re += cr[term.term_index] * x;
+                        im += ci[term.term_index] * x;
+                    }
+                    for term in &inputs.complex_terms[inputs.complex_ptrs[output_index]..inputs.complex_ptrs[output_index + 1]] {
+                        let xr = state[term.re * batch + column];
+                        let xi = term.imag_sign * state[term.im * batch + column];
+                        re += cr[term.term_index] * xr - ci[term.term_index] * xi;
+                        im += cr[term.term_index] * xi + ci[term.term_index] * xr;
+                    }
+                    out[target.re * batch + column] = re;
+                    if target.im != NO_PACKED_IMAG_INDEX {
+                        out[target.im * batch + column] = im;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn rhs_packed_into(
     plan: &PreparedLindbladPlan,
     packed_state: &[f64],

@@ -19,6 +19,163 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyAnyMethods, PyDict, PyDictMethods};
 use std::cell::{Cell, RefCell};
 
+#[pyfunction(signature = (plan, packed_batch, parameter_slot_indices, parameter_values, t, repeats = 100))]
+pub fn benchmark_shared_rhs_layout_py<'py>(
+    py: Python<'py>, plan: PyRef<'py, PreparedLindbladPlan>,
+    packed_batch: numpy::PyReadonlyArray3<'py, f64>,
+    parameter_slot_indices: Vec<usize>,
+    parameter_values: PyReadonlyArray2<'py, Complex64>,
+    t: f64, repeats: usize,
+) -> PyResult<(f64, f64, f64, f64)> {
+    use crate::lindblad::rhs::ExperimentalBatchRhs;
+    use std::time::Instant;
+    let shape = packed_batch.shape();
+    let parameter_count = shape[0];
+    let initial_count = shape[1];
+    let dim = shape[2];
+    let batch = parameter_count * initial_count;
+    let y = packed_batch.as_slice().map_err(PyValueError::new_err)?.to_vec();
+    let values = parameter_values.as_slice().map_err(PyValueError::new_err)?.to_vec();
+    let plan = plan.clone();
+    py.detach(move || -> Result<_, String> {
+        let mut kernel = ExperimentalBatchRhs::new(&plan, parameter_count, initial_count,
+            &parameter_slot_indices, &values)?;
+        let mut row_out = vec![0.; y.len()];
+        kernel.eval(t, &y, &mut row_out)?;
+        let mut column_state = vec![0.; y.len()];
+        let mut column_out = vec![0.; y.len()];
+        let conversion_start = Instant::now();
+        for index in 0..dim {
+            for trajectory in 0..batch {
+                column_state[index * batch + trajectory] = y[trajectory * dim + index];
+            }
+        }
+        let conversion_seconds = conversion_start.elapsed().as_secs_f64();
+        kernel.eval_state_major_cached(&column_state, &mut column_out)?;
+        let difference = (0..dim).flat_map(|index| (0..batch).map(move |trajectory| (index, trajectory)))
+            .map(|(index, trajectory)| (row_out[trajectory * dim + index] - column_out[index * batch + trajectory]).abs())
+            .fold(0., f64::max);
+        let start = Instant::now();
+        for _ in 0..repeats { kernel.eval(t, &y, &mut row_out)?; }
+        let row_seconds = start.elapsed().as_secs_f64();
+        let start = Instant::now();
+        for _ in 0..repeats { kernel.eval_state_major_cached(&column_state, &mut column_out)?; }
+        Ok((row_seconds, start.elapsed().as_secs_f64(), conversion_seconds, difference))
+    }).map_err(PyValueError::new_err)
+}
+
+/// RHS-only benchmark. Both variants run in Rust and return timing plus a
+/// numerical checksum; no Python call overhead is included in the timings.
+#[pyfunction(signature = (plan, packed_batch, parameter_slot_indices, parameter_values, t, repeats = 100))]
+pub fn benchmark_shared_rhs_experiment_py<'py>(
+    py: Python<'py>,
+    plan: PyRef<'py, PreparedLindbladPlan>,
+    packed_batch: numpy::PyReadonlyArray3<'py, f64>,
+    parameter_slot_indices: Vec<usize>,
+    parameter_values: PyReadonlyArray2<'py, Complex64>,
+    t: f64,
+    repeats: usize,
+) -> PyResult<(f64, f64, f64)> {
+    use crate::lindblad::rhs::ExperimentalBatchRhs;
+    use std::time::Instant;
+    let shape = packed_batch.shape();
+    let pshape = parameter_values.shape();
+    if shape[2] != plan.layout.packed_len() || pshape != [shape[0], parameter_slot_indices.len()] {
+        return Err(PyValueError::new_err("experimental RHS batch shape mismatch"));
+    }
+    let y = packed_batch.as_slice().map_err(PyValueError::new_err)?.to_vec();
+    let values = parameter_values.as_slice().map_err(PyValueError::new_err)?.to_vec();
+    let plan = plan.clone();
+    let (independent_seconds, batched_seconds, max_difference) = py.detach(move || -> Result<_, String> {
+        let dim = plan.layout.packed_len();
+        let mut independent_workspaces = Vec::new();
+        for point in 0..shape[0] {
+            for _ in 0..shape[1] {
+                let mut workspace = RhsWorkspace::new(&plan);
+                let start = point * parameter_slot_indices.len();
+                workspace.set_scalar_parameter_overrides(&parameter_slot_indices,
+                    &values[start..start + parameter_slot_indices.len()])?;
+                independent_workspaces.push(workspace);
+            }
+        }
+        let mut batch = ExperimentalBatchRhs::new(&plan, shape[0], shape[1],
+            &parameter_slot_indices, &values)?;
+        let mut a = vec![0.; y.len()];
+        let mut b = vec![0.; y.len()];
+        // Warm both coefficient caches.
+        for (trajectory, workspace) in independent_workspaces.iter_mut().enumerate() {
+            rhs_packed_into_with_profile(&plan, &y[trajectory * dim..(trajectory + 1) * dim],
+                t, ExecutionMode::ExpandedSparse, RhsOptions::default(), workspace,
+                &mut a[trajectory * dim..(trajectory + 1) * dim], None)?;
+        }
+        batch.eval(t, &y, &mut b)?;
+        let max_difference = a.iter().zip(&b).map(|(x, z)| (x-z).abs()).fold(0., f64::max);
+        let start = Instant::now();
+        for _ in 0..repeats {
+            for (trajectory, workspace) in independent_workspaces.iter_mut().enumerate() {
+                rhs_packed_into_with_profile(&plan, &y[trajectory * dim..(trajectory + 1) * dim],
+                    t, ExecutionMode::ExpandedSparse, RhsOptions::default(), workspace,
+                    &mut a[trajectory * dim..(trajectory + 1) * dim], None)?;
+            }
+        }
+        let independent_seconds = start.elapsed().as_secs_f64();
+        let start = Instant::now();
+        for _ in 0..repeats { batch.eval(t, &y, &mut b)?; }
+        Ok((independent_seconds, start.elapsed().as_secs_f64(), max_difference))
+    }).map_err(PyValueError::new_err)?;
+    Ok((independent_seconds, batched_seconds, max_difference))
+}
+
+/// Explicit benchmark-only entry point. Input shape is [parameter, initial, packed state].
+#[pyfunction(signature = (plan, packed_batch, parameter_slot_indices, parameter_values, t0, t1, abstol, reltol, dt, saveat = None, output = "populations", integral_weights = None, maxiters = 100000, maximum_step = None))]
+#[allow(clippy::too_many_arguments)]
+pub fn solve_shared_step_experiment_py<'py>(
+    py: Python<'py>,
+    plan: PyRef<'py, PreparedLindbladPlan>,
+    packed_batch: numpy::PyReadonlyArray3<'py, f64>,
+    parameter_slot_indices: Vec<usize>,
+    parameter_values: PyReadonlyArray2<'py, Complex64>,
+    t0: f64,
+    t1: f64,
+    abstol: f64,
+    reltol: f64,
+    dt: f64,
+    saveat: Option<PyReadonlyArray1<'py, f64>>,
+    output: &str,
+    integral_weights: Option<Vec<(usize, f64)>>,
+    maxiters: usize,
+    maximum_step: Option<f64>,
+) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>, usize, Py<PyDict>)> {
+    use crate::lindblad::shared_step_experiment::solve_shared_experiment;
+    let shape = packed_batch.shape();
+    let pshape = parameter_values.shape();
+    if shape[2] != plan.layout.packed_len() || pshape != [shape[0], parameter_slot_indices.len()] {
+        return Err(PyValueError::new_err("experimental batch shape mismatch"));
+    }
+    let initial = packed_batch.as_slice().map_err(PyValueError::new_err)?.to_vec();
+    let params = parameter_values.as_slice().map_err(PyValueError::new_err)?.to_vec();
+    let saveat = saveat.map(|v| v.as_slice().map(|x| x.to_vec())).transpose().map_err(PyValueError::new_err)?;
+    let options = crate::ode::OdeOptions {
+        abstol, reltol, dt, maxiters, save_start: false,
+        saveat: Some(saveat.unwrap_or_else(|| vec![t1])),
+    };
+    let weights = integral_weights.unwrap_or_default();
+    let plan = plan.clone();
+    let output_mode = output.to_owned();
+    let result = py.detach(move || solve_shared_experiment(
+        &plan, &initial, shape[0], shape[1], &parameter_slot_indices,
+        &params, t0, t1, &options, &output_mode, &weights, maximum_step,
+    )).map_err(PyValueError::new_err)?;
+    let stats = PyDict::new(py);
+    stats.set_item("accepted_steps", result.stats.accepted_steps)?;
+    stats.set_item("rejected_steps", result.stats.rejected_steps)?;
+    stats.set_item("rhs_calls", result.stats.rhs_calls)?;
+    stats.set_item("controller_counts", result.controllers)?;
+    stats.set_item("rejected_controller_counts", result.rejected_controllers)?;
+    stats.set_item("attempted_steps", result.attempted_steps)?;
+    Ok((PyArray1::from_vec(py, result.times), PyArray1::from_vec(py, result.values), result.width, stats.unbind()))
+}
+
 #[pyclass(module = "centrex_tlf.centrex_tlf_rust", unsendable)]
 pub struct LindbladRhsEvaluator {
     plan: PreparedLindbladPlan,

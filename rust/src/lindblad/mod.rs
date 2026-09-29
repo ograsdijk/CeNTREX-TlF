@@ -6,13 +6,17 @@ pub mod ode_impl;
 pub mod plan;
 pub mod python_api;
 pub mod rhs;
+pub mod shared_step_experiment;
 
 use plan::PreparedLindbladPlan;
 use pyo3::prelude::*;
 use python_api::{
+    benchmark_shared_rhs_experiment_py,
+    benchmark_shared_rhs_layout_py,
     create_lindblad_rhs_evaluator_py, evaluate_lindblad_hamiltonian_py, lindblad_jvp_py,
     lindblad_rhs_py, prepare_lindblad_problem_py, solve_lindblad_batch_ode_py,
-    solve_lindblad_grid_ode_py, solve_lindblad_ode_py, LindbladRhsEvaluator,
+    solve_lindblad_grid_ode_py, solve_lindblad_ode_py,
+    solve_shared_step_experiment_py, LindbladRhsEvaluator,
 };
 
 pub fn register_python_api(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -26,5 +30,8 @@ pub fn register_python_api(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(solve_lindblad_ode_py, m)?)?;
     m.add_function(wrap_pyfunction!(solve_lindblad_batch_ode_py, m)?)?;
     m.add_function(wrap_pyfunction!(solve_lindblad_grid_ode_py, m)?)?;
+    m.add_function(wrap_pyfunction!(solve_shared_step_experiment_py, m)?)?;
+    m.add_function(wrap_pyfunction!(benchmark_shared_rhs_experiment_py, m)?)?;
+    m.add_function(wrap_pyfunction!(benchmark_shared_rhs_layout_py, m)?)?;
     Ok(())
 }

@@ -14,6 +14,18 @@ pub trait OdeRhs {
     fn error_control_dim(&self) -> usize {
         self.dim()
     }
+    /// Experimental grouped trajectories can supply a per-trajectory maximum
+    /// instead of the default RMS over one state. Existing RHS types use None.
+    fn adaptive_error_norm(
+        &mut self,
+        _y: &[f64], _yn: &[f64], _h: f64, _k: &[f64],
+        _dim: usize, _atol: f64, _rtol: f64,
+    ) -> Option<f64> {
+        None
+    }
+    /// Optional maximum internal step for localized time-dependent inputs.
+    /// Existing solver RHS types retain the default unconstrained behavior.
+    fn maximum_step(&self) -> Option<f64> { None }
     fn event_value(&mut self, _t: f64, _y: &[f64]) -> Result<Option<f64>, String> {
         Ok(None)
     }
