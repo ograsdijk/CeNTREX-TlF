@@ -288,9 +288,15 @@ def test_info_rows_cover_both_mF_signs_at_nonzero_B():
         show_ground_residual=False,
         show_excited_residual=False,
     )
-    lines = [text for kind, text in rows if kind == "line"]
-    for sign in ("m_F'=-1", "m_F'=+1"):
-        assert any(sign in line for line in lines), sign
+    table = next(payload for kind, payload in rows if kind == "energy_table")
+    assert len(table) == 4
+    assert sorted(row[0] for row in table) == ["0", "0", "1", "1"]
+    averages = [float(row[1]) if row[2] is None else 0.5 * (float(row[1]) + float(row[2]))
+                for row in table]
+    assert averages == sorted(averages)
+    assert all(row[2] is None for row in table if row[0] == "0")
+    # Pair averages in the inset must not replace the signed scan offsets.
+    assert all(row[1] != row[2] for row in table if row[0] == "1")
 
 
 def test_level_segments_scale_character_by_the_residual():

@@ -11,6 +11,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.font_manager import FontProperties
+from matplotlib.ticker import FormatStrFormatter, MaxNLocator
 from scipy.linalg import eigh
 from scipy.optimize import linear_sum_assignment
 
@@ -1682,7 +1683,9 @@ _INFO_FONT_SCALE: dict[str, float] = {
 
 def _info_row_units(kind: str, payload: Any) -> float:
     if kind == "sticks":
-        return 8.6 if payload[1] else 5.4
+        return 9.0
+    if kind == "energy_table":
+        return 1.6 * (len(payload) + 1)
     if kind == "gap":
         return float(payload)
     return _INFO_ROW_UNITS[kind]
@@ -1797,28 +1800,60 @@ def _render_info_panel(info: Axes, rows: Sequence[tuple[str, Any]], base_fs: flo
             )
             continue
 
-        if kind == "sticks":
-            labels, rotate = payload
-            n = len(labels)
-            base = y_bot + 0.08 * height
-            top = base + 0.30 * height
-            xs = (
-                np.linspace(0.17, 0.83, n)
-                if n > 1
-                else np.array([0.5])
-            )
-            info.plot([0.08, 0.92], [base, base], lw=1.1, color="black")
-            for x, label in zip(xs, labels, strict=True):
-                info.plot([x, x], [base, top], lw=2.3, color="black")
-                info.text(
-                    x,
-                    top + 0.06 * height,
-                    label,
-                    ha="center",
-                    va="bottom",
-                    rotation=90 if rotate else 0,
-                    fontsize=fs * _INFO_FONT_SCALE["sticks"],
+        if kind == "energy_table":
+            table_rows = [(r"$|m_F'|$", r"$m_F'=-|m_F'|$", r"$m_F'=+|m_F'|$"), *payload]
+            row_height = height / len(table_rows)
+            for index, cells in enumerate(table_rows):
+                row_y = y_top - (index + 0.5) * row_height
+                positions = ((0.17, cells[0]), (0.65, cells[1])) if cells[2] is None else zip(
+                    (0.17, 0.49, 0.81), cells, strict=True
                 )
+                for x, cell in positions:
+                    info.text(x, row_y, cell, ha="center", va="center",
+                              fontsize=fs * 0.85)
+            info.plot([0.06, 0.94], [y_top - row_height] * 2, lw=0.6, color="0.65")
+            continue
+
+        if kind == "sticks":
+            levels, reference, colors = payload
+            spectrum = info.inset_axes([0.10, y_bot + 0.48 * height, 0.82, 0.46 * height])
+            offsets = [lv.energy_MHz - reference for lv in levels]
+            span = max(max(offsets) - min(offsets), 1.0)
+            spectrum.set_xlim(min(offsets) - 0.06 * span, max(offsets) + 0.06 * span)
+            spectrum.set_ylim(0, 1.55)
+            spectrum.set_yticks([])
+            spectrum.spines[["left", "right", "top"]].set_visible(False)
+            spectrum.spines["bottom"].set_position(("axes", -0.52))
+            spectrum.xaxis.set_major_locator(MaxNLocator(nbins=5))
+            spectrum.xaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+            spectrum.tick_params(axis="x", labelsize=fs * 0.72, length=3)
+            spectrum.set_xlabel("Energy offset (MHz)", fontsize=fs * 0.78, labelpad=3)
+            spectrum.axhline(0, color="black", lw=1.0)
+            # Pair opposite mF signs by their tracked zero-field parity parent.
+            # The inset uses pair averages; the table retains signed energies.
+            groups: dict[tuple[int, int | None], list[DressedLevel]] = defaultdict(list)
+            for lv in levels:
+                groups[(abs(lv.mF), lv.P)].append(lv)
+            for group in sorted(groups.values(), key=lambda g: np.mean([lv.energy_MHz for lv in g])):
+                energy = float(np.mean([lv.energy_MHz - reference for lv in group]))
+                bottom = 0.0
+                for parity in (-1, +1):
+                    top = bottom + float(np.mean([lv.character.get(parity, 0.0) for lv in group]))
+                    spectrum.plot([energy, energy], [bottom, top],
+                                  color=colors[parity], lw=2.5, solid_capstyle="butt")
+                    bottom = top
+                rounded = f"{energy:.1f}" if abs(energy) >= 0.05 else "0.0"
+                spectrum.text(energy, 1.12, rounded, ha="center", va="bottom",
+                              fontsize=fs * 0.72)
+                signs = sorted({lv.mF for lv in group})
+                if len(signs) == 2 and signs[0] == -signs[1]:
+                    label = rf"$\pm{signs[1]}$"
+                else:
+                    label = ",".join("0" if m == 0 else f"{m:+d}" for m in signs)
+                spectrum.text(energy, -0.12, label, ha="center", va="top",
+                              transform=spectrum.get_xaxis_transform(), fontsize=fs * 0.72)
+            spectrum.text(-0.035, -0.12, r"$m_F'$", ha="right", va="top",
+                          transform=spectrum.transAxes, fontsize=fs * 0.72)
             continue
 
         raise ValueError(f"unknown info-panel row kind: {kind!r}")
@@ -1866,29 +1901,29 @@ def _build_info_rows(
         else min(lv.energy_MHz for lv in excited)
     )
 
-    offsets: list[float] = []
-    for value in sorted(lv.energy_MHz - reference for lv in excited):
-        if not offsets or abs(value - offsets[-1]) > 1e-4:
-            offsets.append(float(value))
-    stick_labels = [
-        "0 MHz" if abs(v) < 5e-4 else f"{v:+.3f} MHz" for v in offsets
-    ]
-
     rows: list[tuple[str, Any]] = [
         ("box_start", None),
         ("title", "Relative excited-state offsets"),
         ("subtitle", r"(relative to lowest $m_F'=0$ level)"),
-        ("sticks", (stick_labels, len(stick_labels) > 3)),
+        ("note", r"Inset marks and labels average the $\pm m_F'$ partners."),
+        ("sticks", (excited, reference, parity_colors)),
         ("box_end", None),
         ("gap", 0.8),
-        ("header", f"Opposite-parity-parent separation at {E:g} V/cm"),
+        ("header", "Energy offsets (MHz), ordered by pair average"),
     ]
 
-    for label, pair in mF_groups:
-        if len(pair) != 2:
-            continue
-        separation = abs(pair[0].energy_MHz - pair[1].energy_MHz)
-        rows.append(("line", rf"${label}:\ {separation:.3f}\ \mathrm{{MHz}}$"))
+    energy_table = []
+    energy_groups: dict[tuple[int, int | None], list[DressedLevel]] = defaultdict(list)
+    for lv in excited:
+        energy_groups[(abs(lv.mF), lv.P)].append(lv)
+    for group in sorted(energy_groups.values(), key=lambda g: np.mean([lv.energy_MHz for lv in g])):
+        mF = abs(group[0].mF)
+        signed_offsets = {lv.mF: f"{lv.energy_MHz - reference:.1f}" for lv in group}
+        if mF == 0:
+            energy_table.append(("0", signed_offsets[0], None))
+        else:
+            energy_table.append((str(mF), signed_offsets[-mF], signed_offsets[mF]))
+    rows.append(("energy_table", energy_table))
 
     splittings = list(structure.zero_field_parity_splitting_MHz.values())
     rows.append(("rule", None))
@@ -1905,13 +1940,22 @@ def _build_info_rows(
 
     rows.append(("rule", None))
     rows.append(("header", f"Parity mixing at {E:g} V/cm (lower level)"))
+    mixing_rows: dict[int, tuple[str, str]] = {}
     for label, pair in mF_groups:
         if not pair:
             continue
         lower = min(pair, key=lambda lv: lv.energy_MHz)
         minus = 100 * lower.character.get(-1, 0.0)
         plus = 100 * lower.character.get(+1, 0.0)
-        rows.append(("line", rf"${label}:\ {minus:.1f}/{plus:.1f}$"))
+        mixing_rows[pair[0].mF] = (label, f"{minus:.1f}/{plus:.1f}")
+    for mF in sorted(mixing_rows, key=lambda m: (abs(m), m)):
+        label, percentages = mixing_rows[mF]
+        partner = mixing_rows.get(-mF)
+        if mF and partner is not None and partner[1] == percentages:
+            if mF < 0:
+                continue
+            label = rf"|m_F'|={mF}"
+        rows.append(("line", rf"${label}:\ {percentages}$"))
 
     rows.append(("gap", 0.5))
     rows.append(("swatch", (parity_colors[-1], r"zero-field $P'=-1$ character")))
@@ -2310,9 +2354,8 @@ def plot_transition_level_diagram(
             for fam, y in zip(families, family_label_y, strict=True)
             if fam[0] == F1
         ]
-        _draw_family_bracket(
-            ax, x_f1_line, x_f1_label, ys, rf"${as_frac2(F1)}$", "black", fs_value
-        )
+        ax.text(x_f1_label, 0.5 * (min(ys) + max(ys)), rf"${as_frac2(F1)}$",
+                ha="center", va="center", fontsize=fs_value, color="black")
 
     # ---------------- information panel ----------------
     if info_ax is not None:
