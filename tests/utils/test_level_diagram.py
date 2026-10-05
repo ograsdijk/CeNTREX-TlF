@@ -212,6 +212,63 @@ def test_plot_accepts_precomputed_structure(p2_structure):
         plt.close(result.fig)
 
 
+def test_energy_axes_require_exact_level_positions(p2_structure):
+    with pytest.raises(ValueError, match="min_level_separation=0"):
+        plot_transition_level_diagram(
+            structure=p2_structure, min_level_separation=0.01, stack_overlapping_levels=False
+        )
+    result = plot_transition_level_diagram(structure=p2_structure)
+    try:
+        assert sum(text.get_text() == "MHz" for text in result.ax.texts) == 2
+    finally:
+        plt.close(result.fig)
+
+
+def test_level_position_mapping_is_independent_of_common_energy_origin(p2_structure):
+    from dataclasses import replace
+
+    from centrex_tlf.utils.plotting import _band_y
+
+    shifted = [replace(lv, energy_MHz=lv.energy_MHz + 1e8) for lv in p2_structure.ground]
+    assert _band_y(shifted, 0.0, 1.0, 0.0) == pytest.approx(
+        _band_y(p2_structure.ground, 0.0, 1.0, 0.0), abs=1e-7
+    )
+
+
+def test_q1_stacking_keeps_all_four_mF0_ground_bars_visible():
+    from centrex_tlf.utils.plotting import _Y_GROUND_BAND
+
+    result = plot_transition_level_diagram(
+        J_ground=1, branch="Q", F1_excited=0.5, F_excited=0,
+        E=170.0, B=-0.488644, stack_overlapping_levels=True,
+    )
+    try:
+        ys = sorted({float(line.get_ydata()[0]) for line in result.ax.lines
+                     if len(line.get_xdata()) == 2
+                     and min(line.get_xdata()) >= -0.31
+                     and max(line.get_xdata()) <= 0.31
+                     and line.get_ydata()[0] == line.get_ydata()[1]
+                     and _Y_GROUND_BAND[0] <= line.get_ydata()[0] <= _Y_GROUND_BAND[1]})
+        assert len(ys) == 4
+        height_points = result.fig.get_figheight() * 72 * result.ax.get_position().height
+        assert min(np.diff(ys)) * height_points >= 3.2 - 1e-8
+    finally:
+        plt.close(result.fig)
+
+
+def test_stacking_moves_only_overlapping_clusters(p2_structure):
+    from dataclasses import replace
+
+    from centrex_tlf.utils.plotting import _band_y
+
+    levels = [replace(p2_structure.ground[0], mF=0, energy_MHz=energy)
+              for energy in (0.0, 0.001, 0.5, 0.514, 1.0)]
+    ys = _band_y(levels, 0.0, 1.0, 0.02, overlap_threshold=0.01)
+    assert ys[:2] == pytest.approx([0.0, 0.02])
+    # A readable pair narrower than the target padding must remain untouched.
+    assert ys[2:] == pytest.approx([0.5, 0.514, 1.0])
+
+
 def test_plot_into_supplied_axes(p2_structure):
     fig, axes = plt.subplots(1, 2)
     try:
