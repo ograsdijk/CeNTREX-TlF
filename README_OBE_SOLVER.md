@@ -211,6 +211,55 @@ scans can overlap early work with later worker startup. Without this profiling
 option, parallel startup/steady-state fields are `None`; total time and per-point
 stage timings are still available with `collect_stats=True`.
 
+### Reusing Process Workers Across Calls
+
+`DenseLindbladSession` keeps process workers and their native evaluators alive for
+repeated dense scans of one prepared model. This mainly helps short scans and
+fitting calls; a single large scan already amortizes process startup.
+
+```python
+from centrex_tlf.lindblad import DenseLindbladSession, grid_scan
+
+def run_repeated_scans(prepared, rho0, detunings, rabi_values, t_end):
+    results = []
+    with DenseLindbladSession(prepared, threads=8) as session:
+        for rabi in rabi_values:
+            results.append(grid_scan(
+                prepared, rho0, (0.0, t_end),
+                scan={"detuning": detunings, "rabi": [rabi]},
+                solver="dense_eig", dense_session=session,
+                output="populations", output_when="final",
+            ))
+    return results
+
+# Invoke from an if __name__ == "__main__": guard on Windows.
+```
+
+The context manager initializes all workers once and joins them on exit, including
+when a scan raises. Explicit `close()` is also supported and is idempotent. A
+session used without a context starts lazily on its first solve and must be closed.
+The worker count defaults to physical cores and stays fixed even for small calls.
+`parallel=True` is required for batch/grid APIs; omit their `threads` option or
+match the session's worker count. Single `solve_lindblad` calls also accept a
+session and submit their one parameter point to its pool.
+
+Runtime overrides, initial states, output modes, sampling times and CPU/CUDA
+projection may vary between calls. The prepared object and `execution_mode` must
+match the session. Mutating its model payload/default parameters is rejected;
+create a new session after rebuilding the model (including polarization changes).
+Each call computes new decompositions; the session does not cache responses or
+eigenbases. One session accepts one call at a time; overlapping calls are rejected.
+Worker crashes invalidate the session. Ordinary worker exceptions propagate,
+cancel queued work, and leave the session usable; already-running tasks may finish.
+
+With `collect_stats=True`, `pool_reused` identifies an already initialized pool,
+`worker_startup_seconds` measures setup inside that call (zero after context
+entry), and `steady_state_seconds` includes communication and collation.
+`session_startup_seconds` records the one-time setup also available as
+`session.startup_seconds`. Startup outside a call is excluded from its
+`total_seconds`. Session readiness is synchronized regardless of `profile_startup`;
+the ordinary fresh-pool API keeps its existing scheduling defaults.
+
 ### Reusing a Factorization and Reconstructing Density Matrices
 
 ```python

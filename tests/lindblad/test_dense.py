@@ -8,6 +8,7 @@ import scipy.linalg as la
 import sympy as smp
 
 from centrex_tlf.lindblad import (
+    DenseLindbladSession,
     grid_scan,
     initial_condition_scan,
     parameter_scan,
@@ -18,6 +19,166 @@ from centrex_tlf.lindblad import (
 )
 
 pytest.importorskip("centrex_tlf.centrex_tlf_rust")
+
+
+def test_session_reuses_workers_and_cleans_up_on_exception(monkeypatch):
+    import psutil
+
+    from centrex_tlf.lindblad import dense
+
+    prepared, H, C = model(3)
+    initial = states(3)
+    session = DenseLindbladSession(prepared, threads=2)
+    with pytest.raises(RuntimeError, match="deliberate failure"):  # noqa: SIM117
+        with session:
+            pool = session._pool
+            pids = set(pool._processes)
+            assert len(pids) == 2
+            assert session.startup_seconds > 0
+
+            def no_new_pool(*args, **kwargs):
+                raise AssertionError("must reuse the existing process pool")
+
+            monkeypatch.setattr(dense, "ProcessPoolExecutor", no_new_pool)
+            for repeat in range(2):
+                deltas = [0.8, -0.2, 0.8] if repeat == 0 else [0.1, 0.3]
+                times = np.array([0.0, 0.03, 0.4 + repeat * 0.1])
+                answer = grid_scan(
+                    prepared,
+                    None,
+                    (0.0, times[-1]),
+                    scan={"delta": deltas},
+                    rho0_batch=initial,
+                    solver="dense_eig",
+                    dense_session=session,
+                    output="weighted_integral",
+                    integral_weights=[(1, 0.5)],
+                    output_when="saveat",
+                    saveat=times,
+                    collect_stats=True,
+                )
+                for point, delta in enumerate(deltas):
+                    for j, rho in enumerate(initial):
+                        expected = independent(H, C, rho, times, [(1, 0.5)], delta=delta)
+                        np.testing.assert_allclose(
+                            answer.values[point * 2 + j, :, 0], expected, atol=1e-12
+                        )
+                assert answer.solver_stats["pool_reused"]
+                assert answer.solver_stats["worker_startup_seconds"] == 0
+                assert answer.solver_stats["factorization_count"] == len(set(deltas))
+                assert set(pool._processes) == pids
+            # Changing initial support and output, with no overrides: defaults
+            # must be restored after the preceding detuning scans.
+            answer = solve_lindblad(
+                prepared,
+                initial[1],
+                (0.0, 0.5),
+                solver="dense_eig",
+                dense_session=session,
+                output="full",
+                saveat=[0.0, 0.5],
+            )
+            np.testing.assert_allclose(
+                answer.density_matrices()[-1], independent(H, C, initial[1], [0.5])[0], atol=1e-12
+            )
+            other, _, _ = model(3)
+            with pytest.raises(ValueError, match="same prepared model"):
+                grid_scan(
+                    other,
+                    initial[0],
+                    (0.0, 0.2),
+                    scan={"delta": [0.0]},
+                    solver="dense_eig",
+                    dense_session=session,
+                )
+            with pytest.raises(ValueError, match="threads must match"):
+                grid_scan(
+                    prepared,
+                    initial[0],
+                    (0.0, 0.2),
+                    scan={"delta": [0.0]},
+                    solver="dense_eig",
+                    dense_session=session,
+                    threads=3,
+                )
+            with pytest.raises(ValueError, match="parallel=True"):
+                grid_scan(
+                    prepared,
+                    initial[0],
+                    (0.0, 0.2),
+                    scan={"delta": [0.0]},
+                    solver="dense_eig",
+                    dense_session=session,
+                    parallel=False,
+                )
+            # Detect mutation of parameters as well as matrix/model data.
+            saved = prepared.parameter_graph["base_values"][0]
+            prepared.parameter_graph["base_values"][0] = dict(saved, re=saved["re"] + 0.1)
+            with pytest.raises(ValueError, match="model changed"):
+                solve_lindblad(
+                    prepared, initial[0], (0.0, 0.2), solver="dense_eig", dense_session=session
+                )
+            prepared.parameter_graph["base_values"][0] = saved
+            assert session._lock.acquire(blocking=False)
+            try:
+                with pytest.raises(RuntimeError, match="already in use"):
+                    solve_lindblad(
+                        prepared, initial[0], (0.0, 0.2), solver="dense_eig", dense_session=session
+                    )
+            finally:
+                session._lock.release()
+            # A real worker-side failure must propagate and still release the
+            # session lease. Context exit then joins every worker.
+            original_submit = pool.submit
+            with monkeypatch.context() as patch:
+                patch.setattr(pool, "submit", lambda *args, **kwargs: original_submit(pow, 0, -1))
+                with pytest.raises(ZeroDivisionError):
+                    grid_scan(
+                        prepared,
+                        initial[0],
+                        (0.0, 0.2),
+                        scan={"delta": [0.0]},
+                        solver="dense_eig",
+                        dense_session=session,
+                    )
+            solve_lindblad(
+                prepared, initial[0], (0.0, 0.2), solver="dense_eig", dense_session=session
+            )
+            raise RuntimeError("deliberate failure")
+    assert session._pool is None
+    assert all(not psutil.pid_exists(pid) for pid in pids)
+    session.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        solve_lindblad(prepared, initial[0], (0.0, 0.2), solver="dense_eig", dense_session=session)
+
+
+def test_session_lazy_one_worker_and_invalid_solver_options():
+    prepared, _, _ = model()
+    session = DenseLindbladSession(prepared, threads=1)
+    try:
+        for repeat in range(2):
+            answer = initial_condition_scan(
+                prepared,
+                states(),
+                (0.0, 0.2),
+                solver="dense_eig",
+                dense_session=session,
+                collect_stats=True,
+            )
+            assert answer.solver_stats["pool_reused"] == (repeat == 1)
+            assert (answer.solver_stats["worker_startup_seconds"] > 0) == (repeat == 0)
+        with pytest.raises(ValueError, match="only to solver='dense_eig'"):
+            solve_lindblad(
+                prepared, states()[0], (0.0, 0.2), solver="dopri5", dense_session=session
+            )
+        with pytest.raises(ValueError, match="only to solver='dense_eig'"):
+            solve_lindblad_batch(
+                prepared, states(), (0.0, 0.2), solver="dopri5", dense_session=session
+            )
+    finally:
+        session.close()
+    with pytest.raises(ValueError, match="positive integer"):
+        DenseLindbladSession(prepared, threads=0)
 
 
 def model(n=2, parameters=None):
@@ -375,3 +536,16 @@ def test_cuda_projection_agrees_with_cpu():
         prepared, None, (0.0, 0.7), evolution_device="cuda", gpu_batch_size=2, **options
     )
     np.testing.assert_allclose(cpu.values, gpu.values, atol=2e-13)
+    options["parallel"] = True
+    with DenseLindbladSession(prepared, threads=2) as session:
+        for device in ["cpu", "cuda", "cuda"]:
+            reused = grid_scan(
+                prepared,
+                None,
+                (0.0, 0.7),
+                evolution_device=device,
+                dense_session=session,
+                gpu_batch_size=2,
+                **options,
+            )
+            np.testing.assert_allclose(cpu.values, reused.values, atol=2e-13)
