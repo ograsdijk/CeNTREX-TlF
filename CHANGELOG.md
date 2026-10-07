@@ -2,6 +2,11 @@
 
 ## 0.2.10
 
+### Added
+
+- Python 3.14 in the Linux and Windows test matrix and Linux, macOS, and
+  Windows wheel builds.
+
 ### Fixed
 
 - Hamiltonian state compaction accepts imaginary diagonal residuals within
