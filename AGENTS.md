@@ -49,6 +49,9 @@ default Windows console codec (cp1252) raises `UnicodeEncodeError`.
 - **Electric field `E`: V/cm.** **Magnetic field `B`: Gauss.** Both are 3-vectors, `[Ex, Ey, Ez]`.
 - **All energies, detunings and Rabi rates are angular frequencies in rad/s.** To scan a detuning
   in MHz: `2 * np.pi * 1e6 * detuning_MHz`. To read one out: `value / (2 * np.pi * 1e6)`.
+  **One exception, see the gotcha below:** the raw Hamiltonian *dataclass attributes*
+  (`H.Hff`, `H.Hrot`, `H.HSz`, `H.HZz`, …) are in Hz. The `generate_*_hamiltonian_*_function`
+  builders multiply by 2π, so `H(E, B)` and everything downstream of it follows the rule above.
 - Use `B=[0, 0, 1e-5]` rather than exactly zero — X states become degenerate below roughly that,
   and degenerate eigenvectors break state identification.
 - Primed quantum numbers are the **excited** state. `P(2) F1'=3/2 F'=1` names the *ground* J in
@@ -146,6 +149,22 @@ needed.
 
 Each of these produces plausible-looking but wrong output rather than an error.
 
+- **Hamiltonian dataclass attributes are in Hz; the generated `H(E, B)` functions are in
+  rad/s.** `generate_uncoupled_hamiltonian_X` / `generate_coupled_hamiltonian_B` return a
+  dataclass whose matrices (`Hff`, `Hrot`, `H_mhf_*`, `HSz`, `HZz`, …) are **frequencies in
+  Hz** — the X J=2 rotational eigenvalue is 4.0004e10, i.e. `6·B_rot` exactly, matching the
+  40005.98 MHz in `examples/hamiltonian/j2_mf0_crossing_report.md`.
+  `generate_uncoupled_hamiltonian_X_function` / `generate_coupled_hamiltonian_B_function`
+  multiply by 2π, so `H(E, B)` — and `H_int`, `H_symbolic`, detunings, Rabi rates and `Γ`
+  downstream of it — are in **rad/s**. `utils.plotting._x_matrices` / `_b_matrices` build
+  from the attributes and correspondingly report `energy_MHz = w / 1e6`.
+  You only meet the attributes when you need the Stark and Zeeman terms *separately*, which
+  the function does not expose — adiabatic field tracking, per-`mF`-block diagonalization,
+  anything that ramps `E` by hand. Reading them as rad/s divides every line spacing by 2π,
+  which is silent: it blends lines that are actually resolved and leaves the physics looking
+  qualitatively fine. Multiply by 2π once at construction and convert in exactly one place.
+  Worked example, including a case where it moved a computed selectivity by more than an
+  order of magnitude: `reports/spb_detection/` (`analysis.to_MHz`, and §15 of its README).
 - **The X Hamiltonian changed; cached or pickled X Hamiltonians are stale.** X now carries a
   quartic centrifugal-distortion term `-D_rot·[J(J+1)]²` (`D0_X = -Y02_X` ≈ 5.84 kHz), and
   `B_rot` moved by ~24 kHz to the Dunham-derived `B0_X = Y01 + Y11/2 + Y21/4` ≈ 6.667355 GHz.

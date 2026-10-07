@@ -35,6 +35,16 @@ def test_compact_symbolic_hamiltonian_indices():
         )
 
 
+def test_compact_symbolic_hamiltonian_roundoff_imaginary_energies():
+    matrix = smp.diag(0, 1e11 + 1e-6 * smp.I, 2e11 - 1e-6 * smp.I)
+    compact = lindblad.utils_compact.compact_symbolic_hamiltonian_indices(matrix, np.array([1, 2]))
+    assert compact[1, 1] == 1.5e11
+    with pytest.raises(ValueError, match="must be real"):
+        lindblad.utils_compact.compact_symbolic_hamiltonian_indices(
+            smp.diag(0, 1e11 + smp.I, 2e11), np.array([1, 2])
+        )
+
+
 def test_generate_obe_system_transitions_with_compact_selector_over_multiple_js():
     trans = transitions.R0_F1_1o2_F1
     transition_selectors = couplings.generate_transition_selectors(
