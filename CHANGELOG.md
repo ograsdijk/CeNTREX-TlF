@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.10
+
+### Fixed
+
+- Hamiltonian state compaction accepts imaginary diagonal residuals within
+  floating-point roundoff and uses the real mean energy. Significant imaginary
+  energies still raise an error. The tolerance scales with the full numeric
+  diagonal spectrum to account for large energy origins.
+
+### Documentation
+
+- Clarify that raw Hamiltonian dataclass matrices use Hz, while generated
+  Hamiltonian functions and downstream OBE calculations use rad/s.
+
 ## 0.2.9
 
 ### Added
