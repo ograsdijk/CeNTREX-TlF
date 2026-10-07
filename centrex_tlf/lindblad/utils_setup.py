@@ -12,6 +12,7 @@ from centrex_tlf import couplings as couplings_tlf
 from centrex_tlf.couplings.utils_compact import (
     compact_coupling_field,
     insert_levels_coupling_field,
+    insert_row_column_indices,
 )
 from centrex_tlf.transitions import MicrowaveTransition, OpticalTransition
 
@@ -235,6 +236,7 @@ def _generate_couplings(
                     QN,
                     V_ref_int,
                     pol_vecs=ts.polarizations,
+                    normalize_pol=normalize_pol,
                 )
             )
     return couplings
@@ -300,7 +302,7 @@ def _build_obe_system(
             insert_levels_coupling_field(coupling, indices_insert=indices)
             for coupling in couplings
         ]
-        QN = utils_decay.add_states_QN(_decay_channels, QN, indices)
+        original_indices = indices
 
         if (
             (qn_compact is not None)
@@ -310,10 +312,10 @@ def _build_obe_system(
             indices, H_symbolic = utils_decay.add_levels_symbolic_hamiltonian(
                 H_symbolic, _decay_channels, QN_compact, excited_states
             )
-            QN_compact = utils_decay.add_states_QN(_decay_channels, QN_compact, indices)
             C_array = utils_decay.add_decays_C_arrays(
                 _decay_channels, indices, QN_compact, C_array, Γ
             )
+            QN_compact = utils_decay.add_states_QN(_decay_channels, QN_compact, indices)
             couplings_compact = [
                 insert_levels_coupling_field(coupling, indices_insert=indices)
                 for coupling in couplings_compact
@@ -325,6 +327,11 @@ def _build_obe_system(
             C_array = utils_decay.add_decays_C_arrays(
                 _decay_channels, indices, QN, C_array, Γ
             )
+        QN = utils_decay.add_states_QN(_decay_channels, QN, original_indices)
+        H_int = insert_row_column_indices(H_int, original_indices)
+        V_ref_int = insert_row_column_indices(V_ref_int, original_indices)
+        for index in original_indices:
+            V_ref_int[index, index] = 1
 
     if verbose:
         logger.info(
@@ -463,7 +470,11 @@ def generate_OBE_system(
     _warn_deprecated_method(method)
 
     QN_X_original = list(states.generate_coupled_states_X(X_states))
-    QN_B_original = list(states.generate_coupled_states_B(B_states))
+    QN_B_original = (
+        list(states.generate_coupled_states_B(B_states))
+        if isinstance(B_states, states.QuantumSelector) or len(B_states)
+        else []
+    )
     QN_original = QN_X_original + QN_B_original
     rtol = None
     stol = 1e-3
@@ -552,6 +563,12 @@ def generate_OBE_system_transitions(
                                         excited-state dressed levels connected to
                                         the opposite bare parity partner in the
                                         reduced OBE system. Defaults to False.
+        H_func_X: Custom H(E, B) returning rad/s matrices in the full uncoupled
+                    X construction basis. Precomputed functions require matching J bounds.
+        H_func_B: Custom H(E, B) returning rad/s matrices in the full Omega B
+                    construction basis, used during discovery and final construction.
+        transform: Optional square/unitary X uncoupled-to-coupled transformation
+                    in the package's generated construction basis ordering.
         verbose (bool, optional): Log progress to INFO. Defaults to False.
         method (str | None): Deprecated compatibility argument. Passing
                         `"expanded"` or `"matrix"` emits `DeprecationWarning`
@@ -588,6 +605,9 @@ def generate_OBE_system_transitions(
         Bconstants=B_constants,
         nuclear_spins=nuclear_spins,
         retain_opposite_parity_levels=retain_opposite_parity_levels,
+        transform=transform,
+        H_func_X=H_func_X,
+        H_func_B=H_func_B,
     )
 
     if H_reduced.QN_basis is None:

@@ -5,6 +5,45 @@ It covers the full OBE/Lindblad path in `centrex_tlf.lindblad`, the Rust-side
 batch and scan APIs, and the lower-dimensional effective-Hamiltonian Lindblad
 path in `centrex_tlf.effective_hamiltonian`.
 
+## Hamiltonian Construction Bounds
+
+Default X-state diagonalization includes two additional rotational levels on
+each side of the selected ground-state J range: `max(0, min(J) - 2)` through
+`max(J) + 2`. These extra construction states contribute mixing without adding
+levels to the retained OBE system. Explicit `Jmin_X` and `Jmax_X` independently
+override the corresponding bounds. B-state construction remains `J=1` through
+`max(J') + 2` by default.
+
+Rebuild cached Hamiltonians, OBE systems and prepared problems made with the
+previous unpadded X defaults. Increasing only `Jmax_X` does not restore missing
+lower-J mixing. Check convergence again at large electric fields.
+
+Explicit construction bounds must contain every requested parent J and respect
+the physical lower limit (X: zero; B: one). Invalid bounds raise `ValueError`.
+Excited-state matching uses one-to-one assignment, including the Omega-to-parity
+path. This prevents duplicate eigenstates but does not replace adiabatic tracking
+when bare labels become unreliable at strong or reoriented fields.
+
+Microwave-only systems are supported: both driven X manifolds are retained, the
+B block is empty, and `C_array` has shape `(0, n, n)` when no decay is present.
+Additional optical decay channels keep their state indices aligned through
+compaction and level insertion. `normalize_pol` applies to both explicit and
+automatic main-pair selection.
+
+Both OBE builders and their setup wrappers apply `H_func_X`, `H_func_B`, and
+`transform`. Custom B physics is used during ground-level discovery as well as
+final construction. Callbacks receive `(E, B)` and return full construction
+matrices in rad/s: X in the uncoupled basis, B in the Omega basis for the OBE
+builders. The lower-level `generate_reduced_hamiltonian_transitions` also supports
+custom parity-basis B matrices with `use_omega_basis=False`.
+
+Precomputed matrices and transforms should use matching explicit J bounds and
+the package's generated basis ordering. Matrix dimensions, finite entries,
+Hermiticity (allowing floating-point roundoff), and the square/unitary X transform
+are validated; basis ordering cannot be inferred from a bare callback.
+Rebuild systems that previously supplied customization to the transition builder:
+those arguments were formerly ignored.
+
 ## Recommended Paths
 
 Use the full OBE Rust path when you need the complete Hilbert-space model:

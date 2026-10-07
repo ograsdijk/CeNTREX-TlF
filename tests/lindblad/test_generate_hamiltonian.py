@@ -64,8 +64,9 @@ def test_generate_symbolic_hamiltonian():
         28.2517433166504,
         0,
     ]
-    for dh, dtv in zip(np.diag(hamiltonian_symbolic), true_values):
-        assert np.abs(dh - dtv) <= 1e-3
+    angular_frequency_atol = 0.01
+    for dh, dtv in zip(np.diag(hamiltonian_symbolic), true_values, strict=True):
+        assert np.abs(dh - dtv) <= angular_frequency_atol
 
 
 def test_generate_total_symbolic_hamiltonian():

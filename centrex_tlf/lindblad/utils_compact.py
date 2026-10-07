@@ -204,6 +204,11 @@ def generate_qn_compact(
     """
     # Extract J quantum numbers from all ground states in transitions
     J_in_transitions = [transition.J_ground for transition in transition_list]
+    J_in_transitions.extend(
+        transition.J_excited
+        for transition in transition_list
+        if isinstance(transition, transitions.MicrowaveTransition)
+    )
 
     # Find all unique J values in the X-state basis
     J_values_in_basis = np.unique([state.J for state in H_reduced.X_states_basis])
