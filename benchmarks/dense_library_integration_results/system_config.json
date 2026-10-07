@@ -1,0 +1,58 @@
+{
+  "captured_after_benchmark": true,
+  "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+  "physical_cores": 8,
+  "logical_processors": 16,
+  "reported_physical_memory_bytes": 66186956800,
+  "os": "Windows-10-10.0.26200-SP0",
+  "python": "3.11.13",
+  "numpy": "2.3.1",
+  "scipy": "1.16.0",
+  "torch": "2.14.1+cu130",
+  "torch_cuda_build": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "gpu_driver": "591.86",
+  "gpu_reported_memory_MiB": 16303,
+  "blas": [
+    {
+      "user_api": "blas",
+      "internal_api": "openblas",
+      "num_threads": 16,
+      "prefix": "libscipy_openblas",
+      "filepath": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\.venv\\Lib\\site-packages\\numpy.libs\\libscipy_openblas64_-13e2df515630b4a41f92893938845698.dll",
+      "version": "0.3.29",
+      "threading_layer": "pthreads",
+      "architecture": "SkylakeX"
+    },
+    {
+      "user_api": "blas",
+      "internal_api": "openblas",
+      "num_threads": 16,
+      "prefix": "libscipy_openblas",
+      "filepath": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\.venv\\Lib\\site-packages\\scipy.libs\\libscipy_openblas-f07f5a5d207a3a47104dca54d6d0c86a.dll",
+      "version": "0.3.28",
+      "threading_layer": "pthreads",
+      "architecture": "SkylakeX"
+    },
+    {
+      "user_api": "openmp",
+      "internal_api": "openmp",
+      "num_threads": 8,
+      "prefix": "libiomp",
+      "filepath": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\.venv-gpu-bench\\Lib\\site-packages\\torch\\lib\\libiomp5md.dll",
+      "version": null
+    },
+    {
+      "user_api": "openmp",
+      "internal_api": "openmp",
+      "num_threads": 1,
+      "prefix": "libiomp",
+      "filepath": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\.venv-gpu-bench\\Lib\\site-packages\\torch\\lib\\libiompstubs5md.dll",
+      "version": null
+    }
+  ],
+  "benchmark_precision": "float64 / complex128",
+  "cpu_blas_threads_per_worker": 1,
+  "cpu_workers": 8,
+  "autograd": false
+}

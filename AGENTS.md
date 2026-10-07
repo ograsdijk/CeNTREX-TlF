@@ -332,6 +332,26 @@ Capabilities that already exist — check here before building something new.
   the physics and solver settings plus a `_v1` version bump, and the `.npz` carries a scalar
   `cache_version` plus every parameter needed to invalidate it, along with timings.
 
+## Static dense solver
+
+- `solver="dense_eig"` is an optional static-generator path in the usual single,
+  batch and grid APIs. CPU decomposition is shared across initial states and
+  sample times. The default remains `dopri5`.
+- It rejects direct/indirect runtime time dependence, terminal events, sampled
+  quadrature, and singular/ill-conditioned eigenbases. ODE tolerances/timesteps
+  do not control its accuracy.
+- `grid_scan(..., rho0=None, rho0_batch=initial_states)` solves independent
+  populations at every parameter point. Result ordering is parameter point,
+  then initial state; metadata records the initial-state count.
+- CPU scans use physical-core process counts by default (or explicit `threads`)
+  and one BLAS thread per worker. Use a main guard for parallel Windows scripts.
+- `prepare_dense_lindblad_propagator` exposes factorization reuse and full density
+  reconstruction. Exact reachability/sink reduction is checked; use `reduce=False`
+  if later initial coherences may lie outside the reduced subspace.
+- Optional `evolution_device="cuda"`, `gpu_batch_size=8` uses CPU decomposition
+  plus forward-only PyTorch projection. PyTorch is optional (`gpu` extra); full
+  packed density reconstruction remains on the CPU. See README_OBE_SOLVER.md.
+
 ## Sanity checks worth running
 
 - `np.trace(rho)` stays 1 to ~1e-9 across the trajectory. If it drifts, decay is leaving the

@@ -1,5 +1,6 @@
 from . import (
     batch,
+    dense,
     events,
     generate_hamiltonian,
     generate_system_of_equations,
@@ -15,6 +16,7 @@ from . import (
     utils_setup,
 )
 from .batch import *  # noqa
+from .dense import *  # noqa
 from .events import *  # noqa
 from .generate_hamiltonian import *  # noqa
 from .generate_system_of_equations import *  # noqa
@@ -30,6 +32,7 @@ from .utils_decay import *  # noqa
 from .utils_setup import *  # noqa
 
 __all__ = batch.__all__.copy()
+__all__ += dense.__all__.copy()
 __all__ += events.__all__.copy()
 __all__ += generate_hamiltonian.__all__.copy()
 __all__ += generate_system_of_equations.__all__.copy()

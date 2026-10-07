@@ -130,9 +130,132 @@ Current full OBE solver choices:
 | `scipy_bdf` | Stiff fallback | SciPy BDF using Rust packed RHS and optional exact sparse Jacobian path. |
 | `scipy_radau` | Stiff fallback | SciPy Radau using Rust packed RHS and optional exact sparse Jacobian path. |
 | `python_rk45` | Python/reference path | Python/reference RK45 implementation for correctness checks and debugging. |
+| `dense_eig` | Static-generator spectral propagation | CPU decomposition shared by all initial states and sample times; optional CUDA observable evaluation. |
 
 Native Rust stiff/BDF solving is not implemented. Use `scipy_bdf` or
 `scipy_radau` when a stiff fallback is needed.
+
+## Dense Solver for Constant Fields and Drives
+
+`solver="dense_eig"` uses the Rust prepared model's analytic packed Liouvillian,
+then factors it on the CPU with SciPy. It performs **one decomposition per unique
+parameter row**, solves all that row's initial states together, and evaluates
+exponential factors at every requested time. The default remains `dopri5`.
+
+The solver structurally rejects explicit Hamiltonian time dependence and time
+dependence through compound parameters, including indirect dependencies. It
+also rejects terminal events and sampled-quadrature integrals. Use an ODE solver
+for envelopes, modulation, switching, or events. Collapse matrices in the
+prepared model are constant. A singular or poorly conditioned eigenbasis raises
+an error recommending an ODE solver; defective generators cannot be propagated
+by this eigenbasis method.
+
+Prepare with `backend="rust"` and `hamiltonian_representation="decomposed"`. All
+existing static output modes are supported, including full packed density,
+complex selected entries, weighted rates, and analytic cumulative integrals.
+`abstol`, `reltol`, `dt`, and `maxiters` are ODE settings and do not control dense
+solver accuracy. Factorization residual and conditioning diagnostics are
+available with `collect_stats=True`.
+
+For a grid with several independently prepared populations:
+
+```python
+from centrex_tlf.lindblad import grid_scan
+
+# initial_states has shape (n_initial, n_states, n_states).
+result = grid_scan(
+    prepared,
+    None,
+    (0.0, 350e-6),
+    rho0_batch=initial_states,
+    scan={"detuning": detunings_rad_s, "rabi": rabi_values},
+    solver="dense_eig",
+    output="photon_integral",
+    integral_weights=[(i, decay_rate) for i in excited_indices],
+    output_when="saveat",
+    saveat=saveat,
+    parallel=True,
+    threads=8,
+    collect_stats=True,
+)
+photons = result.values[..., 0].reshape(
+    len(detunings_rad_s), len(rabi_values), len(initial_states), len(saveat)
+)
+```
+
+Grid ordering is parameter-point first (the existing Cartesian axis order), then
+initial state. `metadata["grid_shape"]` describes the parameter axes;
+`metadata["initial_condition_count"]` supplies the extra initial-state dimension.
+The explicit `rho0_batch` grid option is available with `dense_eig`; pass
+`rho0=None` with it. Single-state grids preserve existing result shapes.
+`solve_lindblad_batch` and `initial_condition_scan` accept the existing matrix or
+packed batches. Batch trajectories with identical parameter rows share a
+factorization; result rows retain their input ordering.
+
+Parallel dense scans use processes across distinct parameter rows and one BLAS
+thread per process. `threads` sets the process count, capped by the number of
+unique rows; otherwise the solver uses the physical-core count. All initial
+states at one parameter point share one process. On Windows and other platforms
+using process spawning, run parallel scripts under an
+`if __name__ == "__main__":` guard. Small scans can use `parallel=False` to avoid
+process startup. Eigenbasis storage scales as the square of the packed generator
+dimension, and full trajectories may require much more memory than photons.
+
+### Reusing a Factorization and Reconstructing Density Matrices
+
+```python
+from centrex_tlf.lindblad import prepare_dense_lindblad_propagator
+
+propagator = prepare_dense_lindblad_propagator(
+    prepared,
+    initial_states,
+    parameter_values={"rabi": rabi_value, "detuning": detuning_value},
+)
+counts = propagator.evaluate(
+    initial_states, saveat,
+    output="photon_integral",
+    integral_weights=[(i, decay_rate) for i in excited_indices],
+)
+rho = propagator.density_matrices(initial_states, [0.0, 100e-6, 350e-6])
+```
+
+`evaluate` returns `(n_initial, n_times, output_width)`; density reconstruction
+returns `(n_initial, n_times, n_states, n_states)`. Times are absolute and the
+initial states apply at `t0` (default zero). Integrals start at `t0` and are
+independent of the sample grid. Additional initial states and sample times reuse
+the factorization. The propagator is a snapshot: changing prepared parameters
+does not change it, and new power/detuning/field combinations require a new one.
+
+Reduction uses exact graph reachability from the union of the initial states,
+not a numerical coupling cutoff. Zero-feedback sink populations are reconstructed
+analytically, including their initial population. Other unreachable packed
+variables remain zero. A reduced propagator rejects later initial states with
+support outside its retained subspace; prepare with all desired initial states,
+or set `reduce=False` for arbitrary later initial coherences. Reconstruction
+preserves the retained OBE model, including compact spectator states; it does
+not undo state compaction.
+
+### Optional CPU Decomposition with GPU Evaluation
+
+Set `evolution_device="cuda"` and optionally `gpu_batch_size=8` on the dense solve
+or scan. Decomposition and initial-state linear solves still run on CPU workers;
+one GPU consumer receives projected coefficients and evaluates ready batches.
+Time evaluation is chunked and task submission is bounded. Full packed density
+reconstruction stays on the CPU; rates, integrals, populations, and selected
+entries can use CUDA. `DenseLindbladPropagator.evaluate` also accepts the device
+option. This is forward-only evaluation, without autograd.
+
+PyTorch is imported only when CUDA is requested. Install the optional
+`centrex-tlf[gpu]` extra with a CUDA-enabled PyTorch build appropriate for the
+machine. Missing PyTorch or unavailable CUDA raises a clear error before worker
+launch; CPU-only use does not require PyTorch.
+
+The paired saved-matrix prototype measured about 15% higher throughput for the
+hybrid path than eight-worker CPU-only evaluation on the Ryzen 7 9800X3D / RTX
+5070 Ti system. This is a small photon-output benchmark, not a universal gain;
+CPU-only remains the default. See `benchmarks/r2_f4_gpu_concurrency_results/REPORT.md`
+and `benchmarks/dense_library_integration_results/REPORT.md` for scope, complete
+system configuration, and library-level validation.
 
 In short: for full OBE examples, prefer `dopri5` or `tsit5`. For
 effective-Hamiltonian examples, use `dopri5` or `tsit5`.

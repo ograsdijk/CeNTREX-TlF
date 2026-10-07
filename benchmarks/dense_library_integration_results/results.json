@@ -1,0 +1,1409 @@
+{
+  "generated_at": "2026-10-07T11:45:36.200476-05:00",
+  "validation": [
+    {
+      "z_fraction": 0.0,
+      "power_mW": 1.0,
+      "detuning_MHz": 6.8,
+      "photon_reference_error": 1.9984014443252818e-15,
+      "cpu_gpu_error": 2.220446049250313e-15,
+      "trace_error": 9.399703237988888e-12,
+      "min_density_eigenvalue": -6.242859098928445e-15,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.15866815707051685,
+        "eigenbasis_residual": 2.0337352215542543e-14,
+        "factorization_seconds": 0.9013270998839289
+      }
+    },
+    {
+      "z_fraction": 0.0,
+      "power_mW": 1.0,
+      "detuning_MHz": 28.2,
+      "photon_reference_error": 1.3322676295501878e-15,
+      "cpu_gpu_error": 1.1102230246251565e-15,
+      "trace_error": 2.311706381874501e-11,
+      "min_density_eigenvalue": -6.465415962199556e-16,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.005674814213794249,
+        "eigenbasis_residual": 4.5003272187789855e-14,
+        "factorization_seconds": 0.8779217998962849
+      }
+    },
+    {
+      "z_fraction": 0.0,
+      "power_mW": 10.0,
+      "detuning_MHz": 6.8,
+      "photon_reference_error": 2.3314683517128287e-15,
+      "cpu_gpu_error": 2.55351295663786e-15,
+      "trace_error": 4.9777293398278744e-11,
+      "min_density_eigenvalue": -4.779121177110217e-16,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.06819967259139462,
+        "eigenbasis_residual": 1.8554713655848308e-14,
+        "factorization_seconds": 0.9115625000558794
+      }
+    },
+    {
+      "z_fraction": 0.0,
+      "power_mW": 10.0,
+      "detuning_MHz": 28.2,
+      "photon_reference_error": 3.3306690738754696e-15,
+      "cpu_gpu_error": 3.3306690738754696e-15,
+      "trace_error": 2.166034018813434e-11,
+      "min_density_eigenvalue": -4.740255795081079e-16,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.11267073743681379,
+        "eigenbasis_residual": 4.1349710252503726e-14,
+        "factorization_seconds": 0.890140000032261
+      }
+    },
+    {
+      "z_fraction": 0.03,
+      "power_mW": 1.0,
+      "detuning_MHz": 28.2,
+      "photon_reference_error": 1.6653345369377348e-15,
+      "cpu_gpu_error": 1.3322676295501878e-15,
+      "trace_error": 4.0786707344864226e-11,
+      "min_density_eigenvalue": -5.526900561571724e-16,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.03159504198908198,
+        "eigenbasis_residual": 4.1349677372327375e-14,
+        "factorization_seconds": 0.8369104999583215
+      }
+    },
+    {
+      "z_fraction": 0.03,
+      "power_mW": 10.0,
+      "detuning_MHz": 6.8,
+      "photon_reference_error": 3.774758283725532e-15,
+      "cpu_gpu_error": 4.218847493575595e-15,
+      "trace_error": 3.386069202804265e-11,
+      "min_density_eigenvalue": -7.027377636921744e-16,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.06535182498822807,
+        "eigenbasis_residual": 1.86284822048027e-14,
+        "factorization_seconds": 0.8609559999313205
+      }
+    },
+    {
+      "z_fraction": 0.03,
+      "power_mW": 10.0,
+      "detuning_MHz": 28.2,
+      "photon_reference_error": 2.4424906541753444e-15,
+      "cpu_gpu_error": 2.4424906541753444e-15,
+      "trace_error": 3.109457136218907e-11,
+      "min_density_eigenvalue": -7.090902144193978e-16,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.01741416341076355,
+        "eigenbasis_residual": 3.566115425611134e-14,
+        "factorization_seconds": 0.8400912000797689
+      }
+    },
+    {
+      "z_fraction": 0.05,
+      "power_mW": 1.0,
+      "detuning_MHz": 28.2,
+      "photon_reference_error": 1.4432899320127035e-15,
+      "cpu_gpu_error": 1.5543122344752192e-15,
+      "trace_error": 2.591726833145458e-11,
+      "min_density_eigenvalue": -1.285748650377331e-15,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.0760438143343279,
+        "eigenbasis_residual": 4.77477927127714e-14,
+        "factorization_seconds": 0.8362432001158595
+      }
+    },
+    {
+      "z_fraction": 0.05,
+      "power_mW": 10.0,
+      "detuning_MHz": 6.8,
+      "photon_reference_error": 2.886579864025407e-15,
+      "cpu_gpu_error": 2.886579864025407e-15,
+      "trace_error": 2.976174862112657e-11,
+      "min_density_eigenvalue": -6.762283673698419e-16,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.0703297952197096,
+        "eigenbasis_residual": 2.435597304309908e-14,
+        "factorization_seconds": 0.9046771000139415
+      }
+    },
+    {
+      "z_fraction": 0.05,
+      "power_mW": 10.0,
+      "detuning_MHz": 28.2,
+      "photon_reference_error": 2.6645352591003757e-15,
+      "cpu_gpu_error": 2.4424906541753444e-15,
+      "trace_error": 3.789013547361719e-11,
+      "min_density_eigenvalue": -6.48375223757668e-16,
+      "factorization_stats": {
+        "active_dimension": 1444,
+        "packed_dimension": 1681,
+        "sink_count": 3,
+        "reciprocal_condition": 0.11446807374749153,
+        "eigenbasis_residual": 4.018130169189565e-14,
+        "factorization_seconds": 0.8432841999456286
+      }
+    }
+  ],
+  "throughput": [
+    {
+      "device": "cpu",
+      "repeat": 0,
+      "tasks": 32,
+      "wall_s": 10.023952700197697,
+      "points_per_second": 3.1923534514851495,
+      "stats": {
+        "solver": "dense_eig",
+        "evolution_device": "cpu",
+        "workers": 8,
+        "blas_threads_per_worker": 1,
+        "factorization_count": 32,
+        "saved_points": 1401,
+        "total_seconds": 10.020336299901828,
+        "factorizations": [
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997680987425685,
+            "eigenbasis_residual": 2.6104727416714487e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7060718000866473
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267038919113662,
+            "eigenbasis_residual": 1.4831536080031437e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6828494998626411
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997921554109263,
+            "eigenbasis_residual": 2.4907088836511577e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7524742998648435
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06826836425267123,
+            "eigenbasis_residual": 1.732911480931701e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7371674999594688
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.1126705532030755,
+            "eigenbasis_residual": 1.284398898254935e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6560331000946462
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267071290354025,
+            "eigenbasis_residual": 1.2639712221856606e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6513554998673499
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267046573706235,
+            "eigenbasis_residual": 1.3006816878907593e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6785778000485152
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998004098249919,
+            "eigenbasis_residual": 2.8379484530769702e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8273978000506759
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06830295502467214,
+            "eigenbasis_residual": 2.308948969528277e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8379705999977887
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267020770963664,
+            "eigenbasis_residual": 1.3795030742878383e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7830366000998765
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267011074476004,
+            "eigenbasis_residual": 1.505353883390132e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7676281000021845
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06832016205699983,
+            "eigenbasis_residual": 2.2810057577111613e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8387996999081224
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049978414856464946,
+            "eigenbasis_residual": 2.5843659057257116e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7035381000023335
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997598376732773,
+            "eigenbasis_residual": 2.7390521045764407e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6955162000376731
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0681996725913946,
+            "eigenbasis_residual": 1.840453776863833e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6602316000498831
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998325959470715,
+            "eigenbasis_residual": 2.4640735311318863e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.9309314999263734
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11266990260625538,
+            "eigenbasis_residual": 1.3359949241424687e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8396558999083936
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049981646612072654,
+            "eigenbasis_residual": 2.7349067935458823e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.9015277000144124
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267001308660073,
+            "eigenbasis_residual": 1.3780610252845145e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8931569999549538
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998244745692946,
+            "eigenbasis_residual": 2.3602327346779694e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8705690999049693
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06835458097016862,
+            "eigenbasis_residual": 1.880072168293843e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8985274999868125
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049980840570801176,
+            "eigenbasis_residual": 2.6485027378917353e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8561501000076532
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06828564031998782,
+            "eigenbasis_residual": 2.3065915237522958e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7306616001296788
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06821678285459715,
+            "eigenbasis_residual": 1.923330742895477e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6686916998587549
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267029844748024,
+            "eigenbasis_residual": 1.443530291740587e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6701088000554591
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997760417549881,
+            "eigenbasis_residual": 2.4719715882277086e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7262252999935299
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06823393401013049,
+            "eigenbasis_residual": 1.978388493006942e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.694611000129953
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06825112831494995,
+            "eigenbasis_residual": 1.504500835092567e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6997143998742104
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06833735457727541,
+            "eigenbasis_residual": 2.1815895610964778e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8398757998365909
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267063315796526,
+            "eigenbasis_residual": 1.4590267298636536e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6646592998877168
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06837183976277605,
+            "eigenbasis_residual": 2.3253448785098988e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6717454998288304
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11266978809229167,
+            "eigenbasis_residual": 1.6073470017997396e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6326820999383926
+          }
+        ],
+        "full_reconstruction_device": "cpu",
+        "function_evaluations": 0
+      }
+    },
+    {
+      "device": "cuda",
+      "repeat": 0,
+      "tasks": 32,
+      "wall_s": 10.742511700140312,
+      "points_per_second": 2.9788191898903897,
+      "stats": {
+        "solver": "dense_eig",
+        "evolution_device": "cuda",
+        "workers": 8,
+        "blas_threads_per_worker": 1,
+        "factorization_count": 32,
+        "saved_points": 1401,
+        "total_seconds": 9.608283899957314,
+        "factorizations": [
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049978414856464946,
+            "eigenbasis_residual": 2.5843659057257116e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6872690999880433
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997760417549881,
+            "eigenbasis_residual": 2.4719715882277086e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.706302999984473
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267038919113662,
+            "eigenbasis_residual": 1.4831536080031437e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7192844001110643
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06828564031998784,
+            "eigenbasis_residual": 2.3065915237522958e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7638996001332998
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0681996725913946,
+            "eigenbasis_residual": 1.840453776863833e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6670646998099983
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997680987425686,
+            "eigenbasis_residual": 2.6104727416714487e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7036631000228226
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267071290354025,
+            "eigenbasis_residual": 1.2639712221856606e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6390325999818742
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06825112831494994,
+            "eigenbasis_residual": 1.504500835092567e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6870409001130611
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06832016205699983,
+            "eigenbasis_residual": 2.2810057577111613e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8017977999988943
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06830295502467214,
+            "eigenbasis_residual": 2.308948969528277e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7590908000711352
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998084057080119,
+            "eigenbasis_residual": 2.6485027378917353e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7827100001741201
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267020770963664,
+            "eigenbasis_residual": 1.3795030742878383e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7347492000553757
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997921554109263,
+            "eigenbasis_residual": 2.4907088836511577e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7508541999850422
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267011074476004,
+            "eigenbasis_residual": 1.505353883390132e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7589838998392224
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267029844748024,
+            "eigenbasis_residual": 1.443530291740587e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7213948001153767
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0682339340101305,
+            "eigenbasis_residual": 1.978388493006942e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6927684000693262
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0683373545772754,
+            "eigenbasis_residual": 2.1815895610964778e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.9017109000124037
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06837183976277605,
+            "eigenbasis_residual": 2.3253448785098988e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8574175001122057
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06835458097016862,
+            "eigenbasis_residual": 1.880072168293843e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.818954800022766
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998244745692944,
+            "eigenbasis_residual": 2.3602327346779694e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.9088151000905782
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049983259594707154,
+            "eigenbasis_residual": 2.4640735311318863e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.9111389999743551
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11266990260625538,
+            "eigenbasis_residual": 1.3359949241424687e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8519214000552893
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267001308660073,
+            "eigenbasis_residual": 1.3780610252845145e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8034769000951201
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998164661207266,
+            "eigenbasis_residual": 2.7349067935458823e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7301312000490725
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998004098249919,
+            "eigenbasis_residual": 2.8379484530769702e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7338479999452829
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06826836425267122,
+            "eigenbasis_residual": 1.732911480931701e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.72119430010207
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267063315796526,
+            "eigenbasis_residual": 1.4590267298636536e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6546118999831378
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06821678285459715,
+            "eigenbasis_residual": 1.923330742895477e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6677481001242995
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267046573706235,
+            "eigenbasis_residual": 1.3006816878907593e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6585965999402106
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267055320307548,
+            "eigenbasis_residual": 1.284398898254935e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6556538001168519
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997598376732774,
+            "eigenbasis_residual": 2.7390521045764407e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6948116000276059
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11266978809229164,
+            "eigenbasis_residual": 1.6073470017997396e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6588056001346558
+          }
+        ],
+        "full_reconstruction_device": "cpu",
+        "function_evaluations": 0
+      }
+    },
+    {
+      "device": "cuda",
+      "repeat": 1,
+      "tasks": 32,
+      "wall_s": 9.757706699892879,
+      "points_per_second": 3.279459096710839,
+      "stats": {
+        "solver": "dense_eig",
+        "evolution_device": "cuda",
+        "workers": 8,
+        "blas_threads_per_worker": 1,
+        "factorization_count": 32,
+        "saved_points": 1401,
+        "total_seconds": 9.75508900010027,
+        "factorizations": [
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997760417549881,
+            "eigenbasis_residual": 2.4719715882277086e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7385871999431401
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267063315796526,
+            "eigenbasis_residual": 1.4590267298636536e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6831299997866154
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267038919113662,
+            "eigenbasis_residual": 1.4831536080031437e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6817536999005824
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06826836425267123,
+            "eigenbasis_residual": 1.732911480931701e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7470020998734981
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997680987425686,
+            "eigenbasis_residual": 2.6104727416714487e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7113779000937939
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06825112831494995,
+            "eigenbasis_residual": 1.504500835092567e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7419883999973536
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06828564031998782,
+            "eigenbasis_residual": 2.3065915237522958e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.739793999819085
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049978414856464946,
+            "eigenbasis_residual": 2.5843659057257116e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7324846999254078
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049980840570801176,
+            "eigenbasis_residual": 2.6485027378917353e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7887328998185694
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06832016205699983,
+            "eigenbasis_residual": 2.2810057577111613e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7718605999834836
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267020770963665,
+            "eigenbasis_residual": 1.3795030742878383e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7178356000222266
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0681996725913946,
+            "eigenbasis_residual": 1.840453776863833e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6567027999553829
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997598376732773,
+            "eigenbasis_residual": 2.7390521045764407e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7093998999334872
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997921554109263,
+            "eigenbasis_residual": 2.4907088836511577e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7722528001759201
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06821678285459716,
+            "eigenbasis_residual": 1.923330742895477e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6753131998702884
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049983259594707154,
+            "eigenbasis_residual": 2.4640735311318863e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8010591000784189
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0683373545772754,
+            "eigenbasis_residual": 2.1815895610964778e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7918601001147181
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06835458097016862,
+            "eigenbasis_residual": 1.880072168293843e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.841616699937731
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06837183976277605,
+            "eigenbasis_residual": 2.3253448785098988e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7746906001120806
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267071290354025,
+            "eigenbasis_residual": 1.2639712221856606e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6430310001596808
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11266990260625538,
+            "eigenbasis_residual": 1.3359949241424687e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.765390699962154
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998244745692946,
+            "eigenbasis_residual": 2.3602327346779694e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.846562199993059
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998004098249919,
+            "eigenbasis_residual": 2.8379484530769702e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7927951000165194
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267011074476004,
+            "eigenbasis_residual": 1.505353883390132e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7466007999610156
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06830295502467212,
+            "eigenbasis_residual": 2.308948969528277e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7535568999592215
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267029844748024,
+            "eigenbasis_residual": 1.443530291740587e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6631481999065727
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.1126705532030755,
+            "eigenbasis_residual": 1.284398898254935e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6966665000654757
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267046573706235,
+            "eigenbasis_residual": 1.3006816878907593e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6857224002014846
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267001308660073,
+            "eigenbasis_residual": 1.3780610252845145e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7534384001046419
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998164661207265,
+            "eigenbasis_residual": 2.7349067935458823e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7429388000164181
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0682339340101305,
+            "eigenbasis_residual": 1.978388493006942e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7017077999189496
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11266978809229164,
+            "eigenbasis_residual": 1.6073470017997396e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6270957000087947
+          }
+        ],
+        "full_reconstruction_device": "cpu",
+        "function_evaluations": 0
+      }
+    },
+    {
+      "device": "cpu",
+      "repeat": 1,
+      "tasks": 32,
+      "wall_s": 9.976164600113407,
+      "points_per_second": 3.2076455514413054,
+      "stats": {
+        "solver": "dense_eig",
+        "evolution_device": "cpu",
+        "workers": 8,
+        "blas_threads_per_worker": 1,
+        "factorization_count": 32,
+        "saved_points": 1401,
+        "total_seconds": 9.973541300045326,
+        "factorizations": [
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997680987425686,
+            "eigenbasis_residual": 2.6104727416714487e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.718398200115189
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06826836425267122,
+            "eigenbasis_residual": 1.732911480931701e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7269556999672204
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267071290354025,
+            "eigenbasis_residual": 1.2639712221856606e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6361006000079215
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0682339340101305,
+            "eigenbasis_residual": 1.978388493006942e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6938283001072705
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997598376732773,
+            "eigenbasis_residual": 2.7390521045764407e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6961037998553365
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.049978414856464946,
+            "eigenbasis_residual": 2.5843659057257116e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7051923999097198
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997760417549881,
+            "eigenbasis_residual": 2.4719715882277086e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7637414999771863
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267029844748024,
+            "eigenbasis_residual": 1.443530291740587e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6586221000179648
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998084057080119,
+            "eigenbasis_residual": 2.6485027378917353e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7859032999258488
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267020770963664,
+            "eigenbasis_residual": 1.3795030742878383e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.733803000068292
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267011074476004,
+            "eigenbasis_residual": 1.505353883390132e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7295438998844475
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267055320307548,
+            "eigenbasis_residual": 1.284398898254935e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6792105999775231
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998004098249919,
+            "eigenbasis_residual": 2.8379484530769702e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7772913000080734
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06832016205699983,
+            "eigenbasis_residual": 2.2810057577111613e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7598011000081897
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04997921554109263,
+            "eigenbasis_residual": 2.4907088836511577e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.758788299979642
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0683373545772754,
+            "eigenbasis_residual": 2.1815895610964778e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8294275000225753
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.1126700130866007,
+            "eigenbasis_residual": 1.3780610252845145e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8880410999991
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998164661207266,
+            "eigenbasis_residual": 2.7349067935458823e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8787549999542534
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06835458097016862,
+            "eigenbasis_residual": 1.880072168293843e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8190828000660986
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998244745692945,
+            "eigenbasis_residual": 2.3602327346779694e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8771281999070197
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.04998325959470715,
+            "eigenbasis_residual": 2.4640735311318863e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.820445999968797
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06821678285459715,
+            "eigenbasis_residual": 1.923330742895477e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6739758998155594
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06830295502467214,
+            "eigenbasis_residual": 2.308948969528277e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.796735200099647
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267046573706235,
+            "eigenbasis_residual": 1.3006816878907593e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.679117500083521
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06825112831494992,
+            "eigenbasis_residual": 1.504500835092567e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7266732999123633
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267063315796526,
+            "eigenbasis_residual": 1.4590267298636536e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6876799000892788
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06828564031998782,
+            "eigenbasis_residual": 2.3065915237522958e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.7295796999242157
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11266990260625538,
+            "eigenbasis_residual": 1.3359949241424687e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.8711864999495447
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11267038919113664,
+            "eigenbasis_residual": 1.4831536080031437e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6996916001662612
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.0681996725913946,
+            "eigenbasis_residual": 1.840453776863833e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.657292400021106
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.06837183976277605,
+            "eigenbasis_residual": 2.3253448785098988e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6793196999933571
+          },
+          {
+            "active_dimension": 1444,
+            "packed_dimension": 1681,
+            "sink_count": 3,
+            "reciprocal_condition": 0.11266978809229167,
+            "eigenbasis_residual": 1.6073470017997396e-14,
+            "residual_probe_count": 8,
+            "factorization_seconds": 0.6431692000478506
+          }
+        ],
+        "full_reconstruction_device": "cpu",
+        "function_evaluations": 0
+      }
+    }
+  ]
+}

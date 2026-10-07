@@ -565,6 +565,8 @@ def solve_lindblad(
     integral_method: str = "solver",
     integral_saveat: None | float | Sequence[float] | npt.NDArray[np.floating] = None,
     stop_event: Any | None = None,
+    evolution_device: str = "cpu",
+    gpu_batch_size: int = 8,
 ) -> LindbladResult | LindbladMatrixResult | LindbladObservableResult:
     """Solve one Lindblad trajectory.
 
@@ -577,6 +579,38 @@ def solve_lindblad(
     """
     if solver is None:
         solver = "python_rk45" if backend == "python" else "dopri5"
+    if solver == "dense_eig":
+        from .dense import _solve_dense_single
+
+        if backend != "rust":
+            raise ValueError("dense_eig requires backend='rust' for analytic model lowering")
+        if isinstance(prepared_or_obe_system, PreparedLindbladProblem):
+            prepared = prepared_or_obe_system
+        else:
+            if parameters is None:
+                raise TypeError("parameters are required when solving from an OBESystem")
+            prepared = prepare_lindblad_problem(prepared_or_obe_system, parameters, backend=backend)
+        return _solve_dense_single(
+            prepared,
+            rho0,
+            t_span,
+            execution_mode=execution_mode,
+            saveat=saveat,
+            save_start=save_start,
+            collect_stats=collect_stats,
+            output=output,
+            output_indices=output_indices,
+            output_when=output_when,
+            integral_weights=integral_weights,
+            integral_method=integral_method,
+            integral_saveat=integral_saveat,
+            dense_output=dense_output,
+            stop_event=stop_event,
+            evolution_device=evolution_device,
+            gpu_batch_size=gpu_batch_size,
+        )
+    if evolution_device != "cpu" or gpu_batch_size != 8:
+        raise ValueError("evolution_device and gpu_batch_size apply only to solver='dense_eig'")
     if solver not in {
         "dopri5",
         "tsit5",
