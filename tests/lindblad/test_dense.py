@@ -239,7 +239,7 @@ def test_density_and_sink_integrals_match_independent_exponential(n):
     for i, rho in enumerate(initial):
         expected = independent(H, C, rho, times - 2.0)
         np.testing.assert_allclose(density[i], expected, atol=2e-13)
-        assert np.min(la.eigvalsh(density[i])) > -1e-12
+        assert np.min(np.linalg.eigvalsh(density[i])) > -1e-12
     np.testing.assert_allclose(np.trace(density, axis1=-2, axis2=-1), 1, atol=2e-13)
     for weights in [[(1, 0.5)], [(i, 1.0) for i in range(n)]]:
         photons = factor.evaluate(
