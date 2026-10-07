@@ -107,7 +107,7 @@ def collapse_matrices(
 
                 C_list.append(H)
 
-    C_array = np.array(C_list)
+    C_array = np.array(C_list, dtype=float).reshape(-1, len(QN), len(QN))
 
     if qn_compact:
         if isinstance(qn_compact, states.QuantumSelector):

@@ -6,8 +6,6 @@ import pandas as pd
 
 from centrex_tlf import hamiltonian, states
 
-from .polarization import polarization_unpolarized
-
 __all__ = ["calculate_br", "generate_br_dataframe"]
 
 
@@ -19,8 +17,11 @@ def calculate_br(
     """Calculate branching ratios for spontaneous emission from an excited state.
 
     Computes the relative probability for an excited state to decay to each of the
-    ground states via electric dipole transitions. Branching ratio BR[i] = |ME[i]|² /  Σ|ME|²,
-    where ME[i] is the electric dipole matrix element to ground state i.
+    ground states via electric dipole transitions in isotropic free space. For each
+    final state, sums |⟨g|D_a|e⟩|² over three orthogonal Cartesian polarizations
+    before normalizing over the supplied ground states. Amplitudes remain coherent
+    within each polarization component, but distinct components are summed
+    incoherently. A common polarization-average factor of 1/3 cancels.
 
     Args:
         excited_state (CoupledState): Excited state that can decay
@@ -32,29 +33,40 @@ def calculate_br(
         npt.NDArray[np.floating]: Array of branching ratios, length len(ground_states),
             normalized so that Σ BR[i] = 1
 
+    Raises:
+        ValueError: A nonempty ground-state list has zero total dipole strength.
+
     Example:
         >>> BRs = calculate_br(excited_state, ground_states)
         >>> print(f"Decay to state 0: {BRs[0]*100:.1f}%")
     """
-    # Matrix elements between the excited state and the ground states
-    MEs = np.zeros((len(ground_states)), dtype=np.complex128)
+    strengths = np.zeros(len(ground_states), dtype=np.float64)
+    if not len(ground_states):
+        return strengths
+    polarizations = np.eye(3, dtype=np.complex128)
 
     # Both the small-component removal and the Omega-basis transform inside
     # generate_ED_ME_mixed_state depend only on the excited state, so doing
     # them once here saves one rebuild of each per ground state.
-    excited_reduced = hamiltonian.to_omega_basis(
-        excited_state.remove_small_components(tol=tol)
-    )
+    excited_reduced = hamiltonian.to_omega_basis(excited_state.remove_small_components(tol=tol))
     for idg, ground_state in enumerate(ground_states):
-        MEs[idg] = hamiltonian.generate_ED_ME_mixed_state(
-            ground_state.remove_small_components(tol=tol),
-            excited_reduced,
-            pol_vec=polarization_unpolarized.vector,
+        ground_reduced = hamiltonian.to_omega_basis(ground_state.remove_small_components(tol=tol))
+        strengths[idg] = sum(
+            abs(
+                hamiltonian.generate_ED_ME_mixed_state(
+                    ground_reduced, excited_reduced, pol_vec=polarization, normalize_pol=False
+                )
+            )
+            ** 2
+            for polarization in polarizations
         )
 
-    # Calculate branching ratios
-    BRs = np.abs(MEs) ** 2 / (np.sum(np.abs(MEs) ** 2)).astype(np.float64)
-    return BRs
+    total_strength = strengths.sum()
+    if total_strength == 0:
+        raise ValueError(
+            "Cannot normalize branching ratios: supplied ground states have zero total dipole strength"
+        )
+    return strengths / total_strength
 
 
 def generate_br_dataframe(

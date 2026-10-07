@@ -35,4 +35,4 @@ def test_calculate_br():
             0.0,
         ],
     )
-    assert br.sum() == 1.0
+    np.testing.assert_allclose(br.sum(), 1.0, atol=1e-15, rtol=0)

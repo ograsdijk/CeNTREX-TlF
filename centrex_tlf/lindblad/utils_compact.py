@@ -130,7 +130,18 @@ def compact_symbolic_hamiltonian_indices(
 
     # Set the representative state's diagonal element to the mean energy
     # Note: representative_idx doesn't change since we only delete indices after it
-    mean_energy = float(np.mean(diagonal_to_compact))
+    diagonal_values = np.asarray([complex(value) for value in diagonal_to_compact])
+    # Projection of a Hermitian numeric Hamiltonian can leave roundoff-sized
+    # imaginary diagonal residuals. Reject physical imaginary energies rather
+    # than passing them through to a real spectator energy.
+    # The rotating frame subtracts a large common origin. Scale the bound by
+    # the full numeric spectrum, not a small spectator splitting after that
+    # subtraction, which otherwise exaggerates the relative residual.
+    numeric_spectrum = [abs(complex(value)) for value in diagonal_full if not value.free_symbols]
+    roundoff = 128 * np.finfo(float).eps * max(1.0, *numeric_spectrum)
+    if np.max(np.abs(diagonal_values.imag)) > roundoff:
+        raise ValueError("Compacted diagonal energies must be real within floating-point roundoff")
+    mean_energy = float(np.mean(diagonal_values.real))
     hamiltonian_compact[representative_idx, representative_idx] = mean_energy
 
     return hamiltonian_compact
@@ -204,6 +215,11 @@ def generate_qn_compact(
     """
     # Extract J quantum numbers from all ground states in transitions
     J_in_transitions = [transition.J_ground for transition in transition_list]
+    J_in_transitions.extend(
+        transition.J_excited
+        for transition in transition_list
+        if isinstance(transition, transitions.MicrowaveTransition)
+    )
 
     # Find all unique J values in the X-state basis
     J_values_in_basis = np.unique([state.J for state in H_reduced.X_states_basis])

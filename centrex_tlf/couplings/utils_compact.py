@@ -112,7 +112,9 @@ def C_array_to_BR(
 def compact_BR_array_indices(
     BR_array: npt.NDArray[np.floating], indices_compact: npt.NDArray[np.int_]
 ) -> npt.NDArray[np.floating]:
-    new_shape = np.asarray(BR_array[0].shape) - len(indices_compact) + 1
+    new_shape = np.asarray(BR_array.shape[1:]) - len(indices_compact) + 1
+    if BR_array.shape[0] == 0:
+        return np.zeros((0, *new_shape), dtype=BR_array.dtype)
     BR_array_new = []
     for BR in BR_array:
         id1, id2 = np.nonzero(BR)

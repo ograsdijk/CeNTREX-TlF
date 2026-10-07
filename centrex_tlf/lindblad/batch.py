@@ -174,6 +174,10 @@ def solve_lindblad_batch(
     threads: int | None = None,
     metadata: Mapping[str, Any] | None = None,
     stop_event: Any | None = None,
+    evolution_device: str = "cpu",
+    gpu_batch_size: int = 8,
+    profile_startup: bool = False,
+    dense_session: Any = None,
 ) -> LindbladBatchResult:
     """Solve a batch of Lindblad trajectories.
 
@@ -183,6 +187,37 @@ def solve_lindblad_batch(
     ``integral_method="sampled"`` and provide ``integral_saveat`` to choose an
     independent trapezoidal integration grid.
     """
+    if solver == "dense_eig":
+        from .dense import _solve_dense_batch
+
+        return _solve_dense_batch(
+            prepared,
+            rho0_batch,
+            t_span,
+            parameter_batch=parameter_batch,
+            parameter_slots=parameter_slots,
+            execution_mode=execution_mode,
+            saveat=saveat,
+            save_start=save_start,
+            collect_stats=collect_stats,
+            output=output,
+            output_indices=output_indices,
+            output_when=output_when,
+            integral_weights=integral_weights,
+            integral_method=integral_method,
+            integral_saveat=integral_saveat,
+            dense_output=dense_output,
+            parallel=parallel,
+            threads=threads,
+            metadata=metadata,
+            stop_event=stop_event,
+            evolution_device=evolution_device,
+            gpu_batch_size=gpu_batch_size,
+            profile_startup=profile_startup,
+            dense_session=dense_session,
+        )
+    if evolution_device != "cpu" or gpu_batch_size != 8 or profile_startup or dense_session is not None:
+        raise ValueError("dense_session, evolution_device, gpu_batch_size and profile_startup apply only to solver='dense_eig'")
     if prepared.rust_plan is None:
         raise RuntimeError("solve_lindblad_batch requires a Rust prepared plan")
     prepared.check_execution_mode(execution_mode)
@@ -415,6 +450,13 @@ def grid_scan(
     """
     if not scan:
         raise ValueError("scan must contain at least one parameter")
+    if kwargs.get("solver") == "dense_eig":
+        from .dense import _dense_grid_scan
+
+        kwargs.pop("solver")
+        for unused in ("abstol", "reltol", "dt", "maxiters", "use_split_input_rhs"):
+            kwargs.pop(unused, None)
+        return _dense_grid_scan(prepared, rho0, t_span, scan, kwargs)
     parameter_slots = list(scan)
     parameter_slot_names = _parameter_slot_names(parameter_slots)
     axes = [np.asarray(values, dtype=np.complex128).reshape(-1) for values in scan.values()]

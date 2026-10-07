@@ -180,24 +180,29 @@ def generate_reduced_X_hamiltonian(
         stol: Remove state components with amplitude smaller than stol. Defaults to
             1e-3.
         Jmin: Minimum J to include in full Hamiltonian construction. Defaults to None
-            (uses minimum J from X_states_approx).
+            (uses minimum J from X_states_approx minus two, clipped to zero).
         Jmax: Maximum J to include in full Hamiltonian construction. Defaults to None
-            (uses maximum J from X_states_approx).
+            (uses maximum J from X_states_approx plus two).
         constants: X state molecular constants. Defaults to XConstants().
         nuclear_spins: TlF nuclear spin values. Defaults to TlFNuclearSpins().
         transform: Transformation matrix from uncoupled to coupled basis for J states
             from Jmin to Jmax. If None, generated automatically. Defaults to None.
         H_func: Function to generate the Hamiltonian as function of (E, B). If None,
-            uses default X state Hamiltonian. Defaults to None.
+            uses default X state Hamiltonian. Returns rad/s matrices in the full
+            uncoupled construction basis. Defaults to None.
 
     Returns:
         ReducedHamiltonian: Dataclass containing the reduced Hamiltonian matrix,
             eigenvectors, identified states, and construction information
     """
 
+    if not len(X_states_approx):
+        raise ValueError("X_states_approx must contain at least one state")
+
     # need to generate the other states in case of mixing
-    _Jmin = min([gs.J for gs in X_states_approx]) if Jmin is None else Jmin
-    _Jmax = max([gs.J for gs in X_states_approx]) if Jmax is None else Jmax
+    _Jmin = max(0, min([gs.J for gs in X_states_approx]) - 2) if Jmin is None else Jmin
+    _Jmax = max([gs.J for gs in X_states_approx]) + 2 if Jmax is None else Jmax
+    _validate_construction_bounds(X_states_approx, _Jmin, _Jmax, minimum=0)
 
     QN = generate_uncoupled_states_ground(
         Js=np.arange(_Jmin, _Jmax + 1), nuclear_spins=nuclear_spins
@@ -215,14 +220,18 @@ def generate_reduced_X_hamiltonian(
     if transform is None:
         S_transform = generate_transform_matrix(QN, QNc)
     else:
-        if transform.shape[0] != len(QN):
+        if transform.shape != (len(QN), len(QN)):
             raise ValueError(
                 f"shape of transform incorrect; requires {(len(QN), len(QN))}, "
                 f"not {transform.shape}"
             )
         S_transform = transform
+        if not np.allclose(S_transform.conj().T @ S_transform, np.eye(len(QN)), atol=1e-10, rtol=0):
+            raise ValueError("transform must be a unitary uncoupled-to-coupled basis transformation")
 
-    H_X = S_transform.conj().T @ H_X_uc_func(E, B) @ S_transform
+    H_X_uncoupled = np.asarray(H_X_uc_func(E, B))
+    _validate_hamiltonian_matrix(H_X_uncoupled, len(QN), "H_func_X")
+    H_X = S_transform.conj().T @ H_X_uncoupled @ S_transform
     if rtol:
         H_X[np.abs(H_X) < np.abs(H_X).max() * rtol] = 0
 
@@ -298,14 +307,21 @@ def generate_reduced_B_hamiltonian(
         nuclear_spins (TlFNuclearSpins, optional): TlF nuclear spins. Defaults to
                                                     TlFNuclearSpins().
         H_func (Optional[Callable], optional): Function to generate the Hamiltonian
-                                                depending on E and B. Defaults to None.
+                                                depending on E and B. Returns rad/s
+                                                matrices in the full construction
+                                                basis selected by B_states_approx.
+                                                Defaults to None.
 
     Returns:
         ReducedHamiltonian: States and Hamiltonian
     """
+    if not len(B_states_approx):
+        raise ValueError("B_states_approx must contain at least one state")
+
     # need to generate the other states in case of mixing
     _Jmin = 1 if Jmin is None else Jmin
     _Jmax = max([gs.J for gs in B_states_approx]) + 2 if Jmax is None else Jmax
+    _validate_construction_bounds(B_states_approx, _Jmin, _Jmax, minimum=1)
 
     omega_basis_flag = False
 
@@ -329,8 +345,10 @@ def generate_reduced_B_hamiltonian(
     else:
         H_B_func = H_func
 
+    H_B_matrix = np.asarray(H_B_func(E, B))
+    _validate_hamiltonian_matrix(H_B_matrix, len(QN_B), "H_func_B")
     H_diagonalized = generate_diagonalized_hamiltonian(
-        H_B_func(E, B), keep_order=True, return_V_ref=True, rtol=rtol
+        H_B_matrix, keep_order=True, return_V_ref=True, rtol=rtol
     )
 
     # new set of quantum numbers:
@@ -363,6 +381,44 @@ def generate_reduced_B_hamiltonian(
         QN_basis=excited_states,
         QN_construct=list(QN_B),
         hamiltonian=H_B,
+    )
+
+
+def _validate_hamiltonian_matrix(matrix: npt.NDArray, dimension: int, name: str) -> None:
+    if matrix.shape != (dimension, dimension):
+        raise ValueError(
+            f"{name} returned shape {matrix.shape}; expected {(dimension, dimension)} "
+            "for the construction basis. Set matching explicit J bounds for precomputed Hamiltonians."
+        )
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError(f"{name} must return finite Hamiltonian entries; found NaN or infinity")
+    scale = float(np.max(np.abs(matrix), initial=0.0))
+    tolerance = 1e-8 + 64 * np.finfo(float).eps * scale
+    defect = float(np.max(np.abs(matrix - matrix.conj().T), initial=0.0))
+    if defect > tolerance:
+        raise ValueError(
+            f"{name} must return a Hermitian Hamiltonian; maximum defect {defect:.6g} rad/s "
+            f"exceeds the roundoff tolerance {tolerance:.6g} rad/s"
+        )
+
+
+def _validate_construction_bounds(
+    selected_states: Sequence[CoupledBasisState], Jmin: int, Jmax: int, minimum: int
+) -> None:
+    if Jmin < minimum or Jmax < Jmin:
+        raise ValueError(f"Invalid construction bounds: require {minimum} <= Jmin <= Jmax")
+    excluded = sorted({state.J for state in selected_states if not Jmin <= state.J <= Jmax})
+    if excluded:
+        raise ValueError(f"Construction bounds J={Jmin}..{Jmax} exclude requested J={excluded}")
+
+
+def _match_excited_states(
+    approximate_states: Sequence[CoupledBasisState], dressed_states: List[CoupledState]
+) -> List[CoupledState]:
+    construction_basis = list(get_unique_basisstates_from_states(dressed_states))
+    vectors = np.column_stack([state.state_vector(construction_basis) for state in dressed_states])
+    return find_exact_states(
+        [1 * state for state in approximate_states], construction_basis, dressed_states, V=vectors
     )
 
 
@@ -510,7 +566,7 @@ def generate_total_reduced_hamiltonian(
     ground_states = cast(List[CoupledState], ground_states)
     H_X_red = cast(npt.NDArray[np.complex128], H_X_red)
 
-    if use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
+    if len(B_states_approx) and use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
         _B_states_approx = cast(
             Sequence[CoupledBasisState],
             get_unique_basisstates_from_states(
@@ -520,7 +576,14 @@ def generate_total_reduced_hamiltonian(
     else:
         _B_states_approx = cast(List[CoupledBasisState], list(B_states_approx))
 
-    if (
+    if not len(B_states_approx):
+        H_B_red = ReducedHamiltonian(
+            H=np.zeros((0, 0), dtype=complex),
+            V=np.zeros((0, 0), dtype=complex),
+            QN_basis=[],
+            QN_construct=[],
+        )
+    elif (
         B_hamiltonian_omega is not None
         and use_omega_basis
         and B_states_approx[0].basis == Basis.CoupledP
@@ -545,18 +608,13 @@ def generate_total_reduced_hamiltonian(
                 H_func=H_func_B,
             )
 
-    if use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
+    if len(B_states_approx) and use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
         excited_states = [
             qn.transform_to_parity_basis().remove_small_components(stol)
             for qn in H_B_red.QN_basis
         ]
 
-        state_vecs = np.array(
-            [(1 * s).state_vector(excited_states) for s in B_states_approx]
-        )
-        excited_states_reduced = [
-            excited_states[idx] for idx in np.argmax(np.abs(state_vecs), axis=1)
-        ]
+        excited_states_reduced = _match_excited_states(B_states_approx, excited_states)
 
         H_B_red_matrix = reduced_basis_hamiltonian(
             excited_states, H_B_red.H, excited_states_reduced
@@ -602,6 +660,9 @@ def generate_reduced_hamiltonian_transitions(
     minimum_coupling: float = 1e-3,
     retain_opposite_parity_levels: bool = False,
     use_omega_basis: bool = True,
+    transform: Optional[npt.NDArray[np.complex128]] = None,
+    H_func_X: Optional[Callable] = None,
+    H_func_B: Optional[Callable] = None,
 ) -> ReducedHamiltonianTotal:
     """Generate reduced Hamiltonian automatically from transition definitions.
 
@@ -640,10 +701,19 @@ def generate_reduced_hamiltonian_transitions(
             reduced OBE system. Defaults to False.
         use_omega_basis: Use Ω basis for B state calculation (faster). Defaults to
             True.
+        transform: Optional unitary X uncoupled-to-coupled transformation for the
+            complete construction basis, not just the retained states.
+        H_func_X: Custom H(E, B) in rad/s in the full X uncoupled construction basis.
+        H_func_B: Custom H(E, B) in rad/s in the full B construction basis: Ω basis
+            if use_omega_basis is True, parity basis otherwise. Used for both
+            ground-level discovery and final construction. Precomputed functions
+            should supply matching explicit J bounds.
 
     Returns:
         ReducedHamiltonianTotal: Complete reduced Hamiltonian with X and B states
     """
+    if not len(transitions):
+        raise ValueError("transitions must contain at least one transition")
     _J_ground: List[int] = []
     excited_states_selectors = []
     optical_states_approx: list[list[CoupledBasisState]] = []
@@ -651,6 +721,7 @@ def generate_reduced_hamiltonian_transitions(
     # collect the approximate excited states per optical transition
     for transition in transitions:
         if isinstance(transition, OpticalTransition):
+            _J_ground.append(transition.J_ground)
             excited_states_approx_qn_select = transition.qn_select_excited
             if retain_opposite_parity_levels:
                 excited_states_approx_qn_select = _retain_opposite_parity_levels(
@@ -682,39 +753,54 @@ def generate_reduced_hamiltonian_transitions(
                 ]
             ),
         )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            B_hamiltonian_omega = generate_reduced_B_hamiltonian(
-                B_states_approx=union_states_omega,
+        if H_func_B is not None and not use_omega_basis:
+            discovery_min = 1 if Jmin_B is None else Jmin_B
+            discovery_max = (
+                max(state.J for state in union_states_omega) + 2 if Jmax_B is None else Jmax_B
+            )
+            discovery_parity = list(
+                generate_coupled_states_B(
+                    QuantumSelector(J=np.arange(discovery_min, discovery_max + 1), P=[-1, 1], Ω=1),
+                    nuclear_spins=nuclear_spins,
+                )
+            )
+            _validate_construction_bounds(union_states_omega, discovery_min, discovery_max, minimum=1)
+            parity_discovery = generate_reduced_B_hamiltonian(
+                discovery_parity,
                 E=E,
                 B=B,
                 rtol=rtol,
                 stol=stol,
-                Jmin=Jmin_B,
-                Jmax=Jmax_B,
+                Jmin=discovery_min,
+                Jmax=discovery_max,
                 constants=Bconstants,
                 nuclear_spins=nuclear_spins,
+                H_func=H_func_B,
             )
-        # Dressed levels labeled in the parity basis; each transition's excited
-        # states are identified by largest overlap, the same matching used in
-        # generate_total_reduced_hamiltonian.
-        dressed_states_parity = [
-            qn.transform_to_parity_basis().remove_small_components(stol)
-            for qn in B_hamiltonian_omega.QN_basis
-        ]
+            dressed_states_parity = parity_discovery.QN_basis
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                B_hamiltonian_omega = generate_reduced_B_hamiltonian(
+                    B_states_approx=union_states_omega,
+                    E=E,
+                    B=B,
+                    rtol=rtol,
+                    stol=stol,
+                    Jmin=Jmin_B,
+                    Jmax=Jmax_B,
+                    constants=Bconstants,
+                    nuclear_spins=nuclear_spins,
+                    H_func=H_func_B,
+                )
+            dressed_states_parity = [
+                qn.transform_to_parity_basis().remove_small_components(stol)
+                for qn in B_hamiltonian_omega.QN_basis
+            ]
 
     # figure out which rotational ground levels to include per transition
     for excited_states_approx in optical_states_approx:
-        state_vecs = np.array(
-            [
-                (1 * s).state_vector(dressed_states_parity)
-                for s in excited_states_approx
-            ]
-        )
-        excited_states = [
-            dressed_states_parity[idx]
-            for idx in np.argmax(np.abs(state_vecs), axis=1)
-        ]
+        excited_states = _match_excited_states(excited_states_approx, dressed_states_parity)
         excited_states = [
             s.remove_small_components(minimum_amplitude) for s in excited_states
         ]
@@ -765,7 +851,9 @@ def generate_reduced_hamiltonian_transitions(
     ground_states_approx = list(
         generate_coupled_states_X(ground_states_approx_qn_select)
     )
-    excited_states_approx = list(generate_coupled_states_B(excited_states_selectors))
+    excited_states_approx = (
+        list(generate_coupled_states_B(excited_states_selectors)) if excited_states_selectors else []
+    )
 
     return generate_total_reduced_hamiltonian(
         X_states_approx=ground_states_approx,
@@ -781,9 +869,9 @@ def generate_reduced_hamiltonian_transitions(
         X_constants=Xconstants,
         B_constants=Bconstants,
         nuclear_spins=nuclear_spins,
-        transform=None,
-        H_func_X=None,
-        H_func_B=None,
+        transform=transform,
+        H_func_X=H_func_X,
+        H_func_B=H_func_B,
         use_omega_basis=use_omega_basis,
         B_hamiltonian_omega=B_hamiltonian_omega if use_omega_basis else None,
     )

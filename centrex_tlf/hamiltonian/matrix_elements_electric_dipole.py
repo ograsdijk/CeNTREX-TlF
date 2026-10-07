@@ -62,8 +62,10 @@ def generate_ED_ME_mixed_state(
         bra (CoupledState): Bra state (superposition of coupled basis states)
         ket (CoupledState): Ket state (superposition of coupled basis states)
         pol_vec (npt.NDArray[np.complex128] | None): Polarization vector [Ex, Ey, Ez]
-            in Cartesian basis. Defaults to None, which uses [√(2/3), 0, √(1/3)], e.g.
-            averaging over all q=-1,0,+1 polarizations.
+            in Cartesian basis. Defaults to None, which uses the legacy coherent
+            vector [√(2/3), 0, √(1/3)]. This is not an incoherent polarization
+            average; spontaneous-emission strengths require a sum of squared
+            amplitudes over three orthogonal polarizations.
         reduced (bool): If True, return only reduced matrix element (no angular part).
             Defaults to False.
         normalize_pol (bool): If True, normalize the polarization vector. Defaults to

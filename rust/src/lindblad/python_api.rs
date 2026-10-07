@@ -31,6 +31,39 @@ pub struct LindbladRhsEvaluator {
 
 #[pymethods]
 impl LindbladRhsEvaluator {
+    /// Replace this evaluator's scalar overrides while preserving its plan and
+    /// allocation topology. Empty overrides restore the prepared defaults.
+    /// Workspace invalidation is shared with the native ODE scan path.
+    pub fn set_scalar_parameter_overrides_py(
+        &self,
+        slot_indices: Vec<usize>,
+        values: PyReadonlyArray1<'_, Complex64>,
+    ) -> PyResult<()> {
+        let values = values.as_slice().map_err(PyValueError::new_err)?;
+        if slot_indices.len() != values.len() {
+            return Err(PyValueError::new_err(
+                "parameter override slot/value count mismatch",
+            ));
+        }
+        for (i, &slot) in slot_indices.iter().enumerate() {
+            if slot >= self.plan.parameter_graph.base_values.len() {
+                return Err(PyValueError::new_err(
+                    "only base parameter slots may be overridden",
+                ));
+            }
+            if slot_indices[..i].contains(&slot) {
+                return Err(PyValueError::new_err("duplicate parameter override slot"));
+            }
+            if !values[i].re.is_finite() || !values[i].im.is_finite() {
+                return Err(PyValueError::new_err("parameter overrides must be finite"));
+            }
+        }
+        self.workspace
+            .borrow_mut()
+            .set_scalar_parameter_overrides(&slot_indices, values)
+            .map_err(PyValueError::new_err)
+    }
+
     #[pyo3(signature = (enabled = true))]
     pub fn enable_profile_py(&self, enabled: bool) {
         self.profiling_enabled.set(enabled);
