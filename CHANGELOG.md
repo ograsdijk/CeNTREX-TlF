@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.9
+
+### Added
+
+- `solver="dense_eig"` for time-independent Lindblad problems, with shared
+  eigendecomposition across initial populations, analytic cumulative photon
+  integrals, and full density-matrix reconstruction.
+- `DenseLindbladSession` reuses CPU worker processes and prepared plans across
+  repeated scans. CPU workers default to physical cores with one BLAS thread each.
+- Optional `evolution_device="cuda"` evaluates observable projections using
+  PyTorch after CPU eigendecomposition; install the `gpu` extra to enable it.
+- Static-model validation rejects time-dependent parameters and unsupported
+  solver options. Conditioning and residual checks reject unreliable spectral
+  factorizations with guidance to use an ODE solver.
+
+### Performance
+
+- The R(2) F'=4 validation scan (four independent populations, two powers,
+  three polarizations, 901 detunings, and 1401 sample times) completed in
+  13 min 57 s versus 9 h 45 min with the existing ODE solver on an eight-core
+  Ryzen 7 9800X3D with optional RTX 5070 Ti projection, about 42 times faster.
+  Maximum cumulative-photon discrepancy was 3.42e-10. Speedup depends on the
+  model and output; existing ODE defaults remain unchanged.
+
 ## 0.2.8
 
 ### Fixed
