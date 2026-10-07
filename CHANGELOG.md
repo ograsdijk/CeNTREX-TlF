@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.2.8
+
+### Fixed
+
+- X-state Hamiltonian construction now pads the retained parent-J range by two
+  rotational levels on each side, clipped at J=0. This restores omitted lower-J
+  Stark mixing without adding those states to the retained OBE system. Explicit
+  construction bounds override each side independently and must cover every
+  requested parent J and respect the electronic state's physical lower limit.
+- Excited-state matching uses one-to-one assignment in the Omega-to-parity path,
+  preventing duplicate retained eigenstates at transverse electric fields.
+- Custom `H_func_X`, `H_func_B`, and `transform` arguments are honored by the
+  transition-based OBE builder. Custom B physics participates in ground-level
+  discovery as well as final construction. Hamiltonian dimensions, finite values,
+  Hermiticity, and square/unitary X transforms are validated before diagonalization.
+- Microwave-only OBE construction supports empty excited-state and decay blocks;
+  automatic compaction retains both driven X-state rotational manifolds.
+- Additional decay-channel indices remain aligned through level insertion and
+  compaction, including the full internal Hamiltonian and reference transform.
+- `normalize_pol` is honored for automatic main-pair selection.
+- Spontaneous-emission branching ratios sum squared dipole amplitudes over three
+  orthogonal polarizations instead of using a coherent fake unpolarized vector.
+  This restores rotational invariance for mF-mixed states and corrects the
+  resulting collapse-operator population rates. A nonempty final-state list with
+  zero total dipole strength now raises `ValueError` rather than returning NaNs.
+
+### Compatibility notes
+
+- Rebuild cached Hamiltonians, OBE systems, and prepared problems. Missing lower-J
+  mixing can materially change ground-state energies and individual couplings at
+  experimental electric fields; corrected decay branching can change optical
+  pumping in tilted magnetic fields. These are correctness fixes, not an API redesign.
+- Custom Hamiltonian callbacks return rad/s matrices in the full construction
+  basis, with matching explicit J bounds and the package's basis ordering.
+- Unique one-shot matching does not replace adiabatic tracking at strong or
+  reoriented fields; check rotational-basis convergence at large electric fields.
+
 ## 0.2.5
 
 ### Fixed
