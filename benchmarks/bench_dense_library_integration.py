@@ -20,11 +20,19 @@ OUT = Path(__file__).resolve().parent/'dense_library_integration_results'
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--throughput-only',action='store_true')
-    throughput_only=parser.parse_args().throughput_only
+    parser.add_argument('--normal-startup-only',action='store_true')
+    args=parser.parse_args()
+    normal_startup=args.normal_startup_only
+    throughput_only=args.throughput_only or normal_startup
     OUT.mkdir(exist_ok=True)
     result = dict(generated_at=datetime.now().astimezone().isoformat(), validation=[], throughput=[])
     if throughput_only:
-        result['validation']=json.loads((OUT/'results.json').read_text(encoding='utf-8'))['validation']
+        previous=json.loads((OUT/'results.json').read_text(encoding='utf-8'))
+        result['validation']=previous['validation']
+        result['before_plan_reuse_throughput']=previous.get('before_plan_reuse_throughput',previous['throughput'])
+        if normal_startup:
+            result['throughput']=previous['throughput']
+            result['normal_startup_throughput']=[]
     inputs = Path(__file__).resolve().parent/'r2_f4_dense_threading_results'
     with np.load(inputs/'point_0_inputs.npz') as saved:
         packed = saved['packed'].T.copy()
@@ -81,7 +89,7 @@ def main():
     options = dict(solver='dense_eig', rho0_batch=packed, output='photon_integral',
                    output_when='saveat',saveat=scan.TIMES,
                    integral_weights=[(i,scan.GAMMA) for i in benchmark_excited],
-                   parallel=True,threads=8,collect_stats=True)
+                   parallel=True,threads=8,collect_stats=True,profile_startup=not normal_startup)
     for repeat in range(2):
         order = ['cpu','cuda'] if repeat == 0 else ['cuda','cpu']
         results = {}
@@ -92,10 +100,19 @@ def main():
                 evolution_device=device,**options)
             wall=time.perf_counter()-tick
             assert answer.solver_stats['factorization_count']==32
-            result['throughput'].append(dict(device=device,repeat=repeat,tasks=32,wall_s=wall,
+            rows=result['normal_startup_throughput'] if normal_startup else result['throughput']
+            rows.append(dict(device=device,repeat=repeat,tasks=32,wall_s=wall,
                                              points_per_second=32/wall,stats=answer.solver_stats))
             results[device]=answer.values
-            print(f'Public API {device}: {wall:.3f}s, {32/wall:.2f} points/s (includes fresh worker startup)',flush=True)
+            with np.load(saved_refs/'point_0_responses.npz') as reference:
+                error=float(abs(answer.values[:len(packed),:,0]-reference['active_real_photons']).max())
+            assert error < 1e-7
+            rows[-1]['first_point_reference_error']=error
+            steady=answer.solver_stats['steady_state_seconds']
+            if steady is not None:
+                print(f'Public API {device}: total {wall:.3f}s; startup {answer.solver_stats["worker_startup_seconds"]:.3f}s; steady {steady:.3f}s = {32/steady:.2f} points/s; reference error {error:.3g}',flush=True)
+            else:
+                print(f'Normal startup API {device}: total {wall:.3f}s, {32/wall:.2f} points/s; reference error {error:.3g}',flush=True)
         assert float(abs(results['cpu']-results['cuda']).max()) < 1e-7
         (OUT/'results.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
     config = json.loads((Path(__file__).resolve().parent/'r2_f4_gpu_concurrency_results/system_config.json').read_text(encoding='utf-8'))
@@ -104,10 +121,20 @@ def main():
             'Public solver APIs checked against saved F4 responses at ten selected power/polarization/detuning combinations. Twenty independent initial states, 1401 photon samples; full density checks at four times.', '',
             f'Maximum saved-reference photon error: {max(r["photon_reference_error"] for r in result["validation"]):.3g}. Maximum CPU/CUDA difference: {max(r["cpu_gpu_error"] for r in result["validation"]):.3g}. Trace and density positivity checks passed.', '',
             'Small 32-point unique-parameter grid, repeated twice in opposite order. Timings include parameter binding, analytic generator extraction, reduction, conditioning/residual checks, fresh eight-worker process startup, communication, transfers, projection and result collation. Common OBE construction and report writing are excluded. No ODE scan rerun.', '',
-            '| Evolution | Median seconds | Points/s |','|---|---:|---:|']
+            'Each CPU worker now reuses one native plan/evaluator/workspace, replacing parameter overrides with cache invalidation. Worker readiness is synchronized to measure startup separately. Steady-state timing includes extraction, reduction, decomposition, communication, projection, transfers and collation; it excludes worker startup and teardown.', '',
+            '| Evolution | Total seconds | Total points/s | Worker startup seconds | Steady seconds | Steady points/s |','|---|---:|---:|---:|---:|---:|']
     for device in ['cpu','cuda']:
         seconds=float(np.median([r['wall_s'] for r in result['throughput'] if r['device']==device]))
-        report.append(f'| {device} | {seconds:.3f} | {32/seconds:.2f} |')
+        startup=float(np.median([r['stats']['worker_startup_seconds'] for r in result['throughput'] if r['device']==device]))
+        steady=float(np.median([r['stats']['steady_state_seconds'] for r in result['throughput'] if r['device']==device]))
+        report.append(f'| {device} | {seconds:.3f} | {32/seconds:.2f} | {startup:.3f} | {steady:.3f} | {32/steady:.2f} |')
+    if 'before_plan_reuse_throughput' in result:
+        report += ['', 'Before this fix, the same public 32-point API measured approximately 10.00 s CPU-only and 10.25 s CPU/GPU including startup. Prior warm preassembled-matrix benchmarks measured 8.53 and 9.17 points/s respectively, with parameter binding/generator extraction excluded; those remain a narrower timing boundary.']
+    if 'normal_startup_throughput' in result:
+        report += ['', '## Default startup scheduling', '', 'Without startup profiling, ready workers begin solving while other workers initialize. The following cold-call timings use this default scheduling (two repetitions), including startup and teardown.', '', '| Evolution | Total seconds | Points/s |', '|---|---:|---:|']
+        for device in ['cpu','cuda']:
+            wall=float(np.median([r['wall_s'] for r in result['normal_startup_throughput'] if r['device']==device]))
+            report.append(f'| {device} | {wall:.3f} | {32/wall:.2f} |')
     report += ['', 'System: AMD Ryzen 7 9800X3D, eight physical cores / sixteen logical processors, 64 GB RAM class; RTX 5070 Ti. One BLAS thread per CPU worker. Software/driver/BLAS details: [system_config.json](system_config.json). Detailed numerical and timing data: [results.json](results.json).']
     (OUT/'REPORT.md').write_text('\n'.join(report)+'\n',encoding='utf-8')
 

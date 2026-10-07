@@ -193,13 +193,23 @@ packed batches. Batch trajectories with identical parameter rows share a
 factorization; result rows retain their input ordering.
 
 Parallel dense scans use processes across distinct parameter rows and one BLAS
-thread per process. `threads` sets the process count, capped by the number of
+thread per process. Each worker prepares one native plan, evaluator and workspace;
+parameter points replace scalar overrides and invalidate coefficient caches
+without rebuilding the plan. `threads` sets the process count, capped by the number of
 unique rows; otherwise the solver uses the physical-core count. All initial
 states at one parameter point share one process. On Windows and other platforms
 using process spawning, run parallel scripts under an
 `if __name__ == "__main__":` guard. Small scans can use `parallel=False` to avoid
 process startup. Eigenbasis storage scales as the square of the packed generator
 dimension, and full trajectories may require much more memory than photons.
+With `collect_stats=True, profile_startup=True`, `worker_startup_seconds` and `steady_state_seconds`
+separate worker setup from solving; `factorizations` records parameter binding
+and generator extraction, decomposition/reduction, and projection times per point.
+Reported steady-state time still includes communication and output collation.
+Startup profiling synchronizes worker readiness; it is opt-in because normal
+scans can overlap early work with later worker startup. Without this profiling
+option, parallel startup/steady-state fields are `None`; total time and per-point
+stage timings are still available with `collect_stats=True`.
 
 ### Reusing a Factorization and Reconstructing Density Matrices
 

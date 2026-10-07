@@ -567,6 +567,7 @@ def solve_lindblad(
     stop_event: Any | None = None,
     evolution_device: str = "cpu",
     gpu_batch_size: int = 8,
+    profile_startup: bool = False,
 ) -> LindbladResult | LindbladMatrixResult | LindbladObservableResult:
     """Solve one Lindblad trajectory.
 
@@ -608,8 +609,9 @@ def solve_lindblad(
             stop_event=stop_event,
             evolution_device=evolution_device,
             gpu_batch_size=gpu_batch_size,
+            profile_startup=profile_startup,
         )
-    if evolution_device != "cpu" or gpu_batch_size != 8:
+    if evolution_device != "cpu" or gpu_batch_size != 8 or profile_startup:
         raise ValueError("evolution_device and gpu_batch_size apply only to solver='dense_eig'")
     if solver not in {
         "dopri5",

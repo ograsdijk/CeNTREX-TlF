@@ -204,9 +204,81 @@ def test_parallel_process_scan_matches_serial():
         collect_stats=True,
     )
     serial = grid_scan(prepared, states()[0], (0.0, 0.7), parallel=False, **options)
-    parallel = grid_scan(prepared, states()[0], (0.0, 0.7), threads=2, **options)
+    parallel = grid_scan(
+        prepared, states()[0], (0.0, 0.7), threads=2, profile_startup=True, **options
+    )
     np.testing.assert_allclose(serial.values, parallel.values, atol=2e-13)
     assert parallel.solver_stats["workers"] == 2
+    assert parallel.solver_stats["evaluator_count"] == 2
+    assert parallel.solver_stats["worker_startup_seconds"] > 0
+    assert parallel.solver_stats["steady_state_seconds"] > 0
+    normal = grid_scan(prepared, states()[0], (0.0, 0.7), threads=2, **options)
+    np.testing.assert_allclose(serial.values, normal.values, atol=2e-13)
+    assert normal.solver_stats["worker_startup_seconds"] is None
+    assert normal.solver_stats["steady_state_seconds"] is None
+    assert not normal.solver_stats["startup_synchronized"]
+
+
+def test_serial_scan_reuses_plan_and_evaluator(monkeypatch):
+    import centrex_tlf.centrex_tlf_rust as rust
+
+    prepared, _, _ = model()
+    create = rust.create_lindblad_rhs_evaluator_py
+    calls = []
+
+    def counted(*args):
+        calls.append(True)
+        return create(*args)
+
+    def no_rebuild(*args):
+        raise AssertionError("must reuse the prepared Rust plan")
+
+    monkeypatch.setattr(rust, "create_lindblad_rhs_evaluator_py", counted)
+    monkeypatch.setattr(rust, "prepare_lindblad_problem_py", no_rebuild)
+    result = grid_scan(
+        prepared,
+        states()[0],
+        (0.0, 0.7),
+        scan={"omega": [1.2, 0.7, 1.8], "delta": [0.4, -0.2]},
+        solver="dense_eig",
+        parallel=False,
+        collect_stats=True,
+    )
+    assert len(calls) == 1
+    assert result.solver_stats["factorization_count"] == 6
+    assert result.solver_stats["evaluator_count"] == 1
+
+
+def test_native_override_cache_invalidation_and_reset():
+    import centrex_tlf.centrex_tlf_rust as rust
+
+    prepared, _, _ = model(parameters=dict(drive=1.2, omega="drive", delta=0.4))
+    evaluator = rust.create_lindblad_rhs_evaluator_py(prepared.rust_plan, "expanded_sparse")
+    packed = prepared.layout.pack(states()[1])
+    baseline_graph = repr(prepared.parameter_graph)
+    baseline = evaluator.rhs_packed_py(packed, 0.0).copy()
+    slot = prepared.parameter_graph["slot_names"].index("drive")
+    for value in [0.7, 1.8, 0.0, 1.2]:
+        evaluator.set_scalar_parameter_overrides_py([slot], np.array([value], complex))
+        expected, _, _ = model(parameters=dict(drive=value, omega="drive", delta=0.4))
+        reference = rust.create_lindblad_rhs_evaluator_py(expected.rust_plan, "expanded_sparse")
+        # RHS calls warm the static coefficient cache before the next update.
+        np.testing.assert_allclose(
+            evaluator.rhs_packed_py(packed, 0.2), reference.rhs_packed_py(packed, 0.2), atol=1e-14
+        )
+        for candidate, oracle in zip(
+            evaluator.jacobian_packed_sparse_py(0.0, 0.0, "analytic"),
+            reference.jacobian_packed_sparse_py(0.0, 0.0, "analytic"),
+            strict=True,
+        ):
+            np.testing.assert_array_equal(candidate, oracle)
+    evaluator.set_scalar_parameter_overrides_py([], np.array([], complex))
+    np.testing.assert_array_equal(evaluator.rhs_packed_py(packed, 0.0), baseline)
+    for slots, values in [([slot], []), ([100], [1]), ([slot, slot], [1, 2]), ([slot], [np.nan])]:
+        with pytest.raises(ValueError):
+            evaluator.set_scalar_parameter_overrides_py(slots, np.array(values, complex))
+        np.testing.assert_array_equal(evaluator.rhs_packed_py(packed, 0.0), baseline)
+    assert repr(prepared.parameter_graph) == baseline_graph
 
 
 @pytest.mark.parametrize(

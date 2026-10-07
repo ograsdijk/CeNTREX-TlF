@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import os
 import time
 from collections.abc import Mapping, Sequence
@@ -17,14 +16,14 @@ import scipy.sparse as sparse
 from threadpoolctl import threadpool_limits
 
 from .integral_output import INTEGRAL_OUTPUTS
-from .ir import encode_runtime_value
 from .plan_static import PreparedLindbladProblem
 from .state_layout import PackedHermitianLayout
 
 __all__ = ["DenseLindbladPropagator", "prepare_dense_lindblad_propagator"]
 
 _RATES = {"weighted_rate", "photon_rate", "excited_population_rate"}
-_WORKER_PAYLOAD: dict[str, Any] | None = None
+_WORKER_EXTRACTOR: Any = None
+_WORKER_BARRIER: Any = None
 _WORKER_LIMIT: Any = None
 
 
@@ -77,35 +76,46 @@ def _matrix_state_batch(layout: PackedHermitianLayout, rho: Any) -> np.ndarray:
     return _packed_batch(layout, array[None])
 
 
-def _payload_at(payload: dict[str, Any], parameters: Mapping[str, complex]) -> dict[str, Any]:
-    result = dict(payload)
-    graph = copy.deepcopy(payload["parameter_graph"])
-    names = graph["slot_names"]
-    for name, value in parameters.items():
-        if name not in names:
-            raise ValueError(f"unknown parameter slot {name!r}")
-        index = names.index(name)
-        if index >= len(graph["base_values"]):
-            raise ValueError(f"cannot override compound parameter {name!r}")
-        if not np.isfinite(value):
-            raise ValueError("parameter values must be finite")
-        graph["base_values"][index] = encode_runtime_value(complex(value))
-    result["parameter_graph"] = graph
-    return result
+class _StaticLiouvillian:
+    """One evaluator/workspace per worker; each parameter point replaces overrides."""
 
+    def __init__(self, payload: dict[str, Any], execution_mode: str, plan: Any = None):
+        from ..centrex_tlf_rust import create_lindblad_rhs_evaluator_py, prepare_lindblad_problem_py
 
-def _extract(payload: dict[str, Any], execution_mode: str) -> sparse.csr_matrix:
-    from ..centrex_tlf_rust import create_lindblad_rhs_evaluator_py, prepare_lindblad_problem_py
+        if plan is None:
+            plan = prepare_lindblad_problem_py(payload)
+        self.evaluator = create_lindblad_rhs_evaluator_py(plan, execution_mode, True)
+        if not hasattr(self.evaluator, "set_scalar_parameter_overrides_py"):
+            raise RuntimeError(
+                "dense_eig requires the updated Rust extension; rebuild/reinstall centrex-tlf"
+            )
+        self.layout = PackedHermitianLayout(int(payload["n_states"]))
+        graph = payload["parameter_graph"]
+        self.slots = {name: i for i, name in enumerate(graph["slot_names"])}
+        self.base_count = len(graph["base_values"])
 
-    plan = prepare_lindblad_problem_py(payload)
-    evaluator = create_lindblad_rhs_evaluator_py(plan, execution_mode, True)
-    rows, cols, values = evaluator.jacobian_packed_sparse_py(0.0, 0.0, "analytic")
-    n = int(payload["n_states"]) ** 2
-    matrix = sparse.csr_matrix((values, (rows, cols)), shape=(n, n))
-    matrix.eliminate_zeros()
-    if not np.all(np.isfinite(matrix.data)):
-        raise ValueError("Liouvillian contains nonfinite values")
-    return matrix
+    def matrix(self, parameters: Mapping[str, complex]) -> sparse.csr_matrix:
+        slots, values = [], []
+        for name, value in parameters.items():
+            if name not in self.slots:
+                raise ValueError(f"unknown parameter slot {name!r}")
+            slot = self.slots[name]
+            if slot >= self.base_count:
+                raise ValueError(f"cannot override compound parameter {name!r}")
+            if not np.isfinite(value):
+                raise ValueError("parameter values must be finite")
+            slots.append(slot)
+            values.append(complex(value))
+        # Replaces the entire override set, including restoring unspecified
+        # defaults; native invalidation prevents stale static Hamiltonian caches.
+        self.evaluator.set_scalar_parameter_overrides_py(slots, np.asarray(values, complex))
+        rows, cols, values = self.evaluator.jacobian_packed_sparse_py(0.0, 0.0, "analytic")
+        n = self.layout.packed_len
+        matrix = sparse.csr_matrix((values, (rows, cols)), shape=(n, n))
+        matrix.eliminate_zeros()
+        if not np.all(np.isfinite(matrix.data)):
+            raise ValueError("Liouvillian contains nonfinite values")
+        return matrix
 
 
 def _phi(w: np.ndarray, times: np.ndarray, order: int) -> np.ndarray:
@@ -435,12 +445,12 @@ def prepare_dense_lindblad_propagator(
     prepared.check_execution_mode(execution_mode)
     if prepared.rust_plan is None:
         raise ValueError("dense_eig requires a Rust-prepared problem")
-    payload = _payload_at(prepared.to_payload(), parameter_values or {})
     packed = (
         None if rho0_batch is None or not reduce else _packed_batch(prepared.layout, rho0_batch)
     )
     with threadpool_limits(limits=1):
-        return _factor(_extract(payload, execution_mode), prepared.layout, packed)
+        extractor = _StaticLiouvillian(prepared.to_payload(), execution_mode, prepared.rust_plan)
+        return _factor(extractor.matrix(parameter_values or {}), prepared.layout, packed)
 
 
 def _output_rows(
@@ -481,23 +491,34 @@ def _output_rows(
     return rows, output in INTEGRAL_OUTPUTS, output == "selected"
 
 
-def _initialize_worker(payload: dict[str, Any]) -> None:
-    global _WORKER_PAYLOAD, _WORKER_LIMIT
-    _WORKER_PAYLOAD = payload
+def _initialize_worker(payload: dict[str, Any], execution_mode: str, barrier: Any) -> None:
+    global _WORKER_EXTRACTOR, _WORKER_LIMIT, _WORKER_BARRIER
     _WORKER_LIMIT = threadpool_limits(limits=1)
+    _WORKER_EXTRACTOR = _StaticLiouvillian(payload, execution_mode)
+    _WORKER_BARRIER = barrier
+
+
+def _worker_ready() -> int:
+    # One readiness task occupies each process until all plans are prepared.
+    # Separates startup from steady-state work without approximating that split.
+    _WORKER_BARRIER.wait(timeout=120)
+    return os.getpid()
 
 
 def _work(
-    payload: dict[str, Any],
+    extractor: _StaticLiouvillian,
     parameters: dict[str, complex],
     packed: np.ndarray,
-    execution_mode: str,
     options: dict[str, Any],
     times: np.ndarray,
     gpu: bool,
 ) -> Any:
-    layout = PackedHermitianLayout(int(payload["n_states"]))
-    propagator = _factor(_extract(_payload_at(payload, parameters), execution_mode), layout, packed)
+    start = time.perf_counter()
+    layout = extractor.layout
+    matrix = extractor.matrix(parameters)
+    extraction_seconds = time.perf_counter() - start
+    propagator = _factor(matrix, layout, packed)
+    projection_start = time.perf_counter()
     rows, integrated, selected = _output_rows(
         layout, options["output"], options["output_indices"], options["integral_weights"]
     )
@@ -505,12 +526,18 @@ def _work(
         values = propagator._projection(packed, rows, integrated)
     else:
         values = propagator.evaluate(packed, times, **options)
-    return values, propagator.stats, selected
+    stats = dict(
+        propagator.stats,
+        parameter_bind_extract_seconds=extraction_seconds,
+        projection_seconds=time.perf_counter() - projection_start,
+        worker_total_seconds=time.perf_counter() - start,
+    )
+    return values, stats, selected
 
 
 def _worker_task(*args: Any) -> Any:
-    assert _WORKER_PAYLOAD is not None
-    return _work(_WORKER_PAYLOAD, *args)
+    assert _WORKER_EXTRACTOR is not None
+    return _work(_WORKER_EXTRACTOR, *args)
 
 
 def _sample_times(
@@ -569,6 +596,7 @@ def _solve_dense_batch(
     stop_event: Any = None,
     evolution_device: str = "cpu",
     gpu_batch_size: int = 8,
+    profile_startup: bool = False,
 ) -> Any:
     from .batch import LindbladBatchResult, _parameter_slot_indices, _parameter_slot_names
 
@@ -590,6 +618,8 @@ def _solve_dense_batch(
         raise ValueError("threads must be a positive integer")
     if not isinstance(gpu_batch_size, int) or gpu_batch_size < 1:
         raise ValueError("gpu_batch_size must be a positive integer")
+    if profile_startup and not collect_stats:
+        raise ValueError("profile_startup requires collect_stats=True")
     _torch_device(evolution_device)
     if len(t_span) != 2:
         raise ValueError("t_span must contain two values")
@@ -627,7 +657,6 @@ def _solve_dense_batch(
             (
                 dict(zip(names or [], key, strict=False)),
                 packed[indices],
-                execution_mode,
                 options,
                 times,
                 evolution_device == "cuda",
@@ -682,16 +711,34 @@ def _solve_dense_batch(
             put(indices, array)
 
     with threadpool_limits(limits=1):
+        startup_start = time.perf_counter()
         if workers == 1:
+            extractor = _StaticLiouvillian(payload, execution_mode, prepared.rust_plan)
+            startup_seconds = time.perf_counter() - startup_start
+            compute_start = time.perf_counter()
             for indices, args in work:
-                accept(indices, _work(payload, *args))
+                accept(indices, _work(extractor, *args))
+            flush()
+            steady_seconds = time.perf_counter() - compute_start
         else:
+            context = get_context("spawn")
             with ProcessPoolExecutor(
                 max_workers=workers,
-                mp_context=get_context("spawn"),
+                mp_context=context,
                 initializer=_initialize_worker,
-                initargs=(payload,),
+                initargs=(
+                    payload,
+                    execution_mode,
+                    context.Barrier(workers) if profile_startup else None,
+                ),
             ) as pool:
+                if profile_startup:
+                    ready = [pool.submit(_worker_ready) for _ in range(workers)]
+                    assert len({f.result() for f in ready}) == workers
+                    startup_seconds = time.perf_counter() - startup_start
+                else:
+                    startup_seconds = None
+                compute_start = time.perf_counter()
                 # Bound queued tasks/results as well as GPU batches.
                 iterator = iter(work)
                 futures = {}
@@ -705,7 +752,8 @@ def _solve_dense_batch(
                     if next_item is not None:
                         indices, args = next_item
                         futures[pool.submit(_worker_task, *args)] = indices
-        flush()
+                flush()
+                steady_seconds = time.perf_counter() - compute_start if profile_startup else None
     assert values is not None
     if output_when == "final":
         values = values[:, 0]
@@ -717,6 +765,10 @@ def _solve_dense_batch(
         factorization_count=len(groups),
         saved_points=len(times),
         total_seconds=time.perf_counter() - start,
+        worker_startup_seconds=startup_seconds,
+        steady_state_seconds=steady_seconds,
+        evaluator_count=workers,
+        startup_synchronized=profile_startup and workers > 1,
         factorizations=stats_list,
         full_reconstruction_device="cpu",
         function_evaluations=0,
