@@ -1,3 +1,4 @@
+pub mod adjoint;
 pub mod blas;
 pub mod cpu_kernel;
 pub mod eval;
@@ -8,6 +9,7 @@ pub mod plan;
 pub mod python_api;
 pub mod rhs;
 
+use adjoint::solve_lindblad_adjoint_py;
 use plan::PreparedLindbladPlan;
 use pyo3::prelude::*;
 use python_api::{
@@ -27,5 +29,6 @@ pub fn register_python_api(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(solve_lindblad_ode_py, m)?)?;
     m.add_function(wrap_pyfunction!(solve_lindblad_batch_ode_py, m)?)?;
     m.add_function(wrap_pyfunction!(solve_lindblad_grid_ode_py, m)?)?;
+    m.add_function(wrap_pyfunction!(solve_lindblad_adjoint_py, m)?)?;
     Ok(())
 }
