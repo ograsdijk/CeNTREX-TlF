@@ -29,6 +29,12 @@ and [generic preparation](rust_specialized_rhs_results/GENERIC_PREPARED_RHS_REPO
 
 GPU comparisons:
 
+- A later matched rerun now compares the earlier full-storage GPU Tsit5 with
+  the current library on identical 1024-trajectory, 10 us workloads: RC
+  25.837 -> 16.569 s (1.56x, reduction enabled), R(2) 14.641 -> 8.138 s
+  (1.80x, CK54 without reduction). Same-step default Tsit5 gains are 1.40x
+  and 1.41x respectively. All full complex-density checks pass. See the
+  [matched before/after report](gpu_cumulative_results/REPORT.md) for scope.
 - Older full-transit RC output/storage/graph improvements: 79.263 -> 59.479 s
   (1.33x), at batch 128. [Report](rc_gpu_integrator_results/v3_20261012_135724/REPORT.md).
 - Latest exact RC density reduction: 18.503 -> 16.323 s (1.13x) for 1024

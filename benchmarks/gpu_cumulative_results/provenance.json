@@ -1,0 +1,162 @@
+{
+  "python": "3.11.13",
+  "cupy": "14.2.0",
+  "device": "NVIDIA GeForce RTX 5070 Ti",
+  "rc_physics": {
+    "study": "rotational_cooling",
+    "transition": "P2_F1_3o2_F1",
+    "microwave_transitions": [
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ]
+    ],
+    "E_V_cm": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "B_G": [
+      -0.19433,
+      -0.48889,
+      0.01327
+    ],
+    "Earth_field_source": {
+      "source": "https://geomag.bgs.ac.uk/web_service/GMModels/wmm/current/?altitude=0.2&date=2026-10-06&format=json&latitude=41.7183&longitude=-87.9817",
+      "model": "WMM2025",
+      "date": "2026-10-06",
+      "latitude_deg": 41.7183,
+      "longitude_deg": -87.9817,
+      "altitude_km": 0.2,
+      "north_nT": 19433,
+      "east_nT": -1327,
+      "down_nT": 48889,
+      "total_nT": 52627,
+      "declination_deg_east": -3.908,
+      "inclination_deg_down": 68.277,
+      "lab_axes": [
+        "east",
+        "north",
+        "up"
+      ],
+      "lab_B_G": [
+        -0.01327,
+        0.19433,
+        -0.48889
+      ],
+      "note": "BGS web-service response retrieved 2026-10-06. Coordinates reused from the existing Argonne site configuration; 0.2 km elevation is an approximate site altitude. Model field, not an in-laboratory measurement."
+    },
+    "coordinate_axes": [
+      "south",
+      "up",
+      "west"
+    ],
+    "ENU_to_simulation": [
+      [
+        0,
+        -1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ],
+      [
+        -1,
+        0,
+        0
+      ]
+    ],
+    "molecular_direction": [
+      0,
+      0,
+      1
+    ],
+    "UV_direction": [
+      1,
+      0,
+      0
+    ],
+    "UV_polarization": [
+      0,
+      0,
+      1
+    ],
+    "UV_polarization_angle_deg": 0.0,
+    "uv_input_power_W": 0.25,
+    "microwave_power_W": 0.5,
+    "power_selection": "last explicit user powers: 250 mW UV; 500 mW each MW",
+    "uv_length_m": 0.044,
+    "uv_height_m": 0.03556,
+    "uv_pass_count": 13,
+    "uv_pass_transmission": 0.95,
+    "uv_model": "uniform homogenized pass intensities; one effective direction",
+    "microwave_half_power_diameter_m": 0.0254,
+    "microwave_angle_deg": 33.0,
+    "microwave_profile": "centered circular Gaussian intensity",
+    "microwave_switch_frequency_Hz": 1000000.0,
+    "microwave_switch_offset_s": 2.5e-07,
+    "entry_time_s": 0.0,
+    "phase_averaged": false,
+    "eom_frequency_Hz": 1600000.0,
+    "eom_beta": 3.8,
+    "eom_phase_rad": 0.0,
+    "post_decay_lifetimes": 25.0,
+    "initial_populations": "uniform within each J; three independent unit-trace mixtures",
+    "velocity_averaged": false,
+    "transverse_motion": "optical Doppler only; later detuning reweighting",
+    "microwave_doppler_included": false,
+    "detuning_reference": "UV angular detuning from field-dressed selected main line"
+  },
+  "files": [
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-SPB-testing\\.cache\\simulations\\optical_bloch\\native_rc_v1\\4aebc0feac6a3d3837e529b9\\prepared_context.pkl",
+      "sha256": "cd215628debfc223a50ad78fc2641ef627c2193f373f59cb7d4e7ecd2c6cd9a5"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\r2_gpu_reuse_results\\matched_cross_v1\\inputs.npz",
+      "sha256": "515811eb40b8c849bd6837118605d47680d3af47b7062fe93a8ce92529fe26d5"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\check_gpu_cumulative.py",
+      "sha256": "3bfa6d3b2b8350469f4ddec04c1bd70f7b73df0cb4a5714d478e3d484c15c8b0"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrators.py",
+      "sha256": "b73f8bdb4c296c730d9df17d0193338b954eeb6290b4dd5a77bd4a78becadcd1"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrators.cu",
+      "sha256": "8fc8a57d006695fe071bdb2e6a86522badef1d090bab0797f154bb1157ee85ed"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_methods.py",
+      "sha256": "e11f8a8178c308b0d4b7ce9db5794fee1e16472094eb9b9ec630344950d3718a"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_kernels.cu",
+      "sha256": "b3ac8a71ec8e7275410d60e264149c88e0fffae2ad4d1552c8064d964741c3b6"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\.cache\\publication\\installed\\centrex_tlf\\lindblad\\_cuda_kernels.py",
+      "sha256": "fffca08f5fac95b69caa75d51238dfa7cca19d1e0a8e85d15e3250484256f5a7"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\.cache\\publication\\installed\\centrex_tlf\\lindblad\\_cuda_lowering.py",
+      "sha256": "c742de45437840deab199a06ed009f3cc79297e6a9846b3884227e8265757a11"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\.cache\\publication\\installed\\centrex_tlf\\lindblad\\_dense_cuda.py",
+      "sha256": "62b0f9edacac8c778a37eaf0538c28a68b62f03be24d070d7a3443296b71abfc"
+    },
+    {
+      "path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\.cache\\publication\\installed\\centrex_tlf\\lindblad\\cuda.py",
+      "sha256": "f7741d95767af86aef8d227dcbb20d074b82a70f4327aa4b78789c566c1e0c8b"
+    }
+  ]
+}
