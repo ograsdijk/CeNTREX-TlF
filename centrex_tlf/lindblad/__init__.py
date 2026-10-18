@@ -1,6 +1,7 @@
 from . import (
     adjoint,
     batch,
+    cuda,
     dense,
     events,
     generate_hamiltonian,
@@ -18,6 +19,7 @@ from . import (
 )
 from .adjoint import *  # noqa
 from .batch import *  # noqa
+from .cuda import *  # noqa
 from .dense import *  # noqa
 from .events import *  # noqa
 from .generate_hamiltonian import *  # noqa
@@ -34,6 +36,7 @@ from .utils_decay import *  # noqa
 from .utils_setup import *  # noqa
 
 __all__ = batch.__all__.copy()
+__all__ += cuda.__all__.copy()
 __all__ += adjoint.__all__.copy()
 __all__ += dense.__all__.copy()
 __all__ += events.__all__.copy()

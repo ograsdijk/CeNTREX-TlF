@@ -24,6 +24,8 @@ Repository = "https://github.com/ograsdijk/CeNTREX-TlF"
 
 [project.optional-dependencies]
 gpu = ["torch>=2.10"]
+cuda = ["cupy-cuda12x>=13.4"]
+cuda13 = ["cupy-cuda13x>=14"]
 dev = [
     "pytest>=7.1.2",
     "pytest-cov>=4.0",
