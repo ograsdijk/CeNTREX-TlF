@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -12,12 +12,17 @@ from scipy.integrate import solve_ivp
 
 from .events import normalize_stop_event, scipy_event_function
 from .integral_output import (
+    FULL_AND_INTEGRAL_OUTPUT,
     INTEGRAL_OUTPUTS,
     INTEGRAL_RATE_OUTPUTS,
     cumulative_trapezoid_at,
     normalize_integral_saveat,
 )
-from .plan_static import PreparedLindbladProblem, prepare_lindblad_problem
+from .plan_static import (
+    STRUCTURED_SPARSE_DENSE_MODES,
+    PreparedLindbladProblem,
+    prepare_lindblad_problem,
+)
 from .reference_dense import reference_rhs, structured_rhs
 
 __all__ = [
@@ -35,12 +40,10 @@ class LindbladResult:
     packed_y: npt.NDArray[np.float64]
     layout: Any
     solver_stats: dict[str, Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def density_matrices(self) -> npt.NDArray[np.complex128]:
-        matrices = np.empty((self.packed_y.shape[0], self.layout.n, self.layout.n), dtype=np.complex128)
-        for idx, state in enumerate(self.packed_y):
-            matrices[idx] = self.layout.unpack(state)
-        return matrices
+        return self.layout.unpack_batch(self.packed_y)
 
     def populations(self) -> npt.NDArray[np.float64]:
         matrices = self.density_matrices()
@@ -75,6 +78,7 @@ class LindbladObservableResult:
     output: str
     output_indices: Any | None = None
     solver_stats: dict[str, Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def _normalize_saveat(
@@ -104,10 +108,7 @@ def _assert_dense_output_available(
 ) -> None:
     if dense_output or output_when != "saveat" or saveat is None:
         return
-    interior = saveat[
-        ~np.isclose(saveat, t_span[0])
-        & ~np.isclose(saveat, t_span[1])
-    ]
+    interior = saveat[~np.isclose(saveat, t_span[0]) & ~np.isclose(saveat, t_span[1])]
     if interior.size:
         raise ValueError("dense_output=False cannot be used with interior saveat points")
 
@@ -206,10 +207,7 @@ def _solve_python_reference(
 
 
 def _pack_matrix_snapshots(layout: Any, matrices: np.ndarray) -> np.ndarray:
-    packed = np.empty((matrices.shape[0], layout.packed_len), dtype=np.float64)
-    for idx, matrix in enumerate(matrices):
-        packed[idx] = layout.pack(matrix)
-    return packed
+    return layout.pack_batch(matrices)
 
 
 def _flatten_complex_matrix_state(rho: np.ndarray) -> np.ndarray:
@@ -248,8 +246,7 @@ def _plan_is_time_dependent(prepared: PreparedLindbladProblem) -> bool:
         if _expression_uses_time(temp):
             return True
     return any(
-        _expression_uses_time(entry["expression"])
-        for entry in hamiltonian_plan.get("entries", [])
+        _expression_uses_time(entry["expression"]) for entry in hamiltonian_plan.get("entries", [])
     )
 
 
@@ -347,7 +344,9 @@ def _solve_scipy_with_rust_packed_rhs(
             dtype=np.float64,
         )
 
-    def build_jacobian(t: float, _y: np.ndarray | None = None) -> scipy.sparse.csc_matrix | np.ndarray:
+    def build_jacobian(
+        t: float, _y: np.ndarray | None = None
+    ) -> scipy.sparse.csc_matrix | np.ndarray:
         nonlocal jacobian_cache
         if jacobian != "exact":
             raise RuntimeError("only jacobian='exact' is currently implemented")
@@ -428,11 +427,12 @@ def _solve_rust_native(
 
     integral_outputs = INTEGRAL_OUTPUTS
     rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
-    weighted_outputs = integral_outputs | rate_outputs
+    mixed_outputs = {FULL_AND_INTEGRAL_OUTPUT}
+    weighted_outputs = integral_outputs | rate_outputs | mixed_outputs
     sampled_integral = output in integral_outputs and integral_method == "sampled"
     effective_saveat = saveat
     effective_save_start = save_start
-    final_integral = output in integral_outputs
+    final_integral = output in integral_outputs or output in mixed_outputs
     rust_output = output
     rust_output_when = output_when
     rust_integral_method = integral_method
@@ -569,6 +569,7 @@ def solve_lindblad(
     gpu_batch_size: int = 8,
     profile_startup: bool = False,
     dense_session: Any = None,
+    cuda_options: Any = None,
 ) -> LindbladResult | LindbladMatrixResult | LindbladObservableResult:
     """Solve one Lindblad trajectory.
 
@@ -581,6 +582,42 @@ def solve_lindblad(
     """
     if solver is None:
         solver = "python_rk45" if backend == "python" else "dopri5"
+    if evolution_device == "cuda" and solver != "dense_eig":
+        from .cuda import _solve_cuda_single
+
+        if isinstance(prepared_or_obe_system, PreparedLindbladProblem):
+            prepared = prepared_or_obe_system
+        else:
+            if parameters is None:
+                raise TypeError("parameters are required when solving from an OBESystem")
+            prepared = prepare_lindblad_problem(prepared_or_obe_system, parameters, backend=backend)
+        return _solve_cuda_single(
+            prepared,
+            rho0,
+            t_span,
+            solver=solver,
+            dt=dt,
+            saveat=saveat,
+            save_start=save_start,
+            output=output,
+            output_indices=output_indices,
+            output_when=output_when,
+            integral_weights=integral_weights,
+            integral_method=integral_method,
+            integral_saveat=integral_saveat,
+            stop_event=stop_event,
+            maxiters=maxiters,
+            collect_stats=collect_stats,
+            evolution_device=evolution_device,
+            cuda_options=cuda_options,
+            execution_mode=execution_mode,
+            dense_output=dense_output,
+            gpu_batch_size=gpu_batch_size,
+            profile_startup=profile_startup,
+            dense_session=dense_session,
+        )
+    if cuda_options is not None:
+        raise ValueError("cuda_options applies only to CUDA ODE integration")
     if solver == "dense_eig":
         from .dense import _solve_dense_single
 
@@ -613,8 +650,15 @@ def solve_lindblad(
             profile_startup=profile_startup,
             dense_session=dense_session,
         )
-    if evolution_device != "cpu" or gpu_batch_size != 8 or profile_startup or dense_session is not None:
-        raise ValueError("dense_session, evolution_device, gpu_batch_size and profile_startup apply only to solver='dense_eig'")
+    if (
+        evolution_device != "cpu"
+        or gpu_batch_size != 8
+        or profile_startup
+        or dense_session is not None
+    ):
+        raise ValueError(
+            "dense_session, evolution_device, gpu_batch_size and profile_startup apply only to solver='dense_eig'"
+        )
     if solver not in {
         "dopri5",
         "tsit5",
@@ -631,26 +675,46 @@ def solve_lindblad(
             "'fixed_rk2', 'fixed_rk4', 'scipy_rk45', 'scipy_bdf', "
             "'scipy_radau', and 'python_rk45'"
         )
-    if execution_mode not in {"reference", "structured", "structured_upper", "expanded_sparse"}:
+    if execution_mode not in {
+        "reference",
+        "structured",
+        "structured_upper",
+        "expanded_sparse",
+        "experimental_structured_sparse_dense",
+        "experimental_structured_sparse_dense_diag",
+        "experimental_structured_sparse_dense_soa",
+        "experimental_structured_sparse_dense_single_unpack",
+        "experimental_structured_sparse_dense_diag_soa",
+        "experimental_structured_sparse_dense_diag_single_unpack",
+        "experimental_structured_sparse_dense_soa_single_unpack",
+        "experimental_structured_sparse_dense_diag_soa_single_unpack",
+        *STRUCTURED_SPARSE_DENSE_MODES,
+    }:
         raise NotImplementedError(
             "supported execution_mode values are 'reference', 'structured', 'structured_upper', "
-            "and 'expanded_sparse'"
+            "'expanded_sparse', and the experimental_structured_sparse_dense variants"
         )
     integral_outputs = INTEGRAL_OUTPUTS
     rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
-    weighted_outputs = integral_outputs | rate_outputs
+    mixed_outputs = {FULL_AND_INTEGRAL_OUTPUT}
+    weighted_outputs = integral_outputs | rate_outputs | mixed_outputs
     if output not in {"full", "populations", "selected", *weighted_outputs}:
         raise NotImplementedError(
             "output must be 'full', 'populations', 'selected', 'weighted_integral', "
-            "'photon_integral', 'excited_population', 'weighted_rate', 'photon_rate', "
+            "'photon_integral', 'excited_population', 'full_and_integral', "
+            "'weighted_rate', 'photon_rate', "
             "or 'excited_population_rate'"
         )
     if output_when not in {"saveat", "final"}:
         raise NotImplementedError("output_when must be 'saveat' or 'final'")
-    if output in integral_outputs and output_when == "saveat" and saveat is None:
+    if output in (integral_outputs | mixed_outputs) and output_when == "saveat" and saveat is None:
         raise ValueError("integral output_when='saveat' requires explicit saveat values")
     if integral_method not in {"solver", "sampled"}:
         raise ValueError("integral_method must be 'solver' or 'sampled'")
+    if output in mixed_outputs and integral_method != "solver":
+        raise ValueError("output='full_and_integral' requires integral_method='solver'")
+    if output in mixed_outputs and solver not in {"dopri5", "tsit5"}:
+        raise ValueError("output='full_and_integral' currently supports only adaptive Rust solvers")
     if integral_saveat is not None and output not in integral_outputs:
         raise ValueError("integral_saveat is only valid with an integral output")
     if integral_saveat is not None and integral_method != "sampled":
@@ -775,7 +839,11 @@ def solve_lindblad(
     if backend == "python" and solver != "python_rk45":
         raise NotImplementedError("the python backend only supports solver='python_rk45'")
     if backend != "python":
-        raise NotImplementedError(f"unsupported backend/solver combination: backend={backend!r}, solver={solver!r}")
+        raise NotImplementedError(
+            f"unsupported backend/solver combination: backend={backend!r}, solver={solver!r}"
+        )
+    if output in mixed_outputs:
+        raise NotImplementedError("output='full_and_integral' requires backend='rust'")
     return _solve_python_reference(
         prepared,
         packed_rho0,

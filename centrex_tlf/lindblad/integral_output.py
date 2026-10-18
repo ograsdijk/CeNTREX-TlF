@@ -6,6 +6,7 @@ import numpy as np
 import numpy.typing as npt
 
 INTEGRAL_OUTPUTS = {"weighted_integral", "photon_integral", "excited_population"}
+FULL_AND_INTEGRAL_OUTPUT = "full_and_integral"
 INTEGRAL_RATE_OUTPUTS = {
     "weighted_integral": "weighted_rate",
     "photon_integral": "photon_rate",

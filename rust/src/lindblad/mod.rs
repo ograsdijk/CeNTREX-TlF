@@ -1,4 +1,5 @@
 pub mod blas;
+pub mod cpu_kernel;
 pub mod eval;
 pub mod layout;
 pub mod ode_batch;

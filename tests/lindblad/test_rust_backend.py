@@ -321,7 +321,17 @@ def test_execution_mode_check_passes_for_decomposed_and_structured() -> None:
         hamiltonian_representation="decomposed",
     )
     assert decomposed.expanded_rhs_plan is not None
-    for mode in ("reference", "structured", "structured_upper", "expanded_sparse"):
+    for mode in (
+        "reference", "structured", "structured_upper", "expanded_sparse",
+        "experimental_structured_sparse_dense",
+        "experimental_structured_sparse_dense_diag",
+        "experimental_structured_sparse_dense_soa",
+        "experimental_structured_sparse_dense_single_unpack",
+        "experimental_structured_sparse_dense_diag_soa",
+        "experimental_structured_sparse_dense_diag_single_unpack",
+        "experimental_structured_sparse_dense_soa_single_unpack",
+        "experimental_structured_sparse_dense_diag_soa_single_unpack",
+    ):
         decomposed.check_execution_mode(mode)
 
     entrywise = prepare_lindblad_problem(
@@ -331,8 +341,158 @@ def test_execution_mode_check_passes_for_decomposed_and_structured() -> None:
         hamiltonian_representation="entrywise",
     )
     # Only the expanded-sparse family needs the extra plan.
-    for mode in ("reference", "structured", "structured_upper"):
+    for mode in (
+        "reference", "structured", "structured_upper",
+        "experimental_structured_sparse_dense",
+        "experimental_structured_sparse_dense_diag",
+        "experimental_structured_sparse_dense_soa",
+        "experimental_structured_sparse_dense_single_unpack",
+        "experimental_structured_sparse_dense_diag_soa",
+        "experimental_structured_sparse_dense_diag_single_unpack",
+        "experimental_structured_sparse_dense_soa_single_unpack",
+        "experimental_structured_sparse_dense_diag_soa_single_unpack",
+    ):
         entrywise.check_execution_mode(mode)
+
+
+@pytest.mark.parametrize(("time_dependent", "time"), [(False, 0.0), (True, 0.41)])
+@pytest.mark.parametrize("mode", [
+    "experimental_structured_sparse_dense",
+    "experimental_structured_sparse_dense_diag",
+    "experimental_structured_sparse_dense_soa",
+    "experimental_structured_sparse_dense_single_unpack",
+    "experimental_structured_sparse_dense_diag_soa",
+    "experimental_structured_sparse_dense_diag_single_unpack",
+    "experimental_structured_sparse_dense_soa_single_unpack",
+    "experimental_structured_sparse_dense_diag_soa_single_unpack",
+])
+def test_experimental_structured_sparse_dense_rhs_matches_dense_modes(
+    time_dependent: bool,
+    time: float,
+    mode: str,
+) -> None:
+    system = _make_two_level_system()
+    omega_symbol, delta_symbol = system.coupling_symbols
+    if time_dependent:
+        parameters = {
+            "omega0": 0.9,
+            "modulation_depth": 0.4,
+            "modulation_frequency": 2.1,
+            str(omega_symbol): "omega0*phase_modulation(t, modulation_depth, modulation_frequency)",
+            str(delta_symbol): 0.17,
+        }
+    else:
+        parameters = {str(omega_symbol): 0.9 + 0.2j, str(delta_symbol): 0.17}
+    prepared = prepare_lindblad_problem(
+        system,
+        parameters,
+        backend="python",
+        hamiltonian_representation="decomposed",
+    )
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    rho = np.array(
+        [[0.63, 0.12 + 0.09j], [0.12 - 0.09j, 0.37]], dtype=np.complex128
+    )
+    packed = prepared.layout.pack(rho)
+
+    candidate_evaluator = rust.create_lindblad_rhs_evaluator_py(
+        rust_plan, mode
+    )
+    candidate = np.asarray(candidate_evaluator.rhs_packed_py(packed, time), dtype=np.float64)
+    # Repeated static calls exercise the new mode's upper-Hamiltonian cache path.
+    np.testing.assert_array_equal(
+        np.asarray(candidate_evaluator.rhs_packed_py(packed, time), dtype=np.float64),
+        candidate,
+    )
+    structured = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, time, "structured"), dtype=np.float64
+    )
+    reference = np.asarray(
+        rust.lindblad_rhs_py(rust_plan, packed, time, "reference"), dtype=np.float64
+    )
+    np.testing.assert_allclose(candidate, structured, atol=2e-12, rtol=2e-12)
+    np.testing.assert_allclose(candidate, reference, atol=2e-12, rtol=2e-12)
+
+    matrix_rhs = np.asarray(
+        candidate_evaluator.rhs_matrix_py(rho.reshape(-1), time), dtype=np.complex128
+    ).reshape(2, 2)
+    np.testing.assert_allclose(prepared.layout.pack(matrix_rhs), candidate, atol=2e-12, rtol=2e-12)
+
+
+@pytest.mark.parametrize("mode", [
+    "experimental_structured_sparse_dense",
+    "experimental_structured_sparse_dense_diag",
+    "experimental_structured_sparse_dense_soa",
+    "experimental_structured_sparse_dense_single_unpack",
+    "experimental_structured_sparse_dense_diag_soa",
+    "experimental_structured_sparse_dense_diag_single_unpack",
+    "experimental_structured_sparse_dense_soa_single_unpack",
+    "experimental_structured_sparse_dense_diag_soa_single_unpack",
+])
+def test_experimental_structured_sparse_dense_dopri5_matches_structured(mode: str) -> None:
+    system = _make_two_level_system()
+    rho0 = np.array(
+        [[0.7, 0.08 + 0.06j], [0.08 - 0.06j, 0.3]], dtype=np.complex128
+    )
+    parameters = {
+        "omega0": 0.75,
+        "modulation_depth": 0.4,
+        "modulation_frequency": 2.5,
+        str(system.coupling_symbols[1]): 0.1,
+        str(system.coupling_symbols[0]): (
+            "omega0*phase_modulation(t, modulation_depth, modulation_frequency)"
+        ),
+    }
+    prepared = prepare_lindblad_problem(
+        system, parameters, backend="rust", hamiltonian_representation="decomposed"
+    )
+    saveat = np.linspace(0.0, 0.2, 5)
+    reference = solve_lindblad(
+        prepared, rho0, (0.0, 0.2), solver="dopri5", execution_mode="structured",
+        saveat=saveat, dt=1e-3, reltol=1e-9, abstol=1e-11,
+    )
+    candidate = solve_lindblad(
+        prepared, rho0, (0.0, 0.2), solver="dopri5",
+        execution_mode=mode,
+        saveat=saveat, dt=1e-3, reltol=1e-9, abstol=1e-11,
+    )
+    np.testing.assert_array_equal(candidate.t, reference.t)
+    np.testing.assert_allclose(candidate.packed_y, reference.packed_y, atol=2e-10, rtol=2e-9)
+
+    rho0_b = np.array([[0.25, 0.0], [0.0, 0.75]], dtype=np.complex128)
+    batch = solve_lindblad_batch(
+        prepared,
+        np.stack((rho0, rho0_b)),
+        (0.0, 0.2),
+        solver="dopri5",
+        execution_mode=mode,
+        output="populations",
+        output_when="final",
+        dense_output=False,
+        dt=1e-3,
+        reltol=1e-9,
+        abstol=1e-11,
+        parallel=False,
+    )
+    expected_populations = np.stack(
+        [
+            solve_lindblad(
+                prepared,
+                state,
+                (0.0, 0.2),
+                solver="dopri5",
+                execution_mode=mode,
+                output="populations",
+                output_when="final",
+                dense_output=False,
+                dt=1e-3,
+                reltol=1e-9,
+                abstol=1e-11,
+            ).values
+            for state in (rho0, rho0_b)
+        ]
+    )
+    np.testing.assert_allclose(batch.values, expected_populations, atol=2e-12, rtol=2e-10)
 
 
 def test_decomposed_hamiltonian_diagnostics_present() -> None:
@@ -1464,6 +1624,77 @@ def test_rust_batch_selected_saveat_matches_repeated_solves() -> None:
     np.testing.assert_allclose(batch.values, np.asarray(expected), atol=1e-12, rtol=1e-10)
 
 
+@pytest.mark.parametrize("solver", ["dopri5", "tsit5"])
+@pytest.mark.parametrize("output_when", ["final", "saveat"])
+@pytest.mark.parametrize("parallel", [False, True])
+def test_rust_batch_full_output_matches_single_with_coherences_and_overrides(
+    solver: str, output_when: str, parallel: bool
+) -> None:
+    system = _make_two_level_system()
+    omega = str(system.coupling_symbols[0])
+    delta = str(system.coupling_symbols[1])
+    prepared = prepare_lindblad_problem(
+        system, {omega: 0.6, delta: 0.0}, backend="rust"
+    )
+    rho0_batch = np.asarray(
+        [
+            [[0.7, 0.12 + 0.08j], [0.12 - 0.08j, 0.3]],
+            [[0.45, -0.09j], [0.09j, 0.55]],
+        ],
+        dtype=np.complex128,
+    )
+    parameter_values = np.asarray([[0.4], [0.8]], dtype=np.complex128)
+    saveat = np.linspace(0.0, 0.5, 6) if output_when == "saveat" else None
+    options = dict(
+        solver=solver,
+        execution_mode="expanded_sparse",
+        output="full",
+        output_when=output_when,
+        saveat=saveat,
+        dt=1e-3,
+        reltol=1e-9,
+        abstol=1e-11,
+        parallel=parallel,
+        threads=2 if parallel else None,
+    )
+    batch = solve_lindblad_batch(
+        prepared,
+        rho0_batch,
+        (0.0, 0.5),
+        parameter_slots=[omega],
+        parameter_batch=parameter_values,
+        **options,
+    )
+
+    expected = []
+    expected_times = None
+    for rho0, (rabi,) in zip(rho0_batch, parameter_values, strict=True):
+        single_prepared = prepare_lindblad_problem(
+            system, {omega: rabi, delta: 0.0}, backend="rust"
+        )
+        single = solve_lindblad(
+            single_prepared,
+            rho0,
+            (0.0, 0.5),
+            solver=solver,
+            execution_mode="expanded_sparse",
+            output="full",
+            output_when=output_when,
+            saveat=saveat,
+            dt=1e-3,
+            reltol=1e-9,
+            abstol=1e-11,
+        )
+        expected.append(single.packed_y[-1] if output_when == "final" else single.packed_y)
+        expected_times = single.t
+
+    expected_values = np.asarray(expected)
+    assert batch.values.dtype == np.float64
+    assert batch.values.shape == expected_values.shape
+    np.testing.assert_allclose(batch.t, expected_times, atol=1e-13, rtol=0.0)
+    np.testing.assert_allclose(batch.values, expected_values, atol=1e-11, rtol=1e-9)
+
+
 def test_rust_batch_parameter_grid_matches_repeated_solves() -> None:
     system = _make_two_level_system()
     omega = str(system.coupling_symbols[0])
@@ -1610,6 +1841,123 @@ def test_batch_and_grid_integral_final_allow_saveat_none() -> None:
     assert grid.values.shape == (4, 1)
     assert grid.t.shape == (1,)
     assert np.all(grid.values >= 0.0)
+
+
+@pytest.mark.parametrize("solver", ["dopri5", "tsit5"])
+@pytest.mark.parametrize("execution_mode", ["structured", "expanded_sparse"])
+def test_full_and_integral_batch_and_single_preserve_state_and_integral(
+    solver: str, execution_mode: str
+) -> None:
+    system = _make_two_level_system()
+    parameters = {
+        str(system.coupling_symbols[0]): 0.6,
+        str(system.coupling_symbols[1]): 0.1,
+    }
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    rho0 = np.array(
+        [[0.55, 0.1 + 0.12j], [0.1 - 0.12j, 0.45]], dtype=np.complex128
+    )
+    weights = [(1, 0.3)]
+    options = {
+        "solver": solver,
+        "execution_mode": execution_mode,
+        "output_when": "final",
+        "saveat": None,
+        "dense_output": False,
+        "dt": 1e-3,
+        "reltol": 1e-10,
+        "abstol": 1e-12,
+        "parallel": False,
+    }
+
+    mixed = solve_lindblad_batch(
+        prepared,
+        rho0[np.newaxis, :, :],
+        (0.0, 0.5),
+        output="full_and_integral",
+        integral_weights=weights,
+        **options,
+    )
+    full = solve_lindblad_batch(
+        prepared,
+        rho0[np.newaxis, :, :],
+        (0.0, 0.5),
+        output="full",
+        **options,
+    )
+    photon = solve_lindblad_batch(
+        prepared,
+        rho0[np.newaxis, :, :],
+        (0.0, 0.5),
+        output="photon_integral",
+        integral_weights=weights,
+        **options,
+    )
+    assert mixed.values.shape == (1, prepared.layout.packed_len + 1)
+    np.testing.assert_allclose(mixed.values[0, :-1], full.values[0], rtol=2e-8, atol=2e-10)
+    np.testing.assert_allclose(mixed.values[0, -1], photon.values[0, 0], rtol=2e-8, atol=2e-10)
+    assert mixed.values[0, -1] > 0.0
+    final_density = prepared.layout.unpack(mixed.values[0, :-1])
+    assert abs(final_density[0, 1]) > 1e-3  # nonzero coherence survives the mixed output
+
+    mixed_trace = solve_lindblad_batch(
+        prepared,
+        rho0[np.newaxis, :, :],
+        (0.0, 0.5),
+        output="full_and_integral",
+        integral_weights=weights,
+        output_when="saveat",
+        saveat=[0.25, 0.5],
+        save_start=False,
+        dense_output=True,
+        **{
+            key: value
+            for key, value in options.items()
+            if key not in {"output_when", "saveat", "dense_output"}
+        },
+    )
+    assert mixed_trace.values.shape == (1, 2, prepared.layout.packed_len + 1)
+    intermediate = solve_lindblad_batch(
+        prepared,
+        rho0[np.newaxis, :, :],
+        (0.0, 0.25),
+        output="full_and_integral",
+        integral_weights=weights,
+        **options,
+    )
+    np.testing.assert_allclose(mixed_trace.values[0, 0], intermediate.values[0], rtol=2e-8, atol=2e-10)
+    np.testing.assert_allclose(mixed_trace.values[0, -1], mixed.values[0], rtol=2e-8, atol=2e-10)
+
+    single = solve_lindblad(
+        prepared,
+        rho0,
+        (0.0, 0.5),
+        output="full_and_integral",
+        integral_weights=weights,
+        **{key: value for key, value in options.items() if key != "parallel"},
+    )
+    np.testing.assert_allclose(single.values, mixed.values[0], rtol=2e-8, atol=2e-10)
+
+
+def test_full_and_integral_rejects_fixed_solver() -> None:
+    system = _make_two_level_system()
+    prepared = prepare_lindblad_problem(
+        system,
+        {str(system.coupling_symbols[0]): 0.6, str(system.coupling_symbols[1]): 0.0},
+        backend="rust",
+    )
+    with pytest.raises(ValueError, match="adaptive Rust solvers"):
+        solve_lindblad_batch(
+            prepared,
+            _ground_state_density()[np.newaxis, :, :],
+            (0.0, 0.1),
+            solver="fixed_rk4",
+            output="full_and_integral",
+            integral_weights=[(1, 0.3)],
+            output_when="final",
+            dense_output=False,
+            parallel=False,
+        )
 
 
 def test_batch_integral_trace_and_rate_trace_match_populations() -> None:

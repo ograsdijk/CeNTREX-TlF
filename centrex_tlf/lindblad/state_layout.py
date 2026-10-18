@@ -62,6 +62,52 @@ class PackedHermitianLayout:
                 cursor += 2
         return matrix
 
+    def pack_batch(self, matrices: npt.NDArray[np.complex128]) -> npt.NDArray[np.float64]:
+        """Pack ``(..., n, n)`` matrices into an owned ``(..., n*n)`` array.
+
+        Reuse this snapshot as initial input to batch/scan solvers until the
+        initial states change. Like :meth:`pack`, it reads the real diagonal
+        and complex upper triangle; it does not validate Hermiticity.
+        """
+        arr = np.asarray(matrices)
+        if arr.ndim < 2 or arr.shape[-2:] != (self.n, self.n):
+            raise ValueError(f"expected final matrix dimensions {(self.n, self.n)}, got {arr.shape}")
+        result = np.empty((*arr.shape[:-2], self.packed_len), dtype=np.float64)
+        flat = result.reshape(-1, self.packed_len)
+        matrices_flat = arr.reshape(-1, self.n, self.n)
+        ui, uj = np.triu_indices(self.n, 1)
+        chunk = max(1, min(2048, 128_000_000 // (16 * self.n * self.n)))
+        for start in range(0, len(flat), chunk):
+            block = matrices_flat[start : start + chunk]
+            packed = flat[start : start + chunk]
+            packed[:, : self.n] = np.diagonal(block, axis1=-2, axis2=-1).real
+            upper = block[:, ui, uj]
+            packed[:, self.n :: 2] = upper.real
+            packed[:, self.n + 1 :: 2] = upper.imag
+        return result
+
+    def unpack_batch(self, packed: npt.NDArray[np.float64]) -> npt.NDArray[np.complex128]:
+        """Unpack arrays shaped ``(..., n*n)`` in bounded vectorized batches."""
+        arr = np.asarray(packed, dtype=np.float64)
+        if arr.ndim < 1 or arr.shape[-1] != self.packed_len:
+            raise ValueError(f"expected final packed dimension {self.packed_len}, got {arr.shape}")
+        n = self.n
+        result = np.empty((*arr.shape[:-1], n, n), dtype=np.complex128)
+        di = np.arange(n)
+        ui, uj = np.triu_indices(n, 1)
+        # Bound temporary complex upper triangles for large output batches.
+        chunk = max(1, min(2048, 128_000_000 // (16 * n * n)))
+        flat = result.reshape(-1, n, n)
+        packed_flat = arr.reshape(-1, n * n)
+        for start in range(0, len(flat), chunk):
+            block = packed_flat[start : start + chunk]
+            matrices = flat[start : start + chunk]
+            matrices[:, di, di] = block[:, :n]
+            upper = block[:, n::2] + 1j * block[:, n + 1 :: 2]
+            matrices[:, ui, uj] = upper
+            matrices[:, uj, ui] = upper.conj()
+        return result
+
     def _upper_offset(self, i: int, j: int) -> int:
         offset = 0
         for row in range(i):

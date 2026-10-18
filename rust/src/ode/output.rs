@@ -293,6 +293,87 @@ pub struct WeightedIntegralOutput {
     method: IntegralMethod,
 }
 
+/// Save the packed density state together with a solver-native weighted
+/// integral carried as the final coordinate of the augmented ODE state.
+pub struct FullAndIntegralOutput {
+    dim: usize,
+    weights: Vec<(usize, f64)>,
+    times: Vec<f64>,
+    values: Vec<f64>,
+}
+
+impl FullAndIntegralOutput {
+    pub fn new(dim: usize, weights: Vec<(usize, f64)>, capacity: usize) -> Self {
+        Self {
+            dim,
+            weights,
+            times: Vec::with_capacity(capacity),
+            values: Vec::with_capacity(capacity * (dim + 1)),
+        }
+    }
+
+    fn push_state_and_integral(&mut self, t: f64, y: &[f64], integral: f64) {
+        self.times.push(t);
+        self.values.extend_from_slice(&y[..self.dim]);
+        self.values.push(integral);
+    }
+
+    pub fn finish(self) -> OdeOutputResult {
+        OdeOutputResult {
+            times: self.times,
+            values: OdeOutputValues::Full(self.values),
+            width: self.dim + 1,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.times.clear();
+        self.values.clear();
+    }
+
+    pub fn snapshot(&self) -> OdeOutputResult {
+        OdeOutputResult {
+            times: self.times.clone(),
+            values: OdeOutputValues::Full(self.values.clone()),
+            width: self.dim + 1,
+        }
+    }
+}
+
+impl OdeOutput for FullAndIntegralOutput {
+    fn push(&mut self, t: f64, y: &[f64]) {
+        self.push_state_and_integral(t, y, y[self.dim]);
+    }
+
+    fn times(&self) -> &[f64] {
+        &self.times
+    }
+
+    fn solver_integral_weights(&self) -> Option<&[(usize, f64)]> {
+        Some(&self.weights)
+    }
+
+    fn push_solver_integral_interpolated(
+        &mut self,
+        t: f64,
+        y0: &[f64],
+        y1: &[f64],
+        h: f64,
+        theta: f64,
+    ) {
+        let theta2 = theta * theta;
+        let theta3 = theta2 * theta;
+        let h00 = 2.0 * theta3 - 3.0 * theta2 + 1.0;
+        let h10 = theta3 - 2.0 * theta2 + theta;
+        let h01 = -2.0 * theta3 + 3.0 * theta2;
+        let h11 = theta3 - theta2;
+        let rate0: f64 = self.weights.iter().map(|&(i, w)| w * y0[i]).sum();
+        let rate1: f64 = self.weights.iter().map(|&(i, w)| w * y1[i]).sum();
+        let integral = h00 * y0[self.dim] + h10 * h * rate0 + h01 * y1[self.dim] + h11 * h * rate1;
+        self.push_state_and_integral(t, y1, integral);
+    }
+}
+
 impl WeightedIntegralOutput {
     pub fn new(weights: Vec<(usize, f64)>) -> Self {
         Self::new_with_trace(weights, false, 1, IntegralMethod::Solver)

@@ -7,8 +7,8 @@ use crate::lindblad::rhs::{
 };
 use crate::ode::batch::{solve_single, OdeSolver};
 use crate::ode::output::{
-    FullOutput, IntegralMethod, OdeOutputValues, PopulationsOutput, SelectedExtraction,
-    SelectedOutput, WeightedIntegralOutput, WeightedRateOutput,
+    FullAndIntegralOutput, FullOutput, IntegralMethod, OdeOutputValues, PopulationsOutput,
+    SelectedExtraction, SelectedOutput, WeightedIntegralOutput, WeightedRateOutput,
 };
 use num_complex::Complex64;
 use numpy::{
@@ -477,6 +477,16 @@ pub fn solve_lindblad_ode_py<'py>(
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Py<PyAny>, usize, Py<PyDict>)> {
     let execution_mode = ExecutionMode::from_str(mode).map_err(PyValueError::new_err)?;
     let ode_solver = OdeSolver::from_str(solver).map_err(PyValueError::new_err)?;
+    if output == "full_and_integral"
+        && matches!(
+            ode_solver,
+            OdeSolver::FixedDopri5 | OdeSolver::FixedRk2 | OdeSolver::FixedRk4
+        )
+    {
+        return Err(PyValueError::new_err(
+            "output='full_and_integral' currently supports only adaptive solvers",
+        ));
+    }
     let integral_method =
         IntegralMethod::from_str(integral_method).map_err(PyValueError::new_err)?;
     let n = plan.layout.n;
@@ -488,7 +498,7 @@ pub fn solve_lindblad_ode_py<'py>(
     let integral_output = matches!(
         output,
         "weighted_integral" | "photon_integral" | "excited_population"
-    );
+    ) || output == "full_and_integral";
     let saveat_vec = if output_when == "final" && integral_output {
         if integral_method == IntegralMethod::Solver {
             Some(vec![t1])
@@ -545,6 +555,20 @@ pub fn solve_lindblad_ode_py<'py>(
                 capacity,
                 integral_method,
             );
+            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
+                .map_err(PyValueError::new_err)?;
+            (out.finish(), s)
+        }
+        "full_and_integral" => {
+            if integral_method != IntegralMethod::Solver {
+                return Err(PyValueError::new_err(
+                    "output='full_and_integral' requires integral_method='solver'",
+                ));
+            }
+            let weights = integral_weights.ok_or_else(|| {
+                PyValueError::new_err("output='full_and_integral' requires integral_weights")
+            })?;
+            let mut out = FullAndIntegralOutput::new(dim, weights, capacity);
             let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
                 .map_err(PyValueError::new_err)?;
             (out.finish(), s)
@@ -648,10 +672,11 @@ pub fn solve_lindblad_batch_ode_py<'py>(
         .transpose()
         .map_err(PyValueError::new_err)?;
     let final_integral = output_when == "final"
-        && matches!(
-            output,
-            "weighted_integral" | "photon_integral" | "excited_population"
-        );
+        && (output == "full_and_integral"
+            || matches!(
+                output,
+                "weighted_integral" | "photon_integral" | "excited_population"
+            ));
     if output_when == "final" && final_integral {
         if integral_method == IntegralMethod::Solver {
             saveat_vec = Some(vec![t1]);
