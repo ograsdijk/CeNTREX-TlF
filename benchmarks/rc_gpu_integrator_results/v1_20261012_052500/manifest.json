@@ -1,0 +1,11 @@
+{
+  "deadline_utc": "2026-10-12T08:25:00+00:00",
+  "sources": {
+    "rc_gpu_integrators.cu": "8fc8a57d006695fe071bdb2e6a86522badef1d090bab0797f154bb1157ee85ed",
+    "rc_gpu_integrators.py": "5a241f7cae19e82882c9125019dfdd2815e021bc69731e7e1188d68197862c09",
+    "run_rc_gpu_integrator_suite.py": "a055b87a62b2f60dae634201986015d4fe1e2ea40274c70b955f712432781642",
+    "rc_gpu_sparse_methods.py": "e11f8a8178c308b0d4b7ce9db5794fee1e16472094eb9b9ec630344950d3718a",
+    "rc_gpu_sparse_kernels.cu": "b3ac8a71ec8e7275410d60e264149c88e0fffae2ad4d1552c8064d964741c3b6"
+  },
+  "cpu_odes_rerun": false
+}

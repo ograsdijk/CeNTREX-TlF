@@ -1,0 +1,474 @@
+{
+  "kind": "cached static R2 F4 full packed density, all coherences and sink populations",
+  "velocity_definition": "Uniform static 20 mm interaction, duration=0.02/v; v=50..250 m/s. No generator changes.",
+  "preparation": {
+    "source": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\r2_f4_dense_threading_results\\point_0_inputs.npz",
+    "structure": {
+      "full_dimension": 1681,
+      "active_dimension": 1444,
+      "removed_sink_coherences": 234,
+      "sink_count": 3,
+      "active_strong_block_sizes": [
+        1444
+      ]
+    },
+    "factor_stages": {
+      "eig_s": 0.6016050000034738,
+      "real_basis_s": 0.006898799998452887,
+      "lu_s": 0.022918200003914535,
+      "initial_columns_s": 0.001343499985523522,
+      "photon_traces_s": 0.0006834999949205667,
+      "total_s": 0.6334489999862853
+    },
+    "upload_factors_s": 0.41538660001242533
+  },
+  "rows": [
+    {
+      "backend": "cpu",
+      "cpu_blas_threads": 1,
+      "chunk": 512,
+      "velocities": 1,
+      "initials": 20,
+      "combinations": 20,
+      "seconds": [
+        0.0044741999881807715,
+        0.0035373999853618443,
+        0.0037119999760761857
+      ],
+      "median_seconds": 0.0037119999760761857,
+      "all_output_max_abs_vs_cpu": 0.0,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 0.0,
+        "max_absolute_below_1e_6": 0.0,
+        "max_absolute": 0.0,
+        "max_trace_error": 1.8967050152696174e-11,
+        "min_density_eigenvalue": 2.9701722018924813e-16
+      }
+    },
+    {
+      "backend": "cpu",
+      "cpu_blas_threads": 8,
+      "chunk": 512,
+      "velocities": 1,
+      "initials": 20,
+      "combinations": 20,
+      "seconds": [
+        0.0037345000018831342,
+        0.002244200004497543,
+        0.0023059000086504966
+      ],
+      "median_seconds": 0.0023059000086504966,
+      "all_output_max_abs_vs_cpu": 1.5265566588595902e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 1.688089646575976e-12,
+        "max_absolute_below_1e_6": 5.253192459752764e-18,
+        "max_absolute": 1.5265566588595902e-16,
+        "max_trace_error": 1.8967050152696174e-11,
+        "min_density_eigenvalue": 2.970172295110392e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 128,
+      "velocities": 1,
+      "initials": 20,
+      "combinations": 20,
+      "seconds": [
+        0.002065500011667609,
+        0.0017622000013943762,
+        0.0016866000078152865
+      ],
+      "median_seconds": 0.0017622000013943762,
+      "all_output_max_abs_vs_cpu": 1.1102230246251565e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 1.141331155238582e-12,
+        "max_absolute_below_1e_6": 3.588137443687623e-18,
+        "max_absolute": 1.1102230246251565e-16,
+        "max_trace_error": 1.8967050152696174e-11,
+        "min_density_eigenvalue": 2.97017213734756e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 512,
+      "velocities": 1,
+      "initials": 20,
+      "combinations": 20,
+      "seconds": [
+        0.0016595000051893294,
+        0.0016762000159360468,
+        0.001644000003580004
+      ],
+      "median_seconds": 0.0016595000051893294,
+      "all_output_max_abs_vs_cpu": 1.1102230246251565e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 1.141331155238582e-12,
+        "max_absolute_below_1e_6": 3.588137443687623e-18,
+        "max_absolute": 1.1102230246251565e-16,
+        "max_trace_error": 1.8967050152696174e-11,
+        "min_density_eigenvalue": 2.97017213734756e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 2048,
+      "velocities": 1,
+      "initials": 20,
+      "combinations": 20,
+      "seconds": [
+        0.001991900004213676,
+        0.0017202000017277896,
+        0.0016598000074736774
+      ],
+      "median_seconds": 0.0017202000017277896,
+      "all_output_max_abs_vs_cpu": 1.1102230246251565e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 1.141331155238582e-12,
+        "max_absolute_below_1e_6": 3.588137443687623e-18,
+        "max_absolute": 1.1102230246251565e-16,
+        "max_trace_error": 1.8967050152696174e-11,
+        "min_density_eigenvalue": 2.97017213734756e-16
+      }
+    },
+    {
+      "backend": "cpu",
+      "cpu_blas_threads": 1,
+      "chunk": 512,
+      "velocities": 21,
+      "initials": 20,
+      "combinations": 420,
+      "seconds": [
+        0.08424539997940883,
+        0.0815446000196971,
+        0.08214340000995435
+      ],
+      "median_seconds": 0.08214340000995435,
+      "all_output_max_abs_vs_cpu": 0.0,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 0.0,
+        "max_absolute_below_1e_6": 0.0,
+        "max_absolute": 0.0,
+        "max_trace_error": 3.161026995712746e-11,
+        "min_density_eigenvalue": 1.8512695413888074e-16
+      }
+    },
+    {
+      "backend": "cpu",
+      "cpu_blas_threads": 8,
+      "chunk": 512,
+      "velocities": 21,
+      "initials": 20,
+      "combinations": 420,
+      "seconds": [
+        0.07633370000985451,
+        0.07311380002647638,
+        0.07211209999513812
+      ],
+      "median_seconds": 0.07311380002647638,
+      "all_output_max_abs_vs_cpu": 1.5265566588595902e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.040308656982666e-12,
+        "max_absolute_below_1e_6": 2.427490547712418e-18,
+        "max_absolute": 1.3877787807814457e-16,
+        "max_trace_error": 3.161026995712746e-11,
+        "min_density_eigenvalue": 1.8512070416092377e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 128,
+      "velocities": 21,
+      "initials": 20,
+      "combinations": 420,
+      "seconds": [
+        0.014082000008784235,
+        0.01074900000821799,
+        0.010816999973030761
+      ],
+      "median_seconds": 0.010816999973030761,
+      "all_output_max_abs_vs_cpu": 2.220446049250313e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.6775238515217032e-12,
+        "max_absolute_below_1e_6": 2.5588071243164362e-18,
+        "max_absolute": 1.942890293094024e-16,
+        "max_trace_error": 3.161026995712746e-11,
+        "min_density_eigenvalue": 1.8513597040800773e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 512,
+      "velocities": 21,
+      "initials": 20,
+      "combinations": 420,
+      "seconds": [
+        0.008863499999279156,
+        0.006565299991052598,
+        0.00645680000889115
+      ],
+      "median_seconds": 0.006565299991052598,
+      "all_output_max_abs_vs_cpu": 2.220446049250313e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.6775238515217032e-12,
+        "max_absolute_below_1e_6": 2.5588071243164362e-18,
+        "max_absolute": 2.220446049250313e-16,
+        "max_trace_error": 3.161026995712746e-11,
+        "min_density_eigenvalue": 1.8519504537733232e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 2048,
+      "velocities": 21,
+      "initials": 20,
+      "combinations": 420,
+      "seconds": [
+        0.006493000022601336,
+        0.006277300009969622,
+        0.006238800007849932
+      ],
+      "median_seconds": 0.006277300009969622,
+      "all_output_max_abs_vs_cpu": 2.220446049250313e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.6775238515217032e-12,
+        "max_absolute_below_1e_6": 2.5588071243164362e-18,
+        "max_absolute": 2.220446049250313e-16,
+        "max_trace_error": 3.161026995712746e-11,
+        "min_density_eigenvalue": 1.8519504537733232e-16
+      }
+    },
+    {
+      "backend": "cpu",
+      "cpu_blas_threads": 1,
+      "chunk": 512,
+      "velocities": 101,
+      "initials": 20,
+      "combinations": 2020,
+      "seconds": [
+        0.40335869998671114,
+        0.40768009997555055,
+        0.3979412000044249
+      ],
+      "median_seconds": 0.40335869998671114,
+      "all_output_max_abs_vs_cpu": 0.0,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 0.0,
+        "max_absolute_below_1e_6": 0.0,
+        "max_absolute": 0.0,
+        "max_trace_error": 4.063771541495953e-11,
+        "min_density_eigenvalue": 1.565137953404144e-16
+      }
+    },
+    {
+      "backend": "cpu",
+      "cpu_blas_threads": 8,
+      "chunk": 512,
+      "velocities": 101,
+      "initials": 20,
+      "combinations": 2020,
+      "seconds": [
+        0.3502967999957036,
+        0.35366959997918457,
+        0.35420889998204075
+      ],
+      "median_seconds": 0.35366959997918457,
+      "all_output_max_abs_vs_cpu": 2.0816681711721685e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.751750664737547e-12,
+        "max_absolute_below_1e_6": 4.299856877618049e-18,
+        "max_absolute": 1.249000902703301e-16,
+        "max_trace_error": 4.063771541495953e-11,
+        "min_density_eigenvalue": 1.5649280110193605e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 128,
+      "velocities": 101,
+      "initials": 20,
+      "combinations": 2020,
+      "seconds": [
+        0.05051259999163449,
+        0.05039230000693351,
+        0.04936000000452623
+      ],
+      "median_seconds": 0.05039230000693351,
+      "all_output_max_abs_vs_cpu": 2.914335439641036e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.044217719747019e-12,
+        "max_absolute_below_1e_6": 5.222275757177982e-18,
+        "max_absolute": 1.1102230246251565e-16,
+        "max_trace_error": 4.063771541495953e-11,
+        "min_density_eigenvalue": 1.56456461222545e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 512,
+      "velocities": 101,
+      "initials": 20,
+      "combinations": 2020,
+      "seconds": [
+        0.03374220000114292,
+        0.030299200006993487,
+        0.030927600018912926
+      ],
+      "median_seconds": 0.030927600018912926,
+      "all_output_max_abs_vs_cpu": 2.914335439641036e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.044217719747019e-12,
+        "max_absolute_below_1e_6": 5.222275757177982e-18,
+        "max_absolute": 1.6653345369377348e-16,
+        "max_trace_error": 4.063771541495953e-11,
+        "min_density_eigenvalue": 1.5649524551560944e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 2048,
+      "velocities": 101,
+      "initials": 20,
+      "combinations": 2020,
+      "seconds": [
+        0.02765829997952096,
+        0.02525400000740774,
+        0.024835399992298335
+      ],
+      "median_seconds": 0.02525400000740774,
+      "all_output_max_abs_vs_cpu": 2.914335439641036e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.044217719747019e-12,
+        "max_absolute_below_1e_6": 5.222275757177982e-18,
+        "max_absolute": 1.1102230246251565e-16,
+        "max_trace_error": 4.063771541495953e-11,
+        "min_density_eigenvalue": 1.5649524551560944e-16
+      }
+    },
+    {
+      "backend": "cpu",
+      "cpu_blas_threads": 1,
+      "chunk": 512,
+      "velocities": 501,
+      "initials": 20,
+      "combinations": 10020,
+      "seconds": [
+        2.0172193000034895,
+        2.0586174999771174,
+        1.9829036000010092
+      ],
+      "median_seconds": 2.0172193000034895,
+      "all_output_max_abs_vs_cpu": 0.0,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 0.0,
+        "max_absolute_below_1e_6": 0.0,
+        "max_absolute": 0.0,
+        "max_trace_error": 2.222644290839071e-11,
+        "min_density_eigenvalue": 2.59896935886163e-16
+      }
+    },
+    {
+      "backend": "cpu",
+      "cpu_blas_threads": 8,
+      "chunk": 512,
+      "velocities": 501,
+      "initials": 20,
+      "combinations": 10020,
+      "seconds": [
+        1.748029599984875,
+        1.4458699999959208,
+        1.4377221000031568
+      ],
+      "median_seconds": 1.4458699999959208,
+      "all_output_max_abs_vs_cpu": 2.220446049250313e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 2.4969301267412237e-12,
+        "max_absolute_below_1e_6": 4.796482882505086e-18,
+        "max_absolute": 1.1102230246251565e-16,
+        "max_trace_error": 2.222644290839071e-11,
+        "min_density_eigenvalue": 2.59896938883002e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 128,
+      "velocities": 501,
+      "initials": 20,
+      "combinations": 10020,
+      "seconds": [
+        0.2852574000135064,
+        0.23648159997537732,
+        0.23720169998705387
+      ],
+      "median_seconds": 0.23720169998705387,
+      "all_output_max_abs_vs_cpu": 3.608224830031759e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 4.618093251077529e-12,
+        "max_absolute_below_1e_6": 3.820277410794505e-18,
+        "max_absolute": 1.196959198423997e-16,
+        "max_trace_error": 2.222644290839071e-11,
+        "min_density_eigenvalue": 2.598969280626286e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 512,
+      "velocities": 501,
+      "initials": 20,
+      "combinations": 10020,
+      "seconds": [
+        0.13950520000071265,
+        0.13916170000447892,
+        0.14014780000434257
+      ],
+      "median_seconds": 0.13950520000071265,
+      "all_output_max_abs_vs_cpu": 3.608224830031759e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 4.618093251077529e-12,
+        "max_absolute_below_1e_6": 3.820277410794505e-18,
+        "max_absolute": 1.6653345369377348e-16,
+        "max_trace_error": 2.222644290839071e-11,
+        "min_density_eigenvalue": 2.598969309161912e-16
+      }
+    },
+    {
+      "backend": "cuda",
+      "cpu_blas_threads": 0,
+      "chunk": 2048,
+      "velocities": 501,
+      "initials": 20,
+      "combinations": 10020,
+      "seconds": [
+        0.131074599979911,
+        0.1290576999890618,
+        0.12824849999742582
+      ],
+      "median_seconds": 0.1290576999890618,
+      "all_output_max_abs_vs_cpu": 3.608224830031759e-16,
+      "sampled_complex_diagnostics": {
+        "max_complex_relative_above_1e_6": 4.618093251077529e-12,
+        "max_absolute_below_1e_6": 3.820277410794505e-18,
+        "max_absolute": 1.1102230246251565e-16,
+        "max_trace_error": 2.222644290839071e-11,
+        "min_density_eigenvalue": 2.598969309161912e-16
+      }
+    }
+  ],
+  "warmup_accuracy": {
+    "max_complex_relative_above_1e_6": 1.167051190086664e-13,
+    "max_absolute_below_1e_6": 4.810353047016375e-19,
+    "max_absolute": 1.1102230246251565e-16,
+    "max_trace_error": 7.177369809596712e-12,
+    "min_density_eigenvalue": 4.223269189915111e-16
+  }
+}

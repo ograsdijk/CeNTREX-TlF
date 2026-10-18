@@ -1,0 +1,1149 @@
+{
+  "device": "NVIDIA GeForce RTX 5070 Ti",
+  "cases": [
+    {
+      "system": "RC",
+      "batch": 512,
+      "span": [
+        0.000146,
+        0.000147
+      ],
+      "dt": 4.464285714285714e-09,
+      "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\cpu_rust_e0fee2f43ee1888a.npz",
+      "variants": {
+        "base_tiled": {
+          "accuracy": {
+            "max_abs": 5.399706380873093e-08,
+            "max_relative_above_cutoff": 0.008338116382130866,
+            "max_coherence_relative_above_cutoff": 0.008338116382130866,
+            "near_zero_max_abs": 7.690847517666012e-09,
+            "relative_frobenius": 2.3632431529935264e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.7364175418713178e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.1842443000059575,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.0827228000271134,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.12650409998605028
+              }
+            ]
+          },
+          "timings": [
+            0.9681442999863066,
+            0.9709553999709897,
+            0.9074982999591157,
+            0.9249863000004552
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.399706380873093e-08,
+            "max_relative_above_cutoff": 0.008338116382130866,
+            "max_coherence_relative_above_cutoff": 0.008338116382130866,
+            "near_zero_max_abs": 7.690847517666012e-09,
+            "relative_frobenius": 2.3632431529935264e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.7364175418713178e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "base_direct": {
+          "accuracy": {
+            "max_abs": 5.399706380742832e-08,
+            "max_relative_above_cutoff": 0.008338116382459054,
+            "max_coherence_relative_above_cutoff": 0.008338116382459054,
+            "near_zero_max_abs": 7.690847522483777e-09,
+            "relative_frobenius": 2.3632431531310295e-06,
+            "trace_error": 5.551115123125783e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.3552527156068953e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.1163903000415303,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.0256498000235297,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.046419500024057925
+              }
+            ]
+          },
+          "timings": [
+            1.0208064999897033,
+            1.0811551000224426,
+            1.0216456999769434,
+            0.9324023999506608
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.399706380742832e-08,
+            "max_relative_above_cutoff": 0.008338116382459054,
+            "max_coherence_relative_above_cutoff": 0.008338116382459054,
+            "near_zero_max_abs": 7.690847522483777e-09,
+            "relative_frobenius": 2.3632431531310295e-06,
+            "trace_error": 5.551115123125783e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.3552527156068953e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_tiled": {
+          "accuracy": {
+            "max_abs": 5.399706380873093e-08,
+            "max_relative_above_cutoff": 0.008338116382130866,
+            "max_coherence_relative_above_cutoff": 0.008338116382130866,
+            "near_zero_max_abs": 7.690847517666012e-09,
+            "relative_frobenius": 2.3632431529935264e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.7364175418713178e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.531342300004326,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.4674742000061087,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.49041850003413856
+              }
+            ]
+          },
+          "timings": [
+            0.9815321000060067,
+            0.9345536000328138,
+            0.9082891999860294,
+            0.9045216999948025
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.399706380873093e-08,
+            "max_relative_above_cutoff": 0.008338116382130866,
+            "max_coherence_relative_above_cutoff": 0.008338116382130866,
+            "near_zero_max_abs": 7.690847517666012e-09,
+            "relative_frobenius": 2.3632431529935264e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.7364175418713178e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_direct": {
+          "accuracy": {
+            "max_abs": 5.399706380742832e-08,
+            "max_relative_above_cutoff": 0.008338116382459054,
+            "max_coherence_relative_above_cutoff": 0.008338116382459054,
+            "near_zero_max_abs": 7.690847522483777e-09,
+            "relative_frobenius": 2.3632431531310295e-06,
+            "trace_error": 5.551115123125783e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.3552527156068953e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.601530099986121,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.5100462000118569,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.545254800003022
+              }
+            ]
+          },
+          "timings": [
+            0.9345384999760427,
+            0.9909798000007868,
+            0.9497382999979891,
+            0.9397489999537356
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.399706380742832e-08,
+            "max_relative_above_cutoff": 0.008338116382459054,
+            "max_coherence_relative_above_cutoff": 0.008338116382459054,
+            "near_zero_max_abs": 7.690847522483777e-09,
+            "relative_frobenius": 2.3632431531310295e-06,
+            "trace_error": 5.551115123125783e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.3552527156068953e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "hybrid16": {
+          "accuracy": {
+            "max_abs": 5.3997063807652646e-08,
+            "max_relative_above_cutoff": 0.008338116381992477,
+            "max_coherence_relative_above_cutoff": 0.008338116381992477,
+            "near_zero_max_abs": 7.690847524077987e-09,
+            "relative_frobenius": 2.3632431531763474e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.6940658945088357e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.501781099999789,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.4910550999920815,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.4358994999784045
+              }
+            ]
+          },
+          "timings": [
+            1.037372899998445,
+            1.0501357999746688,
+            1.0078789999824949,
+            1.0273934000288136
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.3997063807652646e-08,
+            "max_relative_above_cutoff": 0.008338116381992477,
+            "max_coherence_relative_above_cutoff": 0.008338116381992477,
+            "near_zero_max_abs": 7.690847524077987e-09,
+            "relative_frobenius": 2.3632431531763474e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.6940658945088357e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "hybrid32": {
+          "accuracy": {
+            "max_abs": 5.3997063807652646e-08,
+            "max_relative_above_cutoff": 0.008338116381992477,
+            "max_coherence_relative_above_cutoff": 0.008338116381992477,
+            "near_zero_max_abs": 7.690847524077987e-09,
+            "relative_frobenius": 2.3632431531763474e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.6940658945088357e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.427458999969531,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.4309576000086963,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.4168648000340909
+              }
+            ]
+          },
+          "timings": [
+            1.0171073999954388,
+            0.9916685000061989,
+            0.9869574999902397,
+            0.9682253000210039
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.3997063807652646e-08,
+            "max_relative_above_cutoff": 0.008338116381992477,
+            "max_coherence_relative_above_cutoff": 0.008338116381992477,
+            "near_zero_max_abs": 7.690847524077987e-09,
+            "relative_frobenius": 2.3632431531763474e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.6940658945088357e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_hybrid32": {
+          "accuracy": {
+            "max_abs": 5.3997063807652646e-08,
+            "max_relative_above_cutoff": 0.008338116381992477,
+            "max_coherence_relative_above_cutoff": 0.008338116381992477,
+            "near_zero_max_abs": 7.690847524077987e-09,
+            "relative_frobenius": 2.3632431531763474e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.6940658945088357e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.3980249000014737,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.4095197999849916,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.41791699995519593
+              }
+            ]
+          },
+          "timings": [
+            1.028143799980171,
+            1.195844699977897,
+            0.9955980000086129,
+            0.9918045999947935
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.3997063807652646e-08,
+            "max_relative_above_cutoff": 0.008338116381992477,
+            "max_coherence_relative_above_cutoff": 0.008338116381992477,
+            "near_zero_max_abs": 7.690847524077987e-09,
+            "relative_frobenius": 2.3632431531763474e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.6940658945088357e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "fp32_product_tiled": {
+          "accuracy": {
+            "max_abs": 5.397763793009502e-08,
+            "max_relative_above_cutoff": 0.008293592003318811,
+            "max_coherence_relative_above_cutoff": 0.008293592003318811,
+            "near_zero_max_abs": 8.742174733076292e-09,
+            "relative_frobenius": 2.460969674595814e-06,
+            "trace_error": 1.3985754288015073e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -2.032879073410326e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.6008008000208065,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.5886916000163183,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.49625240004388615
+              }
+            ]
+          },
+          "timings": [
+            1.1171692000352778,
+            1.1245109000010416,
+            1.2758778999559581,
+            1.112216699984856
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.397763793009502e-08,
+            "max_relative_above_cutoff": 0.008293592003318811,
+            "max_coherence_relative_above_cutoff": 0.008293592003318811,
+            "near_zero_max_abs": 8.742174733076292e-09,
+            "relative_frobenius": 2.460969674595814e-06,
+            "trace_error": 1.3985754288015073e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -2.032879073410326e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "fp32_product_direct": {
+          "accuracy": {
+            "max_abs": 5.4809971614346445e-08,
+            "max_relative_above_cutoff": 0.008195045895166536,
+            "max_coherence_relative_above_cutoff": 0.008195045895166536,
+            "near_zero_max_abs": 7.992163989851729e-09,
+            "relative_frobenius": 2.533028377585579e-06,
+            "trace_error": 1.4310166052133866e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -2.0328790734103362e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.531463099992834,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.5374040000024252,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.4303076000069268
+              }
+            ]
+          },
+          "timings": [
+            1.194319500005804,
+            1.2674115999834612,
+            1.1060959000024013,
+            1.1081805999856442
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.4809971614346445e-08,
+            "max_relative_above_cutoff": 0.008195045895166536,
+            "max_coherence_relative_above_cutoff": 0.008195045895166536,
+            "near_zero_max_abs": 7.992163989851729e-09,
+            "relative_frobenius": 2.533028377585579e-06,
+            "trace_error": 1.4310166052133866e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -2.0328790734103362e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "fp32_rhs_direct": {
+          "accuracy": {
+            "max_abs": 5.4809971614346445e-08,
+            "max_relative_above_cutoff": 0.008195045895166536,
+            "max_coherence_relative_above_cutoff": 0.008195045895166536,
+            "near_zero_max_abs": 7.992163989851729e-09,
+            "relative_frobenius": 2.533028377585579e-06,
+            "trace_error": 1.4310166052133866e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -2.0328790734103362e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.552552600041963,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 115200,
+            "rejected_steps": 0,
+            "rhs_calls": 696832,
+            "function_evaluations": 696832,
+            "saved_points": 1,
+            "total_seconds": 1.5211172999697737,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 696832,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.41447630000766367
+              }
+            ]
+          },
+          "timings": [
+            1.1537336999899708,
+            1.1252179000293836,
+            1.1081600000034086,
+            1.1158152999705635
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.4809971614346445e-08,
+            "max_relative_above_cutoff": 0.008195045895166536,
+            "max_coherence_relative_above_cutoff": 0.008195045895166536,
+            "near_zero_max_abs": 7.992163989851729e-09,
+            "relative_frobenius": 2.533028377585579e-06,
+            "trace_error": 1.4310166052133866e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -2.0328790734103362e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        }
+      }
+    },
+    {
+      "system": "R2_EOM",
+      "batch": 512,
+      "span": [
+        1.25e-07,
+        1.125e-06
+      ],
+      "dt": 2e-09,
+      "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\r2_gpu_reuse_results\\eom_v1\\eom_swap_const_exact_0.5ns.npz",
+      "variants": {
+        "base_tiled": {
+          "accuracy": {
+            "max_abs": 1.7273976015325936e-06,
+            "max_relative_above_cutoff": 0.0005943969112971237,
+            "max_coherence_relative_above_cutoff": 0.0005943969112971237,
+            "near_zero_max_abs": 4.559342470798247e-10,
+            "relative_frobenius": 4.360128295062703e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724058078962e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 0.9639078000327572,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 0.612936899997294,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.02309819997753948
+              }
+            ]
+          },
+          "timings": [
+            0.5567538000177592,
+            0.5579423999879509,
+            0.5580452000140212,
+            0.5607120000058785
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015325936e-06,
+            "max_relative_above_cutoff": 0.0005943969112971237,
+            "max_coherence_relative_above_cutoff": 0.0005943969112971237,
+            "near_zero_max_abs": 4.559342470798247e-10,
+            "relative_frobenius": 4.360128295062703e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724058078962e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "base_direct": {
+          "accuracy": {
+            "max_abs": 1.7273976015279394e-06,
+            "max_relative_above_cutoff": 0.0005943969112833269,
+            "max_coherence_relative_above_cutoff": 0.0005943969112833269,
+            "near_zero_max_abs": 4.5593424708392567e-10,
+            "relative_frobenius": 4.360128295049971e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.24917261651067e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 0.9383194000110961,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 0.6029704000102356,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.02360029995907098
+              }
+            ]
+          },
+          "timings": [
+            0.5775736999930814,
+            0.5786731999833137,
+            0.5970840999507345,
+            0.6001879000104964
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015279394e-06,
+            "max_relative_above_cutoff": 0.0005943969112833269,
+            "max_coherence_relative_above_cutoff": 0.0005943969112833269,
+            "near_zero_max_abs": 4.5593424708392567e-10,
+            "relative_frobenius": 4.360128295049971e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.24917261651067e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_tiled": {
+          "accuracy": {
+            "max_abs": 1.7273976015325936e-06,
+            "max_relative_above_cutoff": 0.0005943969112971237,
+            "max_coherence_relative_above_cutoff": 0.0005943969112971237,
+            "near_zero_max_abs": 4.559342470798247e-10,
+            "relative_frobenius": 4.360128295062703e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724058078962e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.2333747000084259,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 0.9152323000016622,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.3494201999856159
+              }
+            ]
+          },
+          "timings": [
+            0.5641363000031561,
+            0.6011400999850594,
+            0.5938754999660887,
+            0.5891242999932729
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015325936e-06,
+            "max_relative_above_cutoff": 0.0005943969112971237,
+            "max_coherence_relative_above_cutoff": 0.0005943969112971237,
+            "near_zero_max_abs": 4.559342470798247e-10,
+            "relative_frobenius": 4.360128295062703e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724058078962e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_direct": {
+          "accuracy": {
+            "max_abs": 1.7273976015279394e-06,
+            "max_relative_above_cutoff": 0.0005943969112833269,
+            "max_coherence_relative_above_cutoff": 0.0005943969112833269,
+            "near_zero_max_abs": 4.5593424708392567e-10,
+            "relative_frobenius": 4.360128295049971e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.24917261651067e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.220272299950011,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 0.9092468000017107,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.32513640000252053
+              }
+            ]
+          },
+          "timings": [
+            0.5822768000070937,
+            0.5833722000243142,
+            0.5961256999871694,
+            0.5860802999814041
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015279394e-06,
+            "max_relative_above_cutoff": 0.0005943969112833269,
+            "max_coherence_relative_above_cutoff": 0.0005943969112833269,
+            "near_zero_max_abs": 4.5593424708392567e-10,
+            "relative_frobenius": 4.360128295049971e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.24917261651067e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "hybrid16": {
+          "accuracy": {
+            "max_abs": 1.7273976015249087e-06,
+            "max_relative_above_cutoff": 0.0005943969112914829,
+            "max_coherence_relative_above_cutoff": 0.0005943969112914829,
+            "near_zero_max_abs": 4.5593424707394366e-10,
+            "relative_frobenius": 4.360128295037205e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724586419576e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.2610697000054643,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 0.9517228999757208,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.34741260000737384
+              }
+            ]
+          },
+          "timings": [
+            0.603235799993854,
+            0.6034872999880463,
+            0.6073852999834344,
+            0.6200471000047401
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015249087e-06,
+            "max_relative_above_cutoff": 0.0005943969112914829,
+            "max_coherence_relative_above_cutoff": 0.0005943969112914829,
+            "near_zero_max_abs": 4.5593424707394366e-10,
+            "relative_frobenius": 4.360128295037205e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724586419576e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "hybrid32": {
+          "accuracy": {
+            "max_abs": 1.7273976015249087e-06,
+            "max_relative_above_cutoff": 0.0005943969112914829,
+            "max_coherence_relative_above_cutoff": 0.0005943969112914829,
+            "near_zero_max_abs": 4.5593424707394366e-10,
+            "relative_frobenius": 4.360128295037205e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724586419576e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.260403899999801,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 0.9495975999743678,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.3713933999533765
+              }
+            ]
+          },
+          "timings": [
+            0.575288099993486,
+            0.6138496000203304,
+            0.591054400021676,
+            0.577473999990616
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015249087e-06,
+            "max_relative_above_cutoff": 0.0005943969112914829,
+            "max_coherence_relative_above_cutoff": 0.0005943969112914829,
+            "near_zero_max_abs": 4.5593424707394366e-10,
+            "relative_frobenius": 4.360128295037205e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724586419576e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_hybrid32": {
+          "accuracy": {
+            "max_abs": 1.7273976015249087e-06,
+            "max_relative_above_cutoff": 0.0005943969112914829,
+            "max_coherence_relative_above_cutoff": 0.0005943969112914829,
+            "near_zero_max_abs": 4.5593424707394366e-10,
+            "relative_frobenius": 4.360128295037205e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724586419576e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.259515299985651,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 0.9200045999605209,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.33611309999832883
+              }
+            ]
+          },
+          "timings": [
+            0.5846814999822527,
+            0.601431000046432,
+            0.6448725000373088,
+            0.5858574000303634
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015249087e-06,
+            "max_relative_above_cutoff": 0.0005943969112914829,
+            "max_coherence_relative_above_cutoff": 0.0005943969112914829,
+            "near_zero_max_abs": 4.5593424707394366e-10,
+            "relative_frobenius": 4.360128295037205e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724586419576e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "fp32_product_tiled": {
+          "accuracy": {
+            "max_abs": 1.7261596185026011e-06,
+            "max_relative_above_cutoff": 0.0005946747079676805,
+            "max_coherence_relative_above_cutoff": 0.0005946747079676805,
+            "near_zero_max_abs": 4.5666360193307923e-10,
+            "relative_frobenius": 4.355610969427668e-06,
+            "trace_error": 7.709373006647979e-08,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.249335076365136e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.3620719999889843,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 1.051372599962633,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.3716393999638967
+              }
+            ]
+          },
+          "timings": [
+            0.6770092000369914,
+            0.6795770999742672,
+            0.7221672000014223,
+            0.6791371000581421
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7261596185026011e-06,
+            "max_relative_above_cutoff": 0.0005946747079676805,
+            "max_coherence_relative_above_cutoff": 0.0005946747079676805,
+            "near_zero_max_abs": 4.5666360193307923e-10,
+            "relative_frobenius": 4.355610969427668e-06,
+            "trace_error": 7.709373006647979e-08,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.249335076365136e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "fp32_product_direct": {
+          "accuracy": {
+            "max_abs": 1.7308818174460052e-06,
+            "max_relative_above_cutoff": 0.0005926337968204007,
+            "max_coherence_relative_above_cutoff": 0.0005926337968204007,
+            "near_zero_max_abs": 4.540712657325102e-10,
+            "relative_frobenius": 4.3675126497066226e-06,
+            "trace_error": 1.2156630180282235e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.249141206870828e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.3634879000019282,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 1.0555327999754809,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.3456508999806829
+              }
+            ]
+          },
+          "timings": [
+            0.7084748999914154,
+            0.7125548000331037,
+            0.708962699980475,
+            0.7090342000010423
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7308818174460052e-06,
+            "max_relative_above_cutoff": 0.0005926337968204007,
+            "max_coherence_relative_above_cutoff": 0.0005926337968204007,
+            "near_zero_max_abs": 4.540712657325102e-10,
+            "relative_frobenius": 4.3675126497066226e-06,
+            "trace_error": 1.2156630180282235e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.249141206870828e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "fp32_rhs_direct": {
+          "accuracy": {
+            "max_abs": 1.7308818174460052e-06,
+            "max_relative_above_cutoff": 0.0005926337968204007,
+            "max_coherence_relative_above_cutoff": 0.0005926337968204007,
+            "near_zero_max_abs": 4.540712657325102e-10,
+            "relative_frobenius": 4.3675126497066226e-06,
+            "trace_error": 1.2156630180282235e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.249141206870828e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.3784753999789245,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 256000,
+            "rejected_steps": 0,
+            "rhs_calls": 1536512,
+            "function_evaluations": 1536512,
+            "saved_points": 1,
+            "total_seconds": 1.0637510000378825,
+            "chunks": [
+              {
+                "trajectories": 512,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 1536512,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.35227500001201406
+              }
+            ]
+          },
+          "timings": [
+            0.7100503999972716,
+            0.7173746000044048,
+            0.7483246000483632,
+            0.722413300012704
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7308818174460052e-06,
+            "max_relative_above_cutoff": 0.0005926337968204007,
+            "max_coherence_relative_above_cutoff": 0.0005926337968204007,
+            "near_zero_max_abs": 4.540712657325102e-10,
+            "relative_frobenius": 4.3675126497066226e-06,
+            "trace_error": 1.2156630180282235e-07,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.249141206870828e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        }
+      }
+    }
+  ]
+}

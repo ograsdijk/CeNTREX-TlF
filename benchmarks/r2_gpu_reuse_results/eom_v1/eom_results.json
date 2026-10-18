@@ -1,0 +1,188 @@
+{
+  "scope": "R2 F4 EOM beta 3.8, 1.6 MHz, 125ns absolute entry, 1us duration; 60 detuning/initial cases repeated to fill batch",
+  "cpu_reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_propagation_results\\cross_system_eom_screen_v1\\suite_v2\\r2_f4\\reference.npz",
+  "rows": [
+    {
+      "variant": "swap_const_exact",
+      "dt_ns": 0.5,
+      "batch": 512,
+      "seconds": [
+        2.627903199987486,
+        2.624773399991682,
+        2.6176258999912534
+      ],
+      "median_seconds": 2.624773399991682,
+      "fine_gpu_diagnostics": {
+        "max_complex_relative_above_1e_6": 0.0,
+        "max_absolute_below_1e_6": 0.0,
+        "max_absolute": 0.0,
+        "max_trace_error": 4.6629367034256575e-15,
+        "min_density_eigenvalue": 1.249196301105973e-13
+      },
+      "archived_cpu_main_diagnostics": {
+        "max_complex_relative_above_1e_6": 7.125471753137564e-08,
+        "max_absolute_below_1e_6": 9.811616515673447e-15,
+        "max_absolute": 2.3820097337741973e-11,
+        "max_trace_error": 7.771561172376096e-16,
+        "min_density_eigenvalue": 5.8714688107855e-09
+      },
+      "passed": true
+    },
+    {
+      "variant": "base",
+      "dt_ns": 1.0,
+      "batch": 512,
+      "seconds": [
+        1.4101355000166222,
+        1.40373270001146,
+        1.4055349999980535
+      ],
+      "median_seconds": 1.4055349999980535,
+      "fine_gpu_diagnostics": {
+        "max_complex_relative_above_1e_6": 9.778263172710858e-06,
+        "max_absolute_below_1e_6": 7.563113285592443e-12,
+        "max_absolute": 2.8665990127004233e-08,
+        "max_trace_error": 3.774758283725532e-15,
+        "min_density_eigenvalue": 1.24919601124754e-13
+      },
+      "archived_cpu_main_diagnostics": {
+        "max_complex_relative_above_1e_6": 4.821394960364304e-08,
+        "max_absolute_below_1e_6": 6.225394608955474e-15,
+        "max_absolute": 1.566681324298298e-11,
+        "max_trace_error": 2.220446049250313e-16,
+        "min_density_eigenvalue": 5.871468827157409e-09
+      },
+      "passed": true
+    },
+    {
+      "variant": "swap_const_exact",
+      "dt_ns": 1.0,
+      "batch": 512,
+      "seconds": [
+        1.3094630000123288,
+        1.311468399973819,
+        1.3191523000132293
+      ],
+      "median_seconds": 1.311468399973819,
+      "fine_gpu_diagnostics": {
+        "max_complex_relative_above_1e_6": 9.778263263942302e-06,
+        "max_absolute_below_1e_6": 7.563113288610925e-12,
+        "max_absolute": 2.866599013345263e-08,
+        "max_trace_error": 3.9968028886505635e-15,
+        "min_density_eigenvalue": 1.249195969746887e-13
+      },
+      "archived_cpu_main_diagnostics": {
+        "max_complex_relative_above_1e_6": 4.821396190951666e-08,
+        "max_absolute_below_1e_6": 6.22539728672081e-15,
+        "max_absolute": 1.5666812249082795e-11,
+        "max_trace_error": 2.220446049250313e-16,
+        "min_density_eigenvalue": 5.8714688428781294e-09
+      },
+      "passed": true
+    },
+    {
+      "variant": "swap_const_exact_packed",
+      "dt_ns": 1.0,
+      "batch": 512,
+      "seconds": [
+        1.1347108999907505,
+        1.137999700004002,
+        1.1486184000095818
+      ],
+      "median_seconds": 1.137999700004002,
+      "fine_gpu_diagnostics": {
+        "max_complex_relative_above_1e_6": 9.778263263942302e-06,
+        "max_absolute_below_1e_6": 7.563113288610925e-12,
+        "max_absolute": 2.866599013345263e-08,
+        "max_trace_error": 3.9968028886505635e-15,
+        "min_density_eigenvalue": 1.249195969746887e-13
+      },
+      "archived_cpu_main_diagnostics": {
+        "max_complex_relative_above_1e_6": 4.821396190951666e-08,
+        "max_absolute_below_1e_6": 6.22539728672081e-15,
+        "max_absolute": 1.5666812249082795e-11,
+        "max_trace_error": 2.220446049250313e-16,
+        "min_density_eigenvalue": 5.8714688428781294e-09
+      },
+      "passed": true
+    },
+    {
+      "variant": "swap_const_exact_packed_direct",
+      "dt_ns": 1.0,
+      "batch": 512,
+      "seconds": [
+        1.1430020999978296,
+        1.144845400005579,
+        1.1516250999993645
+      ],
+      "median_seconds": 1.144845400005579,
+      "fine_gpu_diagnostics": {
+        "max_complex_relative_above_1e_6": 9.778263263942302e-06,
+        "max_absolute_below_1e_6": 7.563113288610925e-12,
+        "max_absolute": 2.866599013345263e-08,
+        "max_trace_error": 3.9968028886505635e-15,
+        "min_density_eigenvalue": 1.249195969746887e-13
+      },
+      "archived_cpu_main_diagnostics": {
+        "max_complex_relative_above_1e_6": 4.821396190951666e-08,
+        "max_absolute_below_1e_6": 6.22539728672081e-15,
+        "max_absolute": 1.5666812249082795e-11,
+        "max_trace_error": 2.220446049250313e-16,
+        "min_density_eigenvalue": 5.8714688428781294e-09
+      },
+      "passed": true
+    },
+    {
+      "variant": "swap_const_exact_packed",
+      "dt_ns": 2.0,
+      "batch": 512,
+      "seconds": [
+        0.5726045000192244,
+        0.5706894000177272,
+        0.5717144999944139
+      ],
+      "median_seconds": 0.5717144999944139,
+      "fine_gpu_diagnostics": {
+        "max_complex_relative_above_1e_6": 0.0005930774984396341,
+        "max_absolute_below_1e_6": 4.5505236422719616e-10,
+        "max_absolute": 1.7240792188070224e-06,
+        "max_trace_error": 1.7763568394002505e-15,
+        "min_density_eigenvalue": 1.2491729091864446e-13
+      },
+      "archived_cpu_main_diagnostics": {
+        "max_complex_relative_above_1e_6": 1.6222526063115156e-06,
+        "max_absolute_below_1e_6": 1.7286773766683525e-13,
+        "max_absolute": 4.2400593948127393e-10,
+        "max_trace_error": 4.440892098500626e-16,
+        "min_density_eigenvalue": 5.871469042602213e-09
+      },
+      "passed": true
+    },
+    {
+      "variant": "swap_const_exact_packed",
+      "dt_ns": 4.0,
+      "batch": 512,
+      "seconds": [
+        0.2893616000073962,
+        0.2911603000247851,
+        0.29206429998157546
+      ],
+      "median_seconds": 0.2911603000247851,
+      "fine_gpu_diagnostics": {
+        "max_complex_relative_above_1e_6": 0.1380835881979264,
+        "max_absolute_below_1e_6": 8.09681115509873e-08,
+        "max_absolute": 0.00031984821047845326,
+        "max_trace_error": 1.1102230246251565e-15,
+        "min_density_eigenvalue": -1.6099483840759755e-06
+      },
+      "archived_cpu_main_diagnostics": {
+        "max_complex_relative_above_1e_6": 9.475538530365515e-05,
+        "max_absolute_below_1e_6": 1.0137823918721702e-11,
+        "max_absolute": 2.3082544888633504e-08,
+        "max_trace_error": 2.220446049250313e-16,
+        "min_density_eigenvalue": 5.871474320247487e-09
+      },
+      "passed": false
+    }
+  ]
+}

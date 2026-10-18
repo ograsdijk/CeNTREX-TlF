@@ -1,0 +1,36 @@
+{
+  "timings": {
+    "full": [
+      1.9695499999797903,
+      1.9740194999612868,
+      2.096381699957419
+    ],
+    "reduced": [
+      1.7880821999860927,
+      1.8720214000204578,
+      1.8003395999548957
+    ]
+  },
+  "check": {
+    "max_abs": 1.1102230246251565e-16,
+    "max_relative_above_1e6": 4.9940480590850105e-12,
+    "max_abs_below_1e6": 5.0312037960046685e-18,
+    "trace_error": 5.551115123125783e-16,
+    "min_eigenvalue": -1.3552527156068953e-20,
+    "passed": true
+  },
+  "chunks": [
+    {
+      "trajectories": 1024,
+      "steps_per_trajectory": 225,
+      "rhs_calls": 1393664,
+      "shared_offdiagonal_hamiltonian": true,
+      "precomputed_waveforms": true,
+      "tile_size": 0,
+      "density_reduction": true,
+      "retained_density_pairs": 2020,
+      "full_density_pairs": 2485,
+      "setup_seconds": 0.07788699999218807
+    }
+  ]
+}

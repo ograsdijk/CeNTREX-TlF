@@ -1,0 +1,78 @@
+{
+  "system": "rc",
+  "passed": true,
+  "checks": [
+    {
+      "test": "H_only_ground_coherences",
+      "time_s": 1.2500000000000002e-07,
+      "normalized_error": 2.874418340125883e-16,
+      "absent_contribution_residual": 0.0
+    },
+    {
+      "test": "D_only_identity",
+      "time_s": 1.2500000000000002e-07,
+      "normalized_error": 4.007038707080142e-16,
+      "absent_contribution_residual": 0.0
+    },
+    {
+      "test": "D_only_H_squared",
+      "time_s": 1.2500000000000002e-07,
+      "normalized_error": 2.5855033321207528e-16,
+      "absent_contribution_residual": 1.442522874179922e-16
+    },
+    {
+      "test": "H_only_ground_coherences",
+      "time_s": 3.75e-07,
+      "normalized_error": 2.874403668239341e-16,
+      "absent_contribution_residual": 0.0
+    },
+    {
+      "test": "D_only_identity",
+      "time_s": 3.75e-07,
+      "normalized_error": 4.007038707080142e-16,
+      "absent_contribution_residual": 0.0
+    },
+    {
+      "test": "D_only_H_squared",
+      "time_s": 3.75e-07,
+      "normalized_error": 3.2255792058099013e-16,
+      "absent_contribution_residual": 2.5804633646479207e-16
+    },
+    {
+      "test": "H_only_ground_coherences",
+      "time_s": 6.25e-07,
+      "normalized_error": 1.4372018341196705e-16,
+      "absent_contribution_residual": 0.0
+    },
+    {
+      "test": "D_only_identity",
+      "time_s": 6.25e-07,
+      "normalized_error": 4.007038707080142e-16,
+      "absent_contribution_residual": 0.0
+    },
+    {
+      "test": "D_only_H_squared",
+      "time_s": 6.25e-07,
+      "normalized_error": 5.715323155937017e-16,
+      "absent_contribution_residual": 2.5804633649380534e-16
+    },
+    {
+      "test": "H_only_ground_coherences",
+      "time_s": 8.750000000000001e-07,
+      "normalized_error": 2.874418340125883e-16,
+      "absent_contribution_residual": 0.0
+    },
+    {
+      "test": "D_only_identity",
+      "time_s": 8.750000000000001e-07,
+      "normalized_error": 4.007038707080142e-16,
+      "absent_contribution_residual": 0.0
+    },
+    {
+      "test": "D_only_H_squared",
+      "time_s": 8.750000000000001e-07,
+      "normalized_error": 2.5804633649018787e-16,
+      "absent_contribution_residual": 1.2902316824509394e-16
+    }
+  ]
+}

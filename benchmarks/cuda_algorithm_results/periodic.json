@@ -1,0 +1,110 @@
+[
+  {
+    "system": "RC",
+    "batch": 1024,
+    "detuning_MHz": 0.0,
+    "period_seconds": 5e-06,
+    "cycles": 8,
+    "span": [
+      0.0,
+      4e-05
+    ],
+    "constant_envelope": true,
+    "retained": 3973,
+    "map_bytes": 126277832,
+    "construction_seconds": 38.04883390001487,
+    "power_seconds": 0.8864228999591433,
+    "reuse_timings": [
+      0.07274890004191548,
+      0.07465660001616925,
+      0.07372939999913797
+    ],
+    "direct_batch_timings": [
+      78.75641130004078,
+      79.10374089999823,
+      76.0984534000163
+    ],
+    "physical_initial_states": 4,
+    "direct_unique_seconds": 2.5335295999539085,
+    "check": {
+      "max_abs": 5.849132822532965e-08,
+      "max_relative_above_1e6": 0.002264379721277304,
+      "max_abs_below_1e6": 0.0,
+      "trace_error": 2.220446049250313e-15,
+      "min_eigenvalue": -3.2526065174565147e-19,
+      "passed": true
+    },
+    "direct_reference_check": {
+      "max_abs": 5.84913303347534e-08,
+      "max_relative_above_1e6": 0.0022643797492234484,
+      "max_abs_below_1e6": 0.0,
+      "trace_error": 1.7763568394002505e-15,
+      "min_eigenvalue": -2.1684043449710907e-19,
+      "passed": true
+    },
+    "coefficient_periodicity_error": 8.880220214376465e-15,
+    "long_cycles": 40,
+    "long_check": {
+      "max_abs": 2.0209465281806338e-08,
+      "max_relative_above_1e6": 3.787825939039587e-05,
+      "max_abs_below_1e6": 4.860965144503156e-11,
+      "trace_error": 3.774758283725532e-15,
+      "min_eigenvalue": -8.470329472543109e-22,
+      "passed": true
+    }
+  },
+  {
+    "system": "R2_EOM",
+    "batch": 1024,
+    "detuning_MHz": 0.0,
+    "period_seconds": 6.25e-07,
+    "cycles": 8,
+    "span": [
+      0.0,
+      5e-06
+    ],
+    "constant_envelope": true,
+    "retained": 1446,
+    "map_bytes": 16727328,
+    "construction_seconds": 1.0591190999839455,
+    "power_seconds": 0.0301445999648422,
+    "reuse_timings": [
+      0.009252399962861091,
+      0.008967200003098696,
+      0.008004800009075552
+    ],
+    "direct_batch_timings": [
+      5.595563200011384,
+      5.437917200033553,
+      5.5270607999991626
+    ],
+    "physical_initial_states": 21,
+    "direct_unique_seconds": 0.4322806000127457,
+    "check": {
+      "max_abs": 2.78910643694431e-09,
+      "max_relative_above_1e6": 5.730915878965111e-06,
+      "max_abs_below_1e6": 4.301866981233831e-12,
+      "trace_error": 1.2323475573339238e-14,
+      "min_eigenvalue": 2.8894432786286437e-11,
+      "passed": true
+    },
+    "direct_reference_check": {
+      "max_abs": 2.8036555056372806e-09,
+      "max_relative_above_1e6": 5.761052547535088e-06,
+      "max_abs_below_1e6": 4.341979177581568e-12,
+      "trace_error": 3.552713678800501e-15,
+      "min_eigenvalue": 2.8894454854346664e-11,
+      "passed": true
+    },
+    "coefficient_periodicity_error": 2.277987190955421e-15,
+    "long_cycles": 40,
+    "long_check": {
+      "max_abs": 1.2111077696275174e-09,
+      "max_relative_above_1e6": 3.0049046169397047e-06,
+      "max_abs_below_1e6": 2.6736392499702117e-12,
+      "trace_error": 6.039613253960852e-14,
+      "min_eigenvalue": 3.802129605010672e-11,
+      "passed": true
+    }
+  }
+]

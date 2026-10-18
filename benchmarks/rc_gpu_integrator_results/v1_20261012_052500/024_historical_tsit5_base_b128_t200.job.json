@@ -1,0 +1,13 @@
+{
+  "fixture": "historical",
+  "span_us": 200,
+  "batch": 128,
+  "integrator": "tsit5",
+  "dt_ns": 3.90625,
+  "variant": "base",
+  "chunk": 16,
+  "repeats": 1,
+  "atol": 1e-10,
+  "rtol": 1e-09,
+  "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v1_20261012_052500\\024_historical_tsit5_base_b128_t200.json"
+}

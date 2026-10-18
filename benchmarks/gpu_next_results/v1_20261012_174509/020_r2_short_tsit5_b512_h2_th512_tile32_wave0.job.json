@@ -1,0 +1,14 @@
+{
+  "system": "r2",
+  "kind": "short",
+  "span_us": 1,
+  "batch": 512,
+  "dt_ns": 2.0,
+  "integrator": "tsit5",
+  "variant": "swap_const_exact_packed",
+  "threads": 512,
+  "tile": 32,
+  "waveform": false,
+  "repeats": 3,
+  "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\020_r2_short_tsit5_b512_h2_th512_tile32_wave0.json"
+}

@@ -1,0 +1,14 @@
+{
+  "system": "rc",
+  "kind": "short",
+  "span_us": 5,
+  "batch": 512,
+  "dt_ns": 1.3,
+  "integrator": "ck54",
+  "variant": "swap_const_schedule_gentle_exact_devicepop_packed",
+  "threads": 256,
+  "tile": 32,
+  "waveform": false,
+  "repeats": 3,
+  "output": "benchmarks\\gpu_next_results\\rc_ck54_20261012_135500\\005_rc_short_ck54_b512_h1.3_th256_tile32_wave0.json"
+}

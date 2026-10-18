@@ -1,0 +1,13 @@
+{
+  "fixture": "production",
+  "span_us": 1,
+  "batch": 512,
+  "integrator": "adaptive_tsit5",
+  "dt_ns": 0.9765625,
+  "variant": "base",
+  "chunk": 16,
+  "repeats": 1,
+  "atol": 1e-09,
+  "rtol": 1e-08,
+  "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v1_20261012_052500\\008_production_adaptive_tsit5_base_b512_t1.json"
+}

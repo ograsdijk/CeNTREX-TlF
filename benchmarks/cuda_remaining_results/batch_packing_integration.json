@@ -1,0 +1,41 @@
+[
+  {
+    "model": "RC",
+    "n": 70,
+    "batch": 1024,
+    "scalar_seconds": 1.7836901000118814,
+    "vectorized_seconds": [
+      0.045023799990303814,
+      0.04391269996995106,
+      0.046000200032722205
+    ],
+    "median_vectorized_seconds": 0.045023799990303814,
+    "max_difference": 0.0
+  },
+  {
+    "model": "R2",
+    "n": 40,
+    "batch": 1024,
+    "scalar_seconds": 0.9064825000241399,
+    "vectorized_seconds": [
+      0.012390099989715964,
+      0.010576299973763525,
+      0.009895500028505921
+    ],
+    "median_vectorized_seconds": 0.010576299973763525,
+    "max_difference": 0.0
+  },
+  {
+    "model": "R0",
+    "n": 18,
+    "batch": 1024,
+    "scalar_seconds": 0.17815280001377687,
+    "vectorized_seconds": [
+      0.0020751000265590847,
+      0.0013655000366270542,
+      0.0013824999914504588
+    ],
+    "median_vectorized_seconds": 0.0013824999914504588,
+    "max_difference": 0.0
+  }
+]

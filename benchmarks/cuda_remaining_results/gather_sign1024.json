@@ -1,0 +1,477 @@
+{
+  "device": "NVIDIA GeForce RTX 5070 Ti",
+  "cases": [
+    {
+      "system": "RC",
+      "batch": 1024,
+      "span": [
+        0.000146,
+        0.000147
+      ],
+      "dt": 4.464285714285714e-09,
+      "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\cpu_rust_e0fee2f43ee1888a.npz",
+      "variants": {
+        "base_tiled": {
+          "accuracy": {
+            "max_abs": 5.399706380873093e-08,
+            "max_relative_above_cutoff": 0.008338116382130866,
+            "max_coherence_relative_above_cutoff": 0.008338116382130866,
+            "near_zero_max_abs": 7.690847517666012e-09,
+            "relative_frobenius": 2.3632431529935264e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.7364175418713178e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 4.078559399989899,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 230400,
+            "rejected_steps": 0,
+            "rhs_calls": 1393664,
+            "function_evaluations": 1393664,
+            "saved_points": 1,
+            "total_seconds": 2.0203280999558046,
+            "chunks": [
+              {
+                "trajectories": 1024,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 1393664,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.13484579999931157
+              }
+            ]
+          },
+          "timings": [
+            1.8806651000049897,
+            1.8797099000075832,
+            1.880062700016424,
+            1.880383100011386
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.399706380873093e-08,
+            "max_relative_above_cutoff": 0.008338116382130866,
+            "max_coherence_relative_above_cutoff": 0.008338116382130866,
+            "near_zero_max_abs": 7.690847517666012e-09,
+            "relative_frobenius": 2.3632431529935264e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.7364175418713178e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "base_direct": {
+          "accuracy": {
+            "max_abs": 5.399706380742832e-08,
+            "max_relative_above_cutoff": 0.008338116382459054,
+            "max_coherence_relative_above_cutoff": 0.008338116382459054,
+            "near_zero_max_abs": 7.690847522483777e-09,
+            "relative_frobenius": 2.3632431531310295e-06,
+            "trace_error": 5.551115123125783e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.3552527156068953e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 4.195474599953741,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 230400,
+            "rejected_steps": 0,
+            "rhs_calls": 1393664,
+            "function_evaluations": 1393664,
+            "saved_points": 1,
+            "total_seconds": 1.9449337999685667,
+            "chunks": [
+              {
+                "trajectories": 1024,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 1393664,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.05310919997282326
+              }
+            ]
+          },
+          "timings": [
+            1.8853069000178948,
+            1.8865828999551013,
+            1.8875583999906667,
+            1.8868062000256032
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.399706380742832e-08,
+            "max_relative_above_cutoff": 0.008338116382459054,
+            "max_coherence_relative_above_cutoff": 0.008338116382459054,
+            "near_zero_max_abs": 7.690847522483777e-09,
+            "relative_frobenius": 2.3632431531310295e-06,
+            "trace_error": 5.551115123125783e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.3552527156068953e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_sign_tiled": {
+          "accuracy": {
+            "max_abs": 5.399706380873093e-08,
+            "max_relative_above_cutoff": 0.008338116382130866,
+            "max_coherence_relative_above_cutoff": 0.008338116382130866,
+            "near_zero_max_abs": 7.690847517666012e-09,
+            "relative_frobenius": 2.3632431529935264e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.7364175418713178e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 4.508334099955391,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 230400,
+            "rejected_steps": 0,
+            "rhs_calls": 1393664,
+            "function_evaluations": 1393664,
+            "saved_points": 1,
+            "total_seconds": 2.528860300022643,
+            "chunks": [
+              {
+                "trajectories": 1024,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 1393664,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.5920811999822035
+              }
+            ]
+          },
+          "timings": [
+            1.906634299957659,
+            1.9056439999840222,
+            1.9044299999950454,
+            1.905401800002437
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.399706380873093e-08,
+            "max_relative_above_cutoff": 0.008338116382130866,
+            "max_coherence_relative_above_cutoff": 0.008338116382130866,
+            "near_zero_max_abs": 7.690847517666012e-09,
+            "relative_frobenius": 2.3632431529935264e-06,
+            "trace_error": 6.661338147750939e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.7364175418713178e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_sign_direct": {
+          "accuracy": {
+            "max_abs": 5.399706380742832e-08,
+            "max_relative_above_cutoff": 0.008338116382459054,
+            "max_coherence_relative_above_cutoff": 0.008338116382459054,
+            "near_zero_max_abs": 7.690847522483777e-09,
+            "relative_frobenius": 2.3632431531310295e-06,
+            "trace_error": 5.551115123125783e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.3552527156068953e-20,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 4.650210699997842,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 225,
+            "accepted_steps": 230400,
+            "rejected_steps": 0,
+            "rhs_calls": 1393664,
+            "function_evaluations": 1393664,
+            "saved_points": 1,
+            "total_seconds": 2.5746780000044964,
+            "chunks": [
+              {
+                "trajectories": 1024,
+                "steps_per_trajectory": 225,
+                "rhs_calls": 1393664,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.439953199995216
+              }
+            ]
+          },
+          "timings": [
+            2.090749200026039,
+            2.0915867000003345,
+            2.094369500002358,
+            2.0910472000250593
+          ],
+          "replay_accuracy": {
+            "max_abs": 5.399706380742832e-08,
+            "max_relative_above_cutoff": 0.008338116382459054,
+            "max_coherence_relative_above_cutoff": 0.008338116382459054,
+            "near_zero_max_abs": 7.690847522483777e-09,
+            "relative_frobenius": 2.3632431531310295e-06,
+            "trace_error": 5.551115123125783e-16,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": -1.3552527156068953e-20,
+            "passes_1percent_above_cutoff": true
+          }
+        }
+      }
+    },
+    {
+      "system": "R2_EOM",
+      "batch": 1024,
+      "span": [
+        1.25e-07,
+        1.125e-06
+      ],
+      "dt": 2e-09,
+      "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\r2_gpu_reuse_results\\eom_v1\\eom_swap_const_exact_0.5ns.npz",
+      "variants": {
+        "base_tiled": {
+          "accuracy": {
+            "max_abs": 1.7273976015325936e-06,
+            "max_relative_above_cutoff": 0.0005943969112971237,
+            "max_coherence_relative_above_cutoff": 0.0005943969112971237,
+            "near_zero_max_abs": 4.559342470798247e-10,
+            "relative_frobenius": 4.360128295062703e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724058078962e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.7783271999796852,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 512000,
+            "rejected_steps": 0,
+            "rhs_calls": 3073024,
+            "function_evaluations": 3073024,
+            "saved_points": 1,
+            "total_seconds": 1.1422600000514649,
+            "chunks": [
+              {
+                "trajectories": 1024,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 3073024,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.029836200003046542
+              }
+            ]
+          },
+          "timings": [
+            1.0793976000277326,
+            1.0791684999712743,
+            1.0795793000143021,
+            1.0797478999593295
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015325936e-06,
+            "max_relative_above_cutoff": 0.0005943969112971237,
+            "max_coherence_relative_above_cutoff": 0.0005943969112971237,
+            "near_zero_max_abs": 4.559342470798247e-10,
+            "relative_frobenius": 4.360128295062703e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724058078962e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "base_direct": {
+          "accuracy": {
+            "max_abs": 1.7273976015279394e-06,
+            "max_relative_above_cutoff": 0.0005943969112833269,
+            "max_coherence_relative_above_cutoff": 0.0005943969112833269,
+            "near_zero_max_abs": 4.5593424708392567e-10,
+            "relative_frobenius": 4.360128295049971e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.24917261651067e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 1.8536993999732658,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 512000,
+            "rejected_steps": 0,
+            "rhs_calls": 3073024,
+            "function_evaluations": 3073024,
+            "saved_points": 1,
+            "total_seconds": 1.2214273000136018,
+            "chunks": [
+              {
+                "trajectories": 1024,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 3073024,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.025767700048163533
+              }
+            ]
+          },
+          "timings": [
+            1.193888700043317,
+            1.1939991999533959,
+            1.194481199956499,
+            1.1938592999940738
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015279394e-06,
+            "max_relative_above_cutoff": 0.0005943969112833269,
+            "max_coherence_relative_above_cutoff": 0.0005943969112833269,
+            "near_zero_max_abs": 4.5593424708392567e-10,
+            "relative_frobenius": 4.360128295049971e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.24917261651067e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_sign_tiled": {
+          "accuracy": {
+            "max_abs": 1.7273976015325936e-06,
+            "max_relative_above_cutoff": 0.0005943969112971237,
+            "max_coherence_relative_above_cutoff": 0.0005943969112971237,
+            "near_zero_max_abs": 4.559342470798247e-10,
+            "relative_frobenius": 4.360128295062703e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724058078962e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.1141399000189267,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 512000,
+            "rejected_steps": 0,
+            "rhs_calls": 3073024,
+            "function_evaluations": 3073024,
+            "saved_points": 1,
+            "total_seconds": 1.4716187000158243,
+            "chunks": [
+              {
+                "trajectories": 1024,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 3073024,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 32,
+                "setup_seconds": 0.3617439999943599
+              }
+            ]
+          },
+          "timings": [
+            1.1085126000107266,
+            1.108862199995201,
+            1.1091087000095285,
+            1.1084994999691844
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015325936e-06,
+            "max_relative_above_cutoff": 0.0005943969112971237,
+            "max_coherence_relative_above_cutoff": 0.0005943969112971237,
+            "near_zero_max_abs": 4.559342470798247e-10,
+            "relative_frobenius": 4.360128295062703e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.2491724058078962e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        },
+        "gather_sign_direct": {
+          "accuracy": {
+            "max_abs": 1.7273976015279394e-06,
+            "max_relative_above_cutoff": 0.0005943969112833269,
+            "max_coherence_relative_above_cutoff": 0.0005943969112833269,
+            "near_zero_max_abs": 4.5593424708392567e-10,
+            "relative_frobenius": 4.360128295049971e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.24917261651067e-13,
+            "passes_1percent_above_cutoff": true
+          },
+          "passed": true,
+          "setup_wall": 2.3212888999842107,
+          "stats": {
+            "solver": "fixed_tsit5",
+            "evolution_device": "cuda",
+            "fixed_step": true,
+            "error_control": false,
+            "steps_per_trajectory": 500,
+            "accepted_steps": 512000,
+            "rejected_steps": 0,
+            "rhs_calls": 3073024,
+            "function_evaluations": 3073024,
+            "saved_points": 1,
+            "total_seconds": 1.6755507999914698,
+            "chunks": [
+              {
+                "trajectories": 1024,
+                "steps_per_trajectory": 500,
+                "rhs_calls": 3073024,
+                "shared_offdiagonal_hamiltonian": true,
+                "precomputed_waveforms": true,
+                "tile_size": 0,
+                "setup_seconds": 0.3458371000015177
+              }
+            ]
+          },
+          "timings": [
+            1.3258669000351802,
+            1.3268905999721028,
+            1.3262926999595948,
+            1.3272557000163943
+          ],
+          "replay_accuracy": {
+            "max_abs": 1.7273976015279394e-06,
+            "max_relative_above_cutoff": 0.0005943969112833269,
+            "max_coherence_relative_above_cutoff": 0.0005943969112833269,
+            "near_zero_max_abs": 4.5593424708392567e-10,
+            "relative_frobenius": 4.360128295049971e-06,
+            "trace_error": 1.5543122344752192e-15,
+            "hermiticity_error": 0.0,
+            "min_eigenvalue": 1.24917261651067e-13,
+            "passes_1percent_above_cutoff": true
+          }
+        }
+      }
+    }
+  ]
+}

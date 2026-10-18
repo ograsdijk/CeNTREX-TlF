@@ -1,0 +1,103 @@
+{
+  "job": {
+    "fixture": "production",
+    "span_us": 176.0,
+    "batch": 9,
+    "integrator": "tsit5",
+    "dt_ns": 3.90625,
+    "variant": "base",
+    "chunk": 16,
+    "repeats": 1,
+    "atol": 1e-10,
+    "rtol": 1e-09,
+    "kind": "full",
+    "velocity": 250,
+    "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v1_20261012_052500\\029_production_tsit5_base_b9_t176.0.json"
+  },
+  "status": "complete",
+  "setup_s": 0.20674090000102296,
+  "evolution_s": [
+    8.634633100009523
+  ],
+  "median_s": 8.634633100009523,
+  "evolution_and_download_wall_s": 8.634815199999139,
+  "accuracy": {
+    "max_abs": 1.8305464790158757e-07,
+    "max_relative_above_cutoff": 0.00046029295103335504,
+    "max_coherence_relative_above_cutoff": 0.00046029295103335504,
+    "worst_per_trajectory_relative": [
+      0.00021745592173201666,
+      0.00019573179761521627,
+      0.0003305309783843272,
+      0.0003305309521048592,
+      0.00046029295103335504,
+      0.00031486110644400345,
+      1.2527311993226278e-05,
+      1.2527265919274448e-05,
+      8.537632338825842e-06,
+      8.537646764770988e-06,
+      8.713924831570487e-06,
+      8.713940395491652e-06,
+      0.0002978890438816309,
+      0.0002978892402508976,
+      0.00031756989141872944,
+      0.00015659385235212346,
+      0.0002588612659979011,
+      0.0002588612659368658
+    ],
+    "near_zero_max_abs": 6.935816228741676e-11,
+    "relative_frobenius": 1.3784435205035816e-05,
+    "trace_error": 1.1213252548714081e-14,
+    "hermiticity_error": 0.0,
+    "min_eigenvalue": -4.984610909976025e-18,
+    "passes_1percent_above_cutoff": true
+  },
+  "stats": [],
+  "rhs_relative_error": 0.0,
+  "context": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-SPB-testing\\.cache\\simulations\\optical_bloch\\native_rc_v1\\4aebc0feac6a3d3837e529b9\\prepared_context.pkl",
+  "context_sha256": "cd215628debfc223a50ad78fc2641ef627c2193f373f59cb7d4e7ecd2c6cd9a5",
+  "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_5fcc5f13ee68b297.npz",
+  "reference_sha256": "8cf12cbe397f69ba4719848ed9d2398098de0d5cbed59397f6c6353d63beb14f",
+  "source_sha256": "d862c70f203dc143bb170296c92ef7b2f5f6841411f342beaec9c8b7593433e2",
+  "device": "NVIDIA GeForce RTX 5070 Ti",
+  "storage": "float64",
+  "accumulation": "float64",
+  "cupy": "14.2.0",
+  "memory_pool_bytes": 17019392,
+  "final_time": 0.000178475,
+  "python_source_hashes": {
+    "rc_gpu_integrators.py": "d026e1a2d478d75e98ddf7835713bf600744996b2b89ab0cf87e9edd3a9eda31",
+    "run_rc_gpu_integrator_suite.py": "93508f3bb67d6da892c6bfbc359cdb410245772264ede6b0cdbc45f7bb15f4f8"
+  },
+  "product_kernel_attributes": {
+    "max_threads_per_block": 1024,
+    "shared_size_bytes": 0,
+    "const_size_bytes": 0,
+    "local_size_bytes": 0,
+    "num_regs": 40,
+    "ptx_version": 120,
+    "binary_version": 120,
+    "cache_mode_ca": 0,
+    "max_dynamic_shared_size_bytes": 49152,
+    "preferred_shared_memory_carveout": -1
+  },
+  "field_exit_wall_s_including_sampling": 8.528218799998285,
+  "full_wall_s_including_sampling_and_post_decay": 8.634633100009523,
+  "accuracy_scope": "All nine endpoints vs finer GPU reference; strict CPU subset separately",
+  "strict_cpu_subset_accuracy": {
+    "max_abs": 5.583601775382974e-10,
+    "max_relative_above_cutoff": 1.6137047560565158e-05,
+    "max_coherence_relative_above_cutoff": 1.6137047560565158e-05,
+    "worst_per_trajectory_relative": [
+      1.5760581977688034e-05,
+      1.6137047560565158e-05
+    ],
+    "near_zero_max_abs": 1.8058672872093592e-11,
+    "relative_frobenius": 1.3829612774718437e-09,
+    "trace_error": 1.887379141862766e-15,
+    "hermiticity_error": 0.0,
+    "min_eigenvalue": -1.8923382957197783e-52,
+    "passes_1percent_above_cutoff": true
+  },
+  "population_history_max_abs_difference": 2.546483351614781e-07
+}

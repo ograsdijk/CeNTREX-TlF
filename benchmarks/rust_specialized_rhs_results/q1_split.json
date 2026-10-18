@@ -1,0 +1,117 @@
+{
+  "system": "q1",
+  "n_states": 26,
+  "generation_s": 0.21426330000394955,
+  "compile_s": 6.022649200021988,
+  "generators": {
+    "hamiltonian_cse_temporaries": 2,
+    "dissipator_cse_temporaries": 0,
+    "hamiltonian_dynamic_entries": 56,
+    "dissipator_active_packed_entries": 436
+  },
+  "source_sha256": "79f20231ad312671d6051fdc6a9f776430889fed3d5fed700df20ba7b8945a48",
+  "baseline_rhs_source_sha256": "f7e2aca5a86a789fb6c2c05e15389a363735c487db1f3391702669e2185a65ed",
+  "normalized_rhs_error": 5.937475229451144e-21,
+  "rhs": [
+    {
+      "method": "D+S+U",
+      "median_s": 2.5980000000000004e-06,
+      "samples_s": [
+        2.5980000000000004e-06,
+        2.6447500000000004e-06,
+        2.597625e-06,
+        2.6025e-06,
+        2.58025e-06
+      ]
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "median_s": 2.32025e-06,
+      "samples_s": [
+        2.3086250000000003e-06,
+        2.33225e-06,
+        2.32025e-06,
+        2.391125e-06,
+        2.30575e-06
+      ]
+    }
+  ],
+  "trajectories": [
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-06,
+      "median_s": 0.0340197,
+      "samples_s": [
+        0.0340129,
+        0.0340197,
+        0.0340662
+      ],
+      "rhs_calls": 11249,
+      "accepted": 1874,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 6.493968978302789e-05,
+        "max_small_absolute": 1.0280126060708553e-11,
+        "passed": true
+      },
+      "trace_error": 3.3306690738754696e-16
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "duration_s": 1e-06,
+      "median_s": 0.0312053,
+      "samples_s": [
+        0.031454,
+        0.0312053,
+        0.031031
+      ],
+      "rhs_calls": 11249,
+      "accepted": 1874,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 6.493968978801556e-05,
+        "max_small_absolute": 1.0280126051435518e-11,
+        "passed": true
+      },
+      "trace_error": 9.992007221626409e-16
+    },
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-05,
+      "median_s": 0.1636792,
+      "samples_s": [
+        0.1785928,
+        0.1630611,
+        0.1636792
+      ],
+      "rhs_calls": 54353,
+      "accepted": 9052,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.9762552312775704e-07,
+        "max_small_absolute": 1.9329653952451899e-13,
+        "passed": true
+      },
+      "trace_error": 8.881784197001252e-16
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "duration_s": 1e-05,
+      "median_s": 0.1495794,
+      "samples_s": [
+        0.1495347,
+        0.1495794,
+        0.1511677
+      ],
+      "rhs_calls": 54353,
+      "accepted": 9052,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.9762551251936368e-07,
+        "max_small_absolute": 1.932967033856392e-13,
+        "passed": true
+      },
+      "trace_error": 7.771561172376096e-16
+    }
+  ]
+}

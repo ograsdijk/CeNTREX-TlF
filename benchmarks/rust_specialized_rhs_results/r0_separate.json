@@ -1,0 +1,126 @@
+{
+  "system": "r0",
+  "n_states": 18,
+  "model_prep_s": 1.6180520000052638,
+  "generation_s": 0.970319499989273,
+  "compile_s": 6.043802800006233,
+  "generators": {
+    "hamiltonian_cse_temporaries": 170,
+    "upper_equations": 171,
+    "cse_optimizations": "basic",
+    "operations_before": 3441,
+    "operations_after": 1955,
+    "dissipator_cse_temporaries": 0,
+    "dissipator_active_packed_entries": 268
+  },
+  "source_sha256": "328fc114db5ba0f88fc537f360d8d4c8d710991d2605e635cf109b3985d7dcb4",
+  "candidate_calls": [
+    "direct_coefficients",
+    "generated_hamiltonian_rhs",
+    "generated_dissipator"
+  ],
+  "candidate_uses_generic_commutator": false,
+  "normalized_rhs_error": 2.0624590006126885e-16,
+  "rhs": [
+    {
+      "method": "D+S+U",
+      "median_s": 1.0183e-06,
+      "samples_s": [
+        1.1522e-06,
+        1.0156250000000001e-06,
+        1.0183e-06,
+        1.0155749999999998e-06,
+        1.0215999999999999e-06
+      ]
+    },
+    {
+      "method": "separately_generated_H_rhs_and_D_rhs",
+      "median_s": 8.96175e-07,
+      "samples_s": [
+        8.96175e-07,
+        8.99325e-07,
+        8.95975e-07,
+        8.962e-07,
+        8.941e-07
+      ]
+    }
+  ],
+  "trajectories": [
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-06,
+      "median_s": 0.0178079,
+      "samples_s": [
+        0.0178327,
+        0.0176734,
+        0.0178079
+      ],
+      "rhs_calls": 14309,
+      "accepted": 2384,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.5839665378283943e-05,
+        "max_small_absolute": 3.857656461502357e-12,
+        "passed": true
+      },
+      "trace_error": 8.881784197001252e-16
+    },
+    {
+      "method": "separately_generated_H_rhs_and_D_rhs",
+      "duration_s": 1e-06,
+      "median_s": 0.0155949,
+      "samples_s": [
+        0.016283,
+        0.0155931,
+        0.0155949
+      ],
+      "rhs_calls": 14309,
+      "accepted": 2384,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.5839665666718994e-05,
+        "max_small_absolute": 3.8576565204148e-12,
+        "passed": true
+      },
+      "trace_error": 7.771561172376096e-16
+    },
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-05,
+      "median_s": 0.0857084,
+      "samples_s": [
+        0.0869821,
+        0.0849765,
+        0.0857084
+      ],
+      "rhs_calls": 68813,
+      "accepted": 11462,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.3005914168546315e-08,
+        "max_small_absolute": 6.470849570192994e-15,
+        "passed": true
+      },
+      "trace_error": 1.7763568394002505e-15
+    },
+    {
+      "method": "separately_generated_H_rhs_and_D_rhs",
+      "duration_s": 1e-05,
+      "median_s": 0.0751161,
+      "samples_s": [
+        0.0750903,
+        0.0755165,
+        0.0751161
+      ],
+      "rhs_calls": 68813,
+      "accepted": 11462,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.3005985821857193e-08,
+        "max_small_absolute": 6.470732698265446e-15,
+        "passed": true
+      },
+      "trace_error": 2.3314683517128287e-15
+    }
+  ]
+}

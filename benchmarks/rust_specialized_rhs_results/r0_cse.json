@@ -1,0 +1,89 @@
+{
+  "system": "r0",
+  "n_states": 18,
+  "cse_temporaries": 135,
+  "operations_before": 8150,
+  "operations_after": 6437,
+  "generation_s": 1.597323599999072,
+  "compile_s": 5.707300099980785,
+  "source_sha256": "21b5f3ae5f79aa8c22c8c479aaaa0985265d8844577b164c82cf25c22d8b1e1f",
+  "normalized_rhs_error": 1.2130853183126435e-16,
+  "rhs": [
+    {
+      "method": "D+S+U",
+      "median_s": 1.025625e-06,
+      "samples_s": [
+        1.5976249999999998e-06,
+        1.1557500000000001e-06,
+        1.025625e-06,
+        1.0135e-06,
+        1.0215e-06
+      ]
+    },
+    {
+      "method": "generated_packed_global_CSE",
+      "median_s": 9.100000000000001e-07,
+      "samples_s": [
+        9.076250000000001e-07,
+        9.146249999999999e-07,
+        9.09375e-07,
+        9.100000000000001e-07,
+        9.10625e-07
+      ]
+    }
+  ],
+  "trajectories": [
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-06,
+      "median_s": 0.0179734,
+      "rhs_calls": 14309,
+      "accepted": 2384,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.5839665378283943e-05,
+        "max_small_absolute": 3.857656461502357e-12,
+        "passed": true
+      }
+    },
+    {
+      "method": "generated_packed_global_CSE",
+      "duration_s": 1e-06,
+      "median_s": 0.0159799,
+      "rhs_calls": 14309,
+      "accepted": 2384,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.5839665352387032e-05,
+        "max_small_absolute": 3.857656461251245e-12,
+        "passed": true
+      }
+    },
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-05,
+      "median_s": 0.0868128,
+      "rhs_calls": 68813,
+      "accepted": 11462,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.3005914168546315e-08,
+        "max_small_absolute": 6.470849570192994e-15,
+        "passed": true
+      }
+    },
+    {
+      "method": "generated_packed_global_CSE",
+      "duration_s": 1e-05,
+      "median_s": 0.0773657,
+      "rhs_calls": 68813,
+      "accepted": 11462,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.3005664894139232e-08,
+        "max_small_absolute": 6.471105822856906e-15,
+        "passed": true
+      }
+    }
+  ]
+}

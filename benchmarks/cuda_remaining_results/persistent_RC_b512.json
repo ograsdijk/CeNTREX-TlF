@@ -1,0 +1,106 @@
+[
+  {
+    "system": "RC",
+    "batch": 512,
+    "shared_bytes": 91328,
+    "kernel_attributes": {
+      "max_threads_per_block": 1024,
+      "shared_size_bytes": 0,
+      "const_size_bytes": 448,
+      "local_size_bytes": 40,
+      "num_regs": 64,
+      "ptx_version": 120,
+      "binary_version": 120,
+      "cache_mode_ca": 0,
+      "max_dynamic_shared_size_bytes": 91328,
+      "preferred_shared_memory_carveout": -1
+    },
+    "baseline_times": [
+      0.9362513999803923,
+      0.9308471000404097,
+      0.9313566000200808
+    ],
+    "variants": {
+      "threads128_steps2": {
+        "accuracy": {
+          "max_abs": 5.399706380802514e-08,
+          "max_relative_above_cutoff": 0.008338116382409281,
+          "max_coherence_relative_above_cutoff": 0.008338116382409281,
+          "near_zero_max_abs": 7.690847520790179e-09,
+          "relative_frobenius": 2.363243153053121e-06,
+          "trace_error": 4.440892098500626e-16,
+          "hermiticity_error": 0.0,
+          "min_eigenvalue": -2.03287907341039e-20,
+          "passes_1percent_above_cutoff": true
+        },
+        "passed": true,
+        "max_difference_from_baseline": 1.0408340855860843e-16,
+        "timings": [
+          2.2220355999888852,
+          2.221260699967388,
+          2.1583744999952614
+        ]
+      },
+      "threads128_steps16": {
+        "accuracy": {
+          "max_abs": 5.399706380802514e-08,
+          "max_relative_above_cutoff": 0.008338116382409281,
+          "max_coherence_relative_above_cutoff": 0.008338116382409281,
+          "near_zero_max_abs": 7.690847520790179e-09,
+          "relative_frobenius": 2.363243153053121e-06,
+          "trace_error": 4.440892098500626e-16,
+          "hermiticity_error": 0.0,
+          "min_eigenvalue": -2.03287907341039e-20,
+          "passes_1percent_above_cutoff": true
+        },
+        "passed": true,
+        "max_difference_from_baseline": 1.0408340855860843e-16,
+        "timings": [
+          2.1283755999756977,
+          2.137746700027492,
+          2.1848160999943502
+        ]
+      },
+      "threads256_steps2": {
+        "accuracy": {
+          "max_abs": 5.399706380802514e-08,
+          "max_relative_above_cutoff": 0.008338116382409281,
+          "max_coherence_relative_above_cutoff": 0.008338116382409281,
+          "near_zero_max_abs": 7.690847520790179e-09,
+          "relative_frobenius": 2.363243153053121e-06,
+          "trace_error": 4.440892098500626e-16,
+          "hermiticity_error": 0.0,
+          "min_eigenvalue": -2.03287907341039e-20,
+          "passes_1percent_above_cutoff": true
+        },
+        "passed": true,
+        "max_difference_from_baseline": 1.0408340855860843e-16,
+        "timings": [
+          1.762989499955438,
+          1.7594056999660097,
+          1.7574870000244118
+        ]
+      },
+      "threads256_steps16": {
+        "accuracy": {
+          "max_abs": 5.399706380802514e-08,
+          "max_relative_above_cutoff": 0.008338116382409281,
+          "max_coherence_relative_above_cutoff": 0.008338116382409281,
+          "near_zero_max_abs": 7.690847520790179e-09,
+          "relative_frobenius": 2.363243153053121e-06,
+          "trace_error": 4.440892098500626e-16,
+          "hermiticity_error": 0.0,
+          "min_eigenvalue": -2.03287907341039e-20,
+          "passes_1percent_above_cutoff": true
+        },
+        "passed": true,
+        "max_difference_from_baseline": 1.0408340855860843e-16,
+        "timings": [
+          1.706163699971512,
+          1.675421699997969,
+          1.669869200035464
+        ]
+      }
+    }
+  }
+]

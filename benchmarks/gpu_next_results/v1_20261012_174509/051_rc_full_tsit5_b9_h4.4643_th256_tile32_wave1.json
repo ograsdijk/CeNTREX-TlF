@@ -1,0 +1,73 @@
+{
+  "job": {
+    "system": "rc",
+    "kind": "full",
+    "span_us": 5,
+    "batch": 9,
+    "dt_ns": 4.464285714285714,
+    "integrator": "tsit5",
+    "variant": "swap_const_schedule_gentle_exact_devicepop_packed",
+    "threads": 256,
+    "tile": 32,
+    "waveform": true,
+    "repeats": 1,
+    "velocity": 250.0,
+    "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\051_rc_full_tsit5_b9_h4.4643_th256_tile32_wave1.json"
+  },
+  "status": "complete",
+  "seconds": [
+    8.234987400006503
+  ],
+  "median_s": 8.234987400006503,
+  "setup_s": 0.6682671000016853,
+  "rhs_relative_error": 1.1683499788402287e-16,
+  "accuracy": {
+    "max_abs": 0.009130463212043043,
+    "max_relative_above_cutoff": 99.2968462416877,
+    "max_coherence_relative_above_cutoff": 99.2968462416877,
+    "worst_per_trajectory_relative": [
+      29.777412585985015,
+      18.82016200961612,
+      23.973893566969796,
+      23.97389356698082,
+      22.716507228696802,
+      22.716507228687977,
+      1.1678959064363423,
+      1.1678959063744156,
+      1.2677074322998654,
+      1.2677074322337885,
+      1.1908827114121692,
+      1.1908827112143594,
+      99.29684624153766,
+      99.2968462416877,
+      20.580299198123786,
+      15.051789272791465,
+      17.480015618620047,
+      17.48001561848418
+    ],
+    "near_zero_max_abs": 1.8948487489607853e-06,
+    "relative_frobenius": 0.5530617569463023,
+    "trace_error": 1.354472090042691e-14,
+    "hermiticity_error": 0.0,
+    "min_eigenvalue": -1.9517455208120538e-07,
+    "passes_1percent_above_cutoff": false
+  },
+  "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_5fcc5f13ee68b297.npz",
+  "input": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-SPB-testing\\.cache\\simulations\\optical_bloch\\native_rc_v1\\4aebc0feac6a3d3837e529b9\\prepared_context.pkl",
+  "input_sha256": "cd215628debfc223a50ad78fc2641ef627c2193f373f59cb7d4e7ecd2c6cd9a5",
+  "live_device_bytes": 26298880,
+  "kernel_threads": 256,
+  "tile": 32,
+  "accepted_steps": 37229,
+  "final_time": 0.000178475,
+  "device": "b'NVIDIA GeForce RTX 5070 Ti'",
+  "reference_is_self": false,
+  "benchmark_source_sha256": {
+    "run_gpu_next_suite.py": "4ad54e4fdc9cf7e45bdb2f48d4515b3a38b19a151077dd5de79d473a109ed247",
+    "rc_gpu_next_followup.py": "d58235506349eae99e09026a036277043bc85c8e7c7e0f6763727e2baf8bfcc2",
+    "rc_gpu_storage_followup.py": "473a8a90926d419a20671df6c6a08c385539f78358c534bce2af63771c276dd9",
+    "rc_gpu_fixed_followup.py": "26920a7a074bdb733432923bf611c00ae2e492ab476adc28895bae44a6b861bc",
+    "rc_gpu_integrators.py": "b73f8bdb4c296c730d9df17d0193338b954eeb6290b4dd5a77bd4a78becadcd1"
+  },
+  "population_history_max_abs": 0.009637090477385443
+}

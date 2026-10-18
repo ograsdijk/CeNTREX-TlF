@@ -1,0 +1,120 @@
+[
+  {
+    "system": "RC",
+    "batch": 512,
+    "span": [
+      0.000146,
+      0.000147
+    ],
+    "rows": [
+      {
+        "offset_MHz": 0.125,
+        "timings": {
+          "fresh": [
+            1.7064257999882102,
+            1.7396281999535859,
+            1.7193247999530286
+          ],
+          "reused": [
+            0.8808786000008695,
+            0.8841675000148825,
+            0.8837283999891952
+          ]
+        },
+        "max_packed_difference": 0.0
+      },
+      {
+        "offset_MHz": -0.25,
+        "timings": {
+          "fresh": [
+            1.7100337999872863,
+            1.8796405000030063,
+            1.7740489999996498
+          ],
+          "reused": [
+            0.883955400029663,
+            0.8836013000109233,
+            0.9202213999815285
+          ]
+        },
+        "max_packed_difference": 0.0
+      },
+      {
+        "offset_MHz": 0.5,
+        "timings": {
+          "fresh": [
+            1.851058500004001,
+            1.8196373999817297,
+            1.7942260999698192
+          ],
+          "reused": [
+            0.9474703000159934,
+            0.8939872999908403,
+            0.9119696000125259
+          ]
+        },
+        "max_packed_difference": 0.0
+      }
+    ],
+    "scope": "Fixed shapes/support/varying pattern/grid; changed detunings; all waveform tables regenerated"
+  },
+  {
+    "system": "R2_EOM",
+    "batch": 512,
+    "span": [
+      1.25e-07,
+      1.125e-06
+    ],
+    "rows": [
+      {
+        "offset_MHz": 0.125,
+        "timings": {
+          "fresh": [
+            0.8924148000078276,
+            0.8763490000274032,
+            0.894559999986086
+          ],
+          "reused": [
+            0.5677425999892876,
+            0.5925020999857225,
+            0.5700460000080056
+          ]
+        },
+        "max_packed_difference": 0.0
+      },
+      {
+        "offset_MHz": -0.25,
+        "timings": {
+          "fresh": [
+            0.8961650000419468,
+            0.8322098000207916,
+            0.8672799000050873
+          ],
+          "reused": [
+            0.6216981000034139,
+            0.5779252999927849,
+            0.5589915000018664
+          ]
+        },
+        "max_packed_difference": 0.0
+      },
+      {
+        "offset_MHz": 0.5,
+        "timings": {
+          "fresh": [
+            0.8392054999712855,
+            0.8608414999907836,
+            0.8484711999772117
+          ],
+          "reused": [
+            0.5587199999717996,
+            0.5813006000244059,
+            0.5674425999750383
+          ]
+        },
+        "max_packed_difference": 0.0
+      }
+    ],
+    "scope": "Fixed shapes/support/varying pattern/grid; changed detunings; all waveform tables regenerated"
+  }
+]

@@ -1,0 +1,1 @@
+{"start": 0.000146, "end": 0.000147, "detunings_MHz": [-20, -20, -20, -1, -1, -1, 0, 0, 0, 20, 20, 20], "initial_J": [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3], "threads": 1, "repeats": 1, "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_cpu_exact_probe.json"}

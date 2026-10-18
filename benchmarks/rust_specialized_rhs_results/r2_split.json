@@ -1,0 +1,117 @@
+{
+  "system": "r2",
+  "n_states": 41,
+  "generation_s": 0.5548577000154182,
+  "compile_s": 8.622869199985871,
+  "generators": {
+    "hamiltonian_cse_temporaries": 2,
+    "dissipator_cse_temporaries": 0,
+    "hamiltonian_dynamic_entries": 100,
+    "dissipator_active_packed_entries": 1175
+  },
+  "source_sha256": "3e693710d21f1c7b65aeb553de867872432da28bcf7b35ebffa5340b4e2b0e29",
+  "baseline_rhs_source_sha256": "f7e2aca5a86a789fb6c2c05e15389a363735c487db1f3391702669e2185a65ed",
+  "normalized_rhs_error": 6.77726383311652e-21,
+  "rhs": [
+    {
+      "method": "D+S+U",
+      "median_s": 6.18625e-06,
+      "samples_s": [
+        6.18625e-06,
+        6.057499999999999e-06,
+        6.091e-06,
+        7.089375e-06,
+        8.28375e-06
+      ]
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "median_s": 5.773375e-06,
+      "samples_s": [
+        5.8282500000000005e-06,
+        5.770375000000001e-06,
+        5.771875e-06,
+        5.906625e-06,
+        5.773375e-06
+      ]
+    }
+  ],
+  "trajectories": [
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-06,
+      "median_s": 0.0484399,
+      "samples_s": [
+        0.0483593,
+        0.0492665,
+        0.0484399
+      ],
+      "rhs_calls": 6791,
+      "accepted": 1131,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 9.143221782278525e-06,
+        "max_small_absolute": 6.4944541554529e-12,
+        "passed": true
+      },
+      "trace_error": 4.440892098500626e-16
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "duration_s": 1e-06,
+      "median_s": 0.0463312,
+      "samples_s": [
+        0.0535029,
+        0.0463312,
+        0.0462322
+      ],
+      "rhs_calls": 6791,
+      "accepted": 1131,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 9.143221730652579e-06,
+        "max_small_absolute": 6.4944541341018286e-12,
+        "passed": true
+      },
+      "trace_error": 4.440892098500626e-16
+    },
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-05,
+      "median_s": 0.279143,
+      "samples_s": [
+        0.2842963,
+        0.2747863,
+        0.279143
+      ],
+      "rhs_calls": 38531,
+      "accepted": 6415,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 3.7130550382323894e-07,
+        "max_small_absolute": 6.801692829938397e-14,
+        "passed": true
+      },
+      "trace_error": 1.3322676295501878e-15
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "duration_s": 1e-05,
+      "median_s": 0.2755613,
+      "samples_s": [
+        0.2768473,
+        0.2755613,
+        0.2648059
+      ],
+      "rhs_calls": 38531,
+      "accepted": 6415,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 3.7130542667795044e-07,
+        "max_small_absolute": 6.801773913779789e-14,
+        "passed": true
+      },
+      "trace_error": 6.661338147750939e-16
+    }
+  ]
+}

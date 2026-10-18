@@ -1,0 +1,432 @@
+{
+  "generated_at": "2026-10-07T10:56:35.905431-05:00",
+  "scope": "Eigen routines and matrix assembly at one existing point, then eight selected parameter points covering 0/3/5% Z and 1/10 mW. No full scan, no new ODE trajectories.",
+  "blas_threads": 1,
+  "eigen_timings": [
+    {
+      "method": "scipy",
+      "repeat": 0,
+      "max_photon_error": 0.0,
+      "max_packed_density_error": 0.0,
+      "eigen_and_real_basis_s": 0.5999094001017511,
+      "lu_and_initial_columns_s": 0.023764499928802252,
+      "photon_projection_s": 0.05211250018328428,
+      "total_s": 0.6757864002138376
+    },
+    {
+      "method": "numpy",
+      "repeat": 0,
+      "max_photon_error": 3.987477015243712e-12,
+      "max_packed_density_error": 2.0403956302317283e-12,
+      "eigen_and_real_basis_s": 0.664905000012368,
+      "lu_and_initial_columns_s": 0.023584100184962153,
+      "photon_projection_s": 0.05258929985575378,
+      "total_s": 0.7410784000530839
+    },
+    {
+      "method": "overwrite_fortran",
+      "repeat": 0,
+      "max_photon_error": 0.0,
+      "max_packed_density_error": 0.0,
+      "eigen_and_real_basis_s": 0.6005878997966647,
+      "lu_and_initial_columns_s": 0.02373980008997023,
+      "photon_projection_s": 0.05258250003680587,
+      "total_s": 0.6769101999234408
+    },
+    {
+      "method": "balanced",
+      "repeat": 0,
+      "max_photon_error": 1.1102230246251565e-15,
+      "max_packed_density_error": 7.771561172376096e-16,
+      "eigen_and_real_basis_s": 0.6311403999570757,
+      "lu_and_initial_columns_s": 0.023870500037446618,
+      "photon_projection_s": 0.0536827000323683,
+      "total_s": 0.7086936000268906
+    },
+    {
+      "method": "lapack_native",
+      "repeat": 0,
+      "max_photon_error": 0.0,
+      "max_packed_density_error": 0.0,
+      "eigen_and_real_basis_s": 0.5942210000939667,
+      "lu_and_initial_columns_s": 0.023620299994945526,
+      "photon_projection_s": 0.05370759987272322,
+      "total_s": 0.6715488999616355
+    },
+    {
+      "method": "lapack_reuse",
+      "repeat": 0,
+      "max_photon_error": 0.0,
+      "max_packed_density_error": 0.0,
+      "eigen_and_real_basis_s": 0.5956858000718057,
+      "lu_and_initial_columns_s": 0.023647200083360076,
+      "photon_projection_s": 0.05222779978066683,
+      "total_s": 0.6715607999358326
+    },
+    {
+      "method": "lapack_reuse",
+      "repeat": 1,
+      "max_photon_error": 0.0,
+      "max_packed_density_error": 0.0,
+      "eigen_and_real_basis_s": 0.5885292000602931,
+      "lu_and_initial_columns_s": 0.02374289999715984,
+      "photon_projection_s": 0.05237989989109337,
+      "total_s": 0.6646519999485463
+    },
+    {
+      "method": "lapack_native",
+      "repeat": 1,
+      "max_photon_error": 0.0,
+      "max_packed_density_error": 0.0,
+      "eigen_and_real_basis_s": 0.5846905999351293,
+      "lu_and_initial_columns_s": 0.023710899986326694,
+      "photon_projection_s": 0.05210460000671446,
+      "total_s": 0.6605060999281704
+    },
+    {
+      "method": "balanced",
+      "repeat": 1,
+      "max_photon_error": 1.1102230246251565e-15,
+      "max_packed_density_error": 7.771561172376096e-16,
+      "eigen_and_real_basis_s": 0.616124700056389,
+      "lu_and_initial_columns_s": 0.023660099832341075,
+      "photon_projection_s": 0.05396759998984635,
+      "total_s": 0.6937523998785764
+    },
+    {
+      "method": "overwrite_fortran",
+      "repeat": 1,
+      "max_photon_error": 0.0,
+      "max_packed_density_error": 0.0,
+      "eigen_and_real_basis_s": 0.5988354999572039,
+      "lu_and_initial_columns_s": 0.024364900076761842,
+      "photon_projection_s": 0.0520091000944376,
+      "total_s": 0.6752095001284033
+    },
+    {
+      "method": "numpy",
+      "repeat": 1,
+      "max_photon_error": 3.987477015243712e-12,
+      "max_packed_density_error": 2.0403956302317283e-12,
+      "eigen_and_real_basis_s": 0.6227124999277294,
+      "lu_and_initial_columns_s": 0.023828899953514338,
+      "photon_projection_s": 0.05234019993804395,
+      "total_s": 0.6988815998192877
+    },
+    {
+      "method": "scipy",
+      "repeat": 1,
+      "max_photon_error": 0.0,
+      "max_packed_density_error": 0.0,
+      "eigen_and_real_basis_s": 0.5983837000094354,
+      "lu_and_initial_columns_s": 0.023805300006642938,
+      "photon_projection_s": 0.05234530009329319,
+      "total_s": 0.6745343001093715
+    }
+  ],
+  "matrix_timings": [
+    {
+      "method": "full_then_slice",
+      "repeat": 0,
+      "seconds_per_assembly": 0.008094588997773827
+    },
+    {
+      "method": "full_then_slice",
+      "repeat": 1,
+      "seconds_per_assembly": 0.008099687001667917
+    },
+    {
+      "method": "full_then_slice",
+      "repeat": 2,
+      "seconds_per_assembly": 0.00807568799937144
+    },
+    {
+      "method": "direct_reduced",
+      "repeat": 0,
+      "seconds_per_assembly": 0.001887713000178337
+    },
+    {
+      "method": "direct_reduced",
+      "repeat": 1,
+      "seconds_per_assembly": 0.0018851280002854765
+    },
+    {
+      "method": "direct_reduced",
+      "repeat": 2,
+      "seconds_per_assembly": 0.0018998120003379882
+    },
+    {
+      "method": "reuse_reduced",
+      "repeat": 0,
+      "seconds_per_assembly": 0.00037586599821224807
+    },
+    {
+      "method": "reuse_reduced",
+      "repeat": 1,
+      "seconds_per_assembly": 0.0003519239998422563
+    },
+    {
+      "method": "reuse_reduced",
+      "repeat": 2,
+      "seconds_per_assembly": 0.0003545360011048615
+    },
+    {
+      "method": "reuse_scatter",
+      "repeat": 0,
+      "seconds_per_assembly": 0.0003658199985511601
+    },
+    {
+      "method": "reuse_scatter",
+      "repeat": 1,
+      "seconds_per_assembly": 0.00037536799907684327
+    },
+    {
+      "method": "reuse_scatter",
+      "repeat": 2,
+      "seconds_per_assembly": 0.00036697499919682744
+    }
+  ],
+  "coverage": [
+    {
+      "z_fraction": 0.0,
+      "power_mW": 1.0,
+      "detuning_MHz": 6.8,
+      "method": "lapack_native",
+      "timings": {
+        "eigen_and_real_basis_s": 0.586818200070411,
+        "lu_and_initial_columns_s": 0.023602999979630113,
+        "photon_projection_s": 0.05247959983535111,
+        "total_s": 0.6629007998853922
+      },
+      "extraction_s": 0.003947500139474869,
+      "structure": {
+        "full_dimension": 1681,
+        "active_dimension": 1444,
+        "removed_sink_coherences": 234,
+        "sink_count": 3,
+        "active_strong_block_sizes": [
+          1444
+        ]
+      },
+      "max_cached_photon_error": 3.82639011621555e-11,
+      "max_scaled_cached_error": 0.0002968761357865637,
+      "max_full_photon_error": 2.5853387065725986e-09,
+      "max_packed_density_error": 1.0013817470545805e-09,
+      "max_trace_error": 9.400036304896275e-12,
+      "min_density_eigenvalue": -6.242859245619637e-15,
+      "min_photon_increment": 3.6898119532916224e-08,
+      "passed": true
+    },
+    {
+      "z_fraction": 0.0,
+      "power_mW": 1.0,
+      "detuning_MHz": 28.2,
+      "method": "lapack_native",
+      "timings": {
+        "eigen_and_real_basis_s": 0.5616073000710458,
+        "lu_and_initial_columns_s": 0.024973700055852532,
+        "photon_projection_s": 0.054405500181019306,
+        "total_s": 0.6409865003079176
+      },
+      "extraction_s": 0.0030825999565422535,
+      "structure": {
+        "full_dimension": 1681,
+        "active_dimension": 1444,
+        "removed_sink_coherences": 234,
+        "sink_count": 3,
+        "active_strong_block_sizes": [
+          1444
+        ]
+      },
+      "max_cached_photon_error": 2.4393633814290272e-11,
+      "max_scaled_cached_error": 0.000159583635230379,
+      "max_full_photon_error": 1.5183341259619731e-10,
+      "max_packed_density_error": 3.7643732575531885e-10,
+      "max_trace_error": 2.3117174841047472e-11,
+      "min_density_eigenvalue": -6.465409767919503e-16,
+      "min_photon_increment": 2.162162313821632e-07,
+      "passed": true
+    },
+    {
+      "z_fraction": 0.03,
+      "power_mW": 10.0,
+      "detuning_MHz": 6.8,
+      "method": "lapack_native",
+      "timings": {
+        "eigen_and_real_basis_s": 0.5846848001237959,
+        "lu_and_initial_columns_s": 0.02361229993402958,
+        "photon_projection_s": 0.05219199997372925,
+        "total_s": 0.6604891000315547
+      },
+      "extraction_s": 0.0033996999263763428,
+      "structure": {
+        "full_dimension": 1681,
+        "active_dimension": 1444,
+        "removed_sink_coherences": 234,
+        "sink_count": 3,
+        "active_strong_block_sizes": [
+          1444
+        ]
+      },
+      "max_cached_photon_error": 1.1826319784580264e-10,
+      "max_scaled_cached_error": 0.000736293754267519,
+      "max_full_photon_error": 2.7193137464021078e-09,
+      "max_packed_density_error": 1.15124143551526e-09,
+      "max_trace_error": 3.3860914072647574e-11,
+      "min_density_eigenvalue": -7.027377636921744e-16,
+      "min_photon_increment": 5.513368903235584e-07,
+      "passed": true
+    },
+    {
+      "z_fraction": 0.03,
+      "power_mW": 10.0,
+      "detuning_MHz": 28.2,
+      "method": "lapack_native",
+      "timings": {
+        "eigen_and_real_basis_s": 0.5567560000345111,
+        "lu_and_initial_columns_s": 0.02369069983251393,
+        "photon_projection_s": 0.05249279993586242,
+        "total_s": 0.6329394998028874
+      },
+      "extraction_s": 0.0030662999488413334,
+      "structure": {
+        "full_dimension": 1681,
+        "active_dimension": 1444,
+        "removed_sink_coherences": 234,
+        "sink_count": 3,
+        "active_strong_block_sizes": [
+          1444
+        ]
+      },
+      "max_cached_photon_error": 8.24967871793092e-11,
+      "max_scaled_cached_error": 0.000381228174983218,
+      "max_full_photon_error": 1.4363766939751166e-08,
+      "max_packed_density_error": 7.853849640082622e-09,
+      "max_trace_error": 3.109434931758415e-11,
+      "min_density_eigenvalue": -7.090902144880355e-16,
+      "min_photon_increment": 2.0984609389893233e-06,
+      "passed": true
+    },
+    {
+      "z_fraction": 0.05,
+      "power_mW": 10.0,
+      "detuning_MHz": 6.8,
+      "method": "lapack_native",
+      "timings": {
+        "eigen_and_real_basis_s": 0.6035388000309467,
+        "lu_and_initial_columns_s": 0.023637699894607067,
+        "photon_projection_s": 0.05243929987773299,
+        "total_s": 0.6796157998032868
+      },
+      "extraction_s": 0.003491200041025877,
+      "structure": {
+        "full_dimension": 1681,
+        "active_dimension": 1444,
+        "removed_sink_coherences": 234,
+        "sink_count": 3,
+        "active_strong_block_sizes": [
+          1444
+        ]
+      },
+      "max_cached_photon_error": 1.1435605934417836e-10,
+      "max_scaled_cached_error": 0.0006424275600147446,
+      "max_full_photon_error": 1.3725506980977187e-08,
+      "max_packed_density_error": 5.275000054816292e-09,
+      "max_trace_error": 2.976174862112657e-11,
+      "min_density_eigenvalue": -6.762283673698419e-16,
+      "min_photon_increment": 6.449250543445611e-07,
+      "passed": true
+    },
+    {
+      "z_fraction": 0.05,
+      "power_mW": 10.0,
+      "detuning_MHz": 28.2,
+      "method": "lapack_native",
+      "timings": {
+        "eigen_and_real_basis_s": 0.56218529981561,
+        "lu_and_initial_columns_s": 0.023717300035059452,
+        "photon_projection_s": 0.052305900026112795,
+        "total_s": 0.6382084998767823
+      },
+      "extraction_s": 0.003275300143286586,
+      "structure": {
+        "full_dimension": 1681,
+        "active_dimension": 1444,
+        "removed_sink_coherences": 234,
+        "sink_count": 3,
+        "active_strong_block_sizes": [
+          1444
+        ]
+      },
+      "max_cached_photon_error": 7.900669007909755e-11,
+      "max_scaled_cached_error": 0.0003854247513622716,
+      "max_full_photon_error": 9.782214593911931e-09,
+      "max_packed_density_error": 5.3238607550243344e-09,
+      "max_trace_error": 3.788991342901227e-11,
+      "min_density_eigenvalue": -6.483347525227094e-16,
+      "min_photon_increment": 2.060100945904246e-06,
+      "passed": true
+    },
+    {
+      "z_fraction": 0.03,
+      "power_mW": 1.0,
+      "detuning_MHz": 28.2,
+      "method": "lapack_native",
+      "timings": {
+        "eigen_and_real_basis_s": 0.5584925999864936,
+        "lu_and_initial_columns_s": 0.024406000040471554,
+        "photon_projection_s": 0.0524620998185128,
+        "total_s": 0.6353606998454779
+      },
+      "extraction_s": 0.003370900172740221,
+      "structure": {
+        "full_dimension": 1681,
+        "active_dimension": 1444,
+        "removed_sink_coherences": 234,
+        "sink_count": 3,
+        "active_strong_block_sizes": [
+          1444
+        ]
+      },
+      "max_cached_photon_error": 2.3789501618631803e-11,
+      "max_scaled_cached_error": 0.00015514638069518902,
+      "max_full_photon_error": 8.019781991275288e-10,
+      "max_packed_density_error": 9.560975344768963e-10,
+      "max_trace_error": 4.0786707344864226e-11,
+      "min_density_eigenvalue": -5.526900561571724e-16,
+      "min_photon_increment": 2.10368830893281e-07,
+      "passed": true
+    },
+    {
+      "z_fraction": 0.05,
+      "power_mW": 1.0,
+      "detuning_MHz": 28.2,
+      "method": "lapack_native",
+      "timings": {
+        "eigen_and_real_basis_s": 0.566457899985835,
+        "lu_and_initial_columns_s": 0.02358330017887056,
+        "photon_projection_s": 0.052828499814495444,
+        "total_s": 0.642869699979201
+      },
+      "extraction_s": 0.003410200122743845,
+      "structure": {
+        "full_dimension": 1681,
+        "active_dimension": 1444,
+        "removed_sink_coherences": 234,
+        "sink_count": 3,
+        "active_strong_block_sizes": [
+          1444
+        ]
+      },
+      "max_cached_photon_error": 2.3812048687010812e-11,
+      "max_scaled_cached_error": 0.00015597213564513826,
+      "max_full_photon_error": 2.443146745675917e-09,
+      "max_packed_density_error": 1.3880002260394098e-09,
+      "max_trace_error": 2.591726833145458e-11,
+      "min_density_eigenvalue": -1.2857487737158108e-15,
+      "min_photon_increment": 2.0652679115187887e-07,
+      "passed": true
+    }
+  ],
+  "fastest_eigen_method": "lapack_native"
+}

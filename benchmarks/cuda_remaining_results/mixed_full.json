@@ -1,0 +1,170 @@
+[
+  {
+    "system": "RC",
+    "variant": "base_tiled",
+    "velocity": 150.0,
+    "end_seconds": 0.0002933333333333333,
+    "batch": 9,
+    "elapsed_seconds": 20.359224500018172,
+    "accuracy": {
+      "max_abs": 5.605491525445689e-07,
+      "max_relative_above_cutoff": 0.002005129996708561,
+      "max_coherence_relative_above_cutoff": 0.002005129996708561,
+      "near_zero_max_abs": 5.403394493660986e-12,
+      "relative_frobenius": 3.639419480662096e-05,
+      "trace_error": 1.3655743202889425e-14,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -7.155048026291614e-18,
+      "passes_1percent_above_cutoff": true
+    },
+    "passed": true,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_a3d11a0c83cbbf43.npz"
+  },
+  {
+    "system": "RC",
+    "variant": "fp32_product_tiled",
+    "velocity": 150.0,
+    "end_seconds": 0.0002933333333333333,
+    "batch": 9,
+    "elapsed_seconds": 23.51885150000453,
+    "accuracy": {
+      "max_abs": 5.76310279586777e-07,
+      "max_relative_above_cutoff": 0.0029770789714592435,
+      "max_coherence_relative_above_cutoff": 0.0029770789714592435,
+      "near_zero_max_abs": 5.403993203975935e-12,
+      "relative_frobenius": 3.7190994818995784e-05,
+      "trace_error": 2.831088099508605e-07,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -8.685402014254098e-18,
+      "passes_1percent_above_cutoff": true
+    },
+    "passed": true,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_a3d11a0c83cbbf43.npz"
+  },
+  {
+    "system": "RC",
+    "variant": "fp32_product_direct",
+    "velocity": 150.0,
+    "end_seconds": 0.0002933333333333333,
+    "batch": 9,
+    "elapsed_seconds": 17.36895719997119,
+    "accuracy": {
+      "max_abs": 5.345008476111401e-07,
+      "max_relative_above_cutoff": 0.0024727143349067954,
+      "max_coherence_relative_above_cutoff": 0.0024727143349067954,
+      "near_zero_max_abs": 5.406322243652167e-12,
+      "relative_frobenius": 3.736673955075167e-05,
+      "trace_error": 3.085105586553283e-07,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -2.8764313910911615e-18,
+      "passes_1percent_above_cutoff": true
+    },
+    "passed": true,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_a3d11a0c83cbbf43.npz"
+  },
+  {
+    "system": "RC",
+    "variant": "fp32_rhs_direct",
+    "velocity": 150.0,
+    "end_seconds": 0.0002933333333333333,
+    "batch": 9,
+    "elapsed_seconds": 17.408678899984807,
+    "accuracy": {
+      "max_abs": 5.607617562740761e-07,
+      "max_relative_above_cutoff": 0.0024055107652382834,
+      "max_coherence_relative_above_cutoff": 0.0024055107652382834,
+      "near_zero_max_abs": 5.384371569938253e-12,
+      "relative_frobenius": 3.7567733309480794e-05,
+      "trace_error": 3.308608093055554e-07,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -6.539848712948308e-18,
+      "passes_1percent_above_cutoff": true
+    },
+    "passed": true,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_a3d11a0c83cbbf43.npz"
+  },
+  {
+    "system": "R2_EOM",
+    "variant": "base_tiled",
+    "velocity": 150.0,
+    "end_seconds": 0.00013333333333333334,
+    "batch": 60,
+    "elapsed_seconds": 17.853961399989203,
+    "accuracy": {
+      "max_abs": 1.1772283703415098e-09,
+      "max_relative_above_cutoff": 2.3400795640352841e-07,
+      "max_coherence_relative_above_cutoff": 2.3400795640352841e-07,
+      "near_zero_max_abs": 4.992034483822808e-11,
+      "relative_frobenius": 2.477010051209447e-09,
+      "trace_error": 2.2537527399890678e-14,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -3.287561027121635e-16,
+      "passes_1percent_above_cutoff": true
+    },
+    "passed": true,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\gpu_next_results\\v1_20261012_174509\\052_r2_full_reference_tsit5_b60_h0.5_th256_tile32_wave0.npz"
+  },
+  {
+    "system": "R2_EOM",
+    "variant": "fp32_product_tiled",
+    "velocity": 150.0,
+    "end_seconds": 0.00013333333333333334,
+    "batch": 60,
+    "elapsed_seconds": 22.83266509999521,
+    "accuracy": {
+      "max_abs": 2.029774515133198e-08,
+      "max_relative_above_cutoff": 0.00015334798941871964,
+      "max_coherence_relative_above_cutoff": 0.00015334798941871964,
+      "near_zero_max_abs": 4.991461795313216e-11,
+      "relative_frobenius": 3.2213044914450284e-08,
+      "trace_error": 3.2253600013021355e-08,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -4.2391302335384714e-16,
+      "passes_1percent_above_cutoff": true
+    },
+    "passed": true,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\gpu_next_results\\v1_20261012_174509\\052_r2_full_reference_tsit5_b60_h0.5_th256_tile32_wave0.npz"
+  },
+  {
+    "system": "R2_EOM",
+    "variant": "fp32_product_direct",
+    "velocity": 150.0,
+    "end_seconds": 0.00013333333333333334,
+    "batch": 60,
+    "elapsed_seconds": 19.578637400001753,
+    "accuracy": {
+      "max_abs": 2.6940981889822524e-08,
+      "max_relative_above_cutoff": 0.0001241215865650209,
+      "max_coherence_relative_above_cutoff": 0.0001241215865650209,
+      "near_zero_max_abs": 4.991299831806597e-11,
+      "relative_frobenius": 3.686673787677404e-08,
+      "trace_error": 3.2067351107833986e-08,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -4.058218112730163e-16,
+      "passes_1percent_above_cutoff": true
+    },
+    "passed": true,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\gpu_next_results\\v1_20261012_174509\\052_r2_full_reference_tsit5_b60_h0.5_th256_tile32_wave0.npz"
+  },
+  {
+    "system": "R2_EOM",
+    "variant": "fp32_rhs_direct",
+    "velocity": 150.0,
+    "end_seconds": 0.00013333333333333334,
+    "batch": 60,
+    "elapsed_seconds": 19.49039199994877,
+    "accuracy": {
+      "max_abs": 8.037014215256377e-08,
+      "max_relative_above_cutoff": 0.00010969807513950404,
+      "max_coherence_relative_above_cutoff": 0.00010969807513950404,
+      "near_zero_max_abs": 9.056522573889809e-11,
+      "relative_frobenius": 1.6910238122562468e-07,
+      "trace_error": 9.718102778055737e-08,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -2.586439863195804e-16,
+      "passes_1percent_above_cutoff": true
+    },
+    "passed": true,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\gpu_next_results\\v1_20261012_174509\\052_r2_full_reference_tsit5_b60_h0.5_th256_tile32_wave0.npz"
+  }
+]

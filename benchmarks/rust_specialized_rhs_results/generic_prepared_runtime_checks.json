@@ -1,0 +1,558 @@
+{
+  "passed": true,
+  "modes_per_check": 64,
+  "checks": [
+    {
+      "system": "r0",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.2132080080202521e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.2132080080202521e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.2132080080202521e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.2132080080202521e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.2132413266590537e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.2132423907888037e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.213249558199239e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.2132429194031786e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 1.2132702813064603e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 1.2132773758786725e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 1.2133251629704834e-16
+    },
+    {
+      "system": "r0",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 1.2132809001864524e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447,
+        "\u03b41": -23247785.63656447,
+        "\u03b42": -23247785.63656447
+      },
+      "normalized_error": 1.917077433321196e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447,
+        "\u03b41": -23247785.63656447,
+        "\u03b42": -23247785.63656447
+      },
+      "normalized_error": 1.9171769453730333e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447,
+        "\u03b41": -23247785.63656447,
+        "\u03b42": -23247785.63656447
+      },
+      "normalized_error": 1.9171769453730333e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447,
+        "\u03b41": -23247785.63656447,
+        "\u03b42": -23247785.63656447
+      },
+      "normalized_error": 1.917077433321196e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0,
+        "\u03b41": 0.0,
+        "\u03b42": 0.0
+      },
+      "normalized_error": 1.917077433321196e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0,
+        "\u03b41": 0.0,
+        "\u03b42": 0.0
+      },
+      "normalized_error": 1.9171769453730333e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0,
+        "\u03b41": 0.0,
+        "\u03b42": 0.0
+      },
+      "normalized_error": 1.9171769453730333e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0,
+        "\u03b41": 0.0,
+        "\u03b42": 0.0
+      },
+      "normalized_error": 1.917077433321196e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589,
+        "\u03b41": 32044245.06661589,
+        "\u03b42": 32044245.06661589
+      },
+      "normalized_error": 1.917077433321196e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589,
+        "\u03b41": 32044245.06661589,
+        "\u03b42": 32044245.06661589
+      },
+      "normalized_error": 1.9171769453730333e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589,
+        "\u03b41": 32044245.06661589,
+        "\u03b42": 32044245.06661589
+      },
+      "normalized_error": 1.9171769453730333e-16
+    },
+    {
+      "system": "rc",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589,
+        "\u03b41": 32044245.06661589,
+        "\u03b42": 32044245.06661589
+      },
+      "normalized_error": 1.917077433321196e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.6953871500051015e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.6953871500051015e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.6953871500051015e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.6953871500051015e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.695387363663122e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.6953869806537117e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.6953865682083357e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.6953880353357185e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 1.6953885743929232e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 1.6953860209964751e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 1.6953832713675388e-16
+    },
+    {
+      "system": "r2",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 1.6953930522266801e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.0740904132850986e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.0740904132850986e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.0740904132850986e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 0.0,
+      "detuning_Hz": -3700000.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 0.0,
+        "\u03b40": -23247785.63656447
+      },
+      "normalized_error": 1.0740904132850986e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.0741240164198961e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.0741239086560588e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 1.0741228577983802e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 0.3,
+      "detuning_Hz": 0.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 3030303.0303030303,
+        "\u03b40": 0.0
+      },
+      "normalized_error": 2.1482473368430136e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 1.2500000000000002e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 2.1483456710583246e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 3.75e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 2.148344234077365e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 6.25e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 2.1483302214616002e-16
+    },
+    {
+      "system": "q1",
+      "rabi_scale": 2.0,
+      "detuning_Hz": 5100000.0,
+      "time_s": 8.750000000000001e-07,
+      "changed_parameters": {
+        "\u03a9t0": 20202020.2020202,
+        "\u03b40": 32044245.06661589
+      },
+      "normalized_error": 2.148341030666538e-16
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "stage": "complete",
+  "current_job": null,
+  "completed_jobs": 18,
+  "failed_jobs": 0,
+  "timed_out_jobs": 0,
+  "elapsed_s": 1014.8515822887421,
+  "remaining_budget_s": 9785.148417711258,
+  "runner_pid": 4148,
+  "winner": {
+    "integrator": "tsit5",
+    "dt_ns": 4.464285714285714,
+    "variant": "swap_const_schedule_gentle"
+  },
+  "kept_optimizations": [
+    "swap_const_schedule_gentle"
+  ]
+}

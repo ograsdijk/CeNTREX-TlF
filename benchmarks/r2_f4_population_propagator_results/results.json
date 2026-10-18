@@ -1,0 +1,197 @@
+{
+  "generated_at": "2026-10-07T10:32:09.936609-05:00",
+  "scope": "Three detunings, pure X, 10 mW, four independent starting states, 1401 times through 350 us.",
+  "detunings_MHz": [
+    6.8,
+    28.2,
+    80.0
+  ],
+  "blas_threads": 1,
+  "reference_rayon_threads": 4,
+  "timing_note": "One timing per point. Dense uses one BLAS thread; independent reference uses four Rayon threads. Diagnostics excluded from dense total; common system build excluded from both.",
+  "threadpools": [
+    {
+      "user_api": "blas",
+      "internal_api": "openblas",
+      "num_threads": 16,
+      "prefix": "libscipy_openblas",
+      "filepath": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\.venv\\Lib\\site-packages\\numpy.libs\\libscipy_openblas64_-13e2df515630b4a41f92893938845698.dll",
+      "version": "0.3.29",
+      "threading_layer": "pthreads",
+      "architecture": "SkylakeX"
+    },
+    {
+      "user_api": "blas",
+      "internal_api": "openblas",
+      "num_threads": 16,
+      "prefix": "libscipy_openblas",
+      "filepath": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\.venv\\Lib\\site-packages\\scipy.libs\\libscipy_openblas-f07f5a5d207a3a47104dca54d6d0c86a.dll",
+      "version": "0.3.28",
+      "threading_layer": "pthreads",
+      "architecture": "SkylakeX"
+    }
+  ],
+  "points": [
+    {
+      "detuning_MHz": 6.8,
+      "dense_timings": {
+        "extract_seconds": 0.0083424998447299,
+        "eig_seconds": 0.8392357998527586,
+        "lu_seconds": 0.11778230010531843,
+        "four_initial_states_seconds": 0.0020092998165637255,
+        "all_four_photon_traces_seconds": 0.12339879991486669,
+        "total_seconds": 1.0907686995342374
+      },
+      "diagnostics": {
+        "states": 41,
+        "packed_dimension": 1681,
+        "liouvillian_nnz": 57622,
+        "estimated_eigenvector_condition_1norm": 25.39750954572894,
+        "sampled_eigen_residual": 9.542224811301059e-17,
+        "max_trace_error": 1.8871018081512148e-09,
+        "max_photon_imaginary": 1.1046806595803918e-16,
+        "minimum_photons": 0.0,
+        "minimum_photon_increment": 9.62682201286898e-07
+      },
+      "independent_four_thread_ode_seconds": 6.340117800049484,
+      "wall_speedup_vs_four_thread_ode": 5.812522675757692,
+      "max_abs_photon_error": 1.6467391894536831e-09,
+      "max_scaled_photon_error": 0.0008744669688871631,
+      "max_ode_vs_cached_error": 0.0,
+      "max_dense_vs_cached_error": 1.6467391894536831e-09,
+      "passed_accuracy_gate": true,
+      "reference_solver_stats": {
+        "solver": "dopri5",
+        "accepted_steps": 309725,
+        "rejected_steps": 0,
+        "rhs_calls": 1858354,
+        "event_triggered": false,
+        "event_triggered_by_trajectory": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "event_times": [
+          0.00035,
+          0.00035,
+          0.00035,
+          0.00035
+        ],
+        "event_count": 0,
+        "function_evaluations": 1858354,
+        "saved_points": 1401,
+        "rhs_seconds": 6.337981400080025,
+        "total_seconds": 6.337981400080025
+      }
+    },
+    {
+      "detuning_MHz": 28.2,
+      "dense_timings": {
+        "extract_seconds": 0.0075876000337302685,
+        "eig_seconds": 0.8050925999414176,
+        "lu_seconds": 0.11262770020402968,
+        "four_initial_states_seconds": 0.001909299986436963,
+        "all_four_photon_traces_seconds": 0.1257754999678582,
+        "total_seconds": 1.0529927001334727
+      },
+      "diagnostics": {
+        "states": 41,
+        "packed_dimension": 1681,
+        "liouvillian_nnz": 57622,
+        "estimated_eigenvector_condition_1norm": 13.731237408046965,
+        "sampled_eigen_residual": 6.827823133383945e-17,
+        "max_trace_error": 6.678557706862878e-11,
+        "max_photon_imaginary": 4.521264021821837e-18,
+        "minimum_photons": 0.0,
+        "minimum_photon_increment": 2.298002827626861e-06
+      },
+      "independent_four_thread_ode_seconds": 6.381134800147265,
+      "wall_speedup_vs_four_thread_ode": 6.059999085785135,
+      "max_abs_photon_error": 8.479372759495618e-11,
+      "max_scaled_photon_error": 0.0003679789125852819,
+      "max_ode_vs_cached_error": 0.0,
+      "max_dense_vs_cached_error": 8.479372759495618e-11,
+      "passed_accuracy_gate": true,
+      "reference_solver_stats": {
+        "solver": "dopri5",
+        "accepted_steps": 310023,
+        "rejected_steps": 1,
+        "rhs_calls": 1860148,
+        "event_triggered": false,
+        "event_triggered_by_trajectory": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "event_times": [
+          0.00035,
+          0.00035,
+          0.00035,
+          0.00035
+        ],
+        "event_count": 0,
+        "function_evaluations": 1860148,
+        "saved_points": 1401,
+        "rhs_seconds": 6.378839100012556,
+        "total_seconds": 6.378839100012556
+      }
+    },
+    {
+      "detuning_MHz": 80.0,
+      "dense_timings": {
+        "extract_seconds": 0.008350200019776821,
+        "eig_seconds": 0.8462483999319375,
+        "lu_seconds": 0.11323060002177954,
+        "four_initial_states_seconds": 0.0019053998403251171,
+        "all_four_photon_traces_seconds": 0.12355319992639124,
+        "total_seconds": 1.0932877997402102
+      },
+      "diagnostics": {
+        "states": 41,
+        "packed_dimension": 1681,
+        "liouvillian_nnz": 57622,
+        "estimated_eigenvector_condition_1norm": 22.35632112833949,
+        "sampled_eigen_residual": 6.517296471555149e-17,
+        "max_trace_error": 6.225775450729998e-11,
+        "max_photon_imaginary": 2.5783373154751997e-21,
+        "minimum_photons": 0.0,
+        "minimum_photon_increment": 1.66039271366742e-08
+      },
+      "independent_four_thread_ode_seconds": 10.791236999910325,
+      "wall_speedup_vs_four_thread_ode": 9.870444911645924,
+      "max_abs_photon_error": 3.3163894200272104e-10,
+      "max_scaled_photon_error": 0.0016004076957692299,
+      "max_ode_vs_cached_error": 0.0,
+      "max_dense_vs_cached_error": 3.3163894200272104e-10,
+      "passed_accuracy_gate": true,
+      "reference_solver_stats": {
+        "solver": "dopri5",
+        "accepted_steps": 529241,
+        "rejected_steps": 0,
+        "rhs_calls": 3175474,
+        "event_triggered": false,
+        "event_triggered_by_trajectory": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "event_times": [
+          0.00035,
+          0.00035,
+          0.00035,
+          0.00035
+        ],
+        "event_count": 0,
+        "function_evaluations": 3175474,
+        "saved_points": 1401,
+        "rhs_seconds": 10.789002900011837,
+        "total_seconds": 10.789002900011837
+      }
+    }
+  ],
+  "source_sha256": "010bb8bc056b65bfa3510c441bcd731f69865f67bbf0f8be077df341f2565b87",
+  "system_build_prepare_seconds": 11.14174719993025
+}

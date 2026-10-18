@@ -1,0 +1,96 @@
+[
+  {
+    "system": "RC",
+    "batch": 32,
+    "span": [
+      0.000146,
+      0.000147
+    ],
+    "real_coordinates": 3973,
+    "complex_upper_entries": 2020,
+    "timings": {
+      "current_tiled": [
+        0.0681408999953419
+      ],
+      "structured_full": [
+        0.08509070001309738
+      ],
+      "structured_reduced": [
+        0.07938800001284108
+      ]
+    },
+    "checks": {
+      "structured_full": {
+        "max_abs": 9.71445146547012e-17,
+        "max_relative_above_1e6": 8.004632426319646e-13,
+        "max_abs_below_1e6": 0.0,
+        "trace_error": 4.440892098500626e-16,
+        "min_eigenvalue": -1.016439536705163e-20,
+        "passed": true
+      },
+      "structured_reduced": {
+        "max_abs": 9.71445146547012e-17,
+        "max_relative_above_1e6": 8.004632426319646e-13,
+        "max_abs_below_1e6": 0.0,
+        "trace_error": 4.440892098500626e-16,
+        "min_eigenvalue": -1.016439536705163e-20,
+        "passed": true
+      },
+      "current_tiled": {
+        "max_abs": 0.0,
+        "max_relative_above_1e6": 0.0,
+        "max_abs_below_1e6": 0.0,
+        "trace_error": 5.551115123125783e-16,
+        "min_eigenvalue": -6.77626357803441e-21,
+        "passed": true
+      }
+    }
+  },
+  {
+    "system": "R2_EOM",
+    "batch": 32,
+    "span": [
+      1.25e-07,
+      1.125e-06
+    ],
+    "real_coordinates": 1446,
+    "complex_upper_entries": 743,
+    "timings": {
+      "current_tiled": [
+        0.08633799996459857
+      ],
+      "structured_full": [
+        0.08199179999064654
+      ],
+      "structured_reduced": [
+        0.08023159997537732
+      ]
+    },
+    "checks": {
+      "current_tiled": {
+        "max_abs": 0.0,
+        "max_relative_above_1e6": 0.0,
+        "max_abs_below_1e6": 0.0,
+        "trace_error": 1.5543122344752192e-15,
+        "min_eigenvalue": 1.2491724058078962e-13,
+        "passed": true
+      },
+      "structured_reduced": {
+        "max_abs": 2.7755575615628914e-16,
+        "max_relative_above_1e6": 4.0339231178091485e-14,
+        "max_abs_below_1e6": 6.356143151727778e-20,
+        "trace_error": 1.5543122344752192e-15,
+        "min_eigenvalue": 1.24917261651067e-13,
+        "passed": true
+      },
+      "structured_full": {
+        "max_abs": 2.7755575615628914e-16,
+        "max_relative_above_1e6": 4.0339231178091485e-14,
+        "max_abs_below_1e6": 6.356143151727778e-20,
+        "trace_error": 1.5543122344752192e-15,
+        "min_eigenvalue": 1.24917261651067e-13,
+        "passed": true
+      }
+    }
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "variant": "swap",
+    "bitwise_equal": true,
+    "max_absolute_difference": 0.0,
+    "shape": [
+      483,
+      70,
+      70
+    ]
+  },
+  {
+    "variant": "const",
+    "bitwise_equal": true,
+    "max_absolute_difference": 0.0,
+    "shape": [
+      483,
+      70,
+      70
+    ]
+  },
+  {
+    "variant": "swap_const",
+    "bitwise_equal": true,
+    "max_absolute_difference": 0.0,
+    "shape": [
+      483,
+      70,
+      70
+    ]
+  }
+]

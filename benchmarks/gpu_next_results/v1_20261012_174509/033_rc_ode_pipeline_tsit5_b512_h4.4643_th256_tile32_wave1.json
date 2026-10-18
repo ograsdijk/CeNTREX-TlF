@@ -1,0 +1,41 @@
+{
+  "job": {
+    "system": "rc",
+    "kind": "ode_pipeline",
+    "span_us": 5,
+    "batch": 512,
+    "dt_ns": 4.464285714285714,
+    "integrator": "tsit5",
+    "variant": "swap_const_schedule_gentle_exact_devicepop_packed",
+    "threads": 256,
+    "tile": 32,
+    "waveform": true,
+    "repeats": 3,
+    "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\033_rc_ode_pipeline_tsit5_b512_h4.4643_th256_tile32_wave1.json"
+  },
+  "status": "complete",
+  "chunks": 4,
+  "rows": [
+    {
+      "overlap": false,
+      "seconds": [
+        16.40217680000933,
+        16.40083699999377,
+        16.401153999991948
+      ],
+      "median_s": 16.401153999991948,
+      "all_output_abs_vs_sequential": 0.0
+    },
+    {
+      "overlap": true,
+      "seconds": [
+        16.397160300024552,
+        16.39844550000271,
+        16.398190700012492
+      ],
+      "median_s": 16.398190700012492,
+      "all_output_abs_vs_sequential": 0.0
+    }
+  ],
+  "speedup": 1.0001807089595227
+}

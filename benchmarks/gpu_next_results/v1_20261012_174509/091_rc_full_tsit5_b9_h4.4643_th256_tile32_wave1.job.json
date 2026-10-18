@@ -1,0 +1,20 @@
+{
+  "system": "rc",
+  "kind": "full",
+  "span_us": 5,
+  "batch": 9,
+  "dt_ns": 4.464285714285714,
+  "integrator": "tsit5",
+  "variant": "swap_const_schedule_gentle_exact_devicepop_packed",
+  "threads": 256,
+  "tile": 32,
+  "waveform": true,
+  "repeats": 1,
+  "velocity": 250.0,
+  "photons": true,
+  "output_mode": "photon_only",
+  "reference": "benchmarks\\gpu_next_results\\v1_20261012_174509\\067_rc_full_reference_tsit5_b9_h0.97656_th256_tile32_wave0.npz",
+  "photon_reference": "benchmarks\\gpu_next_results\\v1_20261012_174509\\067_rc_full_reference_tsit5_b9_h0.97656_th256_tile32_wave0.npz",
+  "validation_revision": "physical_time_lookup",
+  "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\091_rc_full_tsit5_b9_h4.4643_th256_tile32_wave1.json"
+}
