@@ -17,6 +17,14 @@ pub enum ExecutionMode {
     ReferenceDense,
     StructuredBlas,
     StructuredUpper,
+    ExperimentalStructuredSparseDense,
+    ExperimentalStructuredSparseDenseDiag,
+    ExperimentalStructuredSparseDenseSoa,
+    ExperimentalStructuredSparseDenseSingleUnpack,
+    ExperimentalStructuredSparseDenseDiagSoa,
+    ExperimentalStructuredSparseDenseDiagSingleUnpack,
+    ExperimentalStructuredSparseDenseSoaSingleUnpack,
+    ExperimentalStructuredSparseDenseDiagSoaSingleUnpack,
     ExpandedSparse,
     ExperimentalExpandedSparseBaselinePacked,
     ExperimentalExpandedSparseCurrentSplitInputs,
@@ -44,6 +52,46 @@ impl ExecutionMode {
             "reference" => Ok(Self::ReferenceDense),
             "structured" => Ok(Self::StructuredBlas),
             "structured_upper" => Ok(Self::StructuredUpper),
+            "experimental_structured_sparse_dense" => Ok(Self::ExperimentalStructuredSparseDense),
+            "experimental_structured_sparse_dense_diag" => {
+                Ok(Self::ExperimentalStructuredSparseDenseDiag)
+            }
+            "experimental_structured_sparse_dense_soa" => {
+                Ok(Self::ExperimentalStructuredSparseDenseSoa)
+            }
+            "experimental_structured_sparse_dense_single_unpack" => {
+                Ok(Self::ExperimentalStructuredSparseDenseSingleUnpack)
+            }
+            "experimental_structured_sparse_dense_diag_soa" => {
+                Ok(Self::ExperimentalStructuredSparseDenseDiagSoa)
+            }
+            "experimental_structured_sparse_dense_diag_single_unpack" => {
+                Ok(Self::ExperimentalStructuredSparseDenseDiagSingleUnpack)
+            }
+            "experimental_structured_sparse_dense_soa_single_unpack" => {
+                Ok(Self::ExperimentalStructuredSparseDenseSoaSingleUnpack)
+            }
+            "experimental_structured_sparse_dense_diag_soa_single_unpack" => {
+                Ok(Self::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack)
+            }
+            "structured_sparse_dense" => Ok(Self::ExperimentalStructuredSparseDense),
+            "structured_sparse_dense_diag" => Ok(Self::ExperimentalStructuredSparseDenseDiag),
+            "structured_sparse_dense_soa" => Ok(Self::ExperimentalStructuredSparseDenseSoa),
+            "structured_sparse_dense_single_unpack" => {
+                Ok(Self::ExperimentalStructuredSparseDenseSingleUnpack)
+            }
+            "structured_sparse_dense_diag_soa" => {
+                Ok(Self::ExperimentalStructuredSparseDenseDiagSoa)
+            }
+            "structured_sparse_dense_diag_single_unpack" => {
+                Ok(Self::ExperimentalStructuredSparseDenseDiagSingleUnpack)
+            }
+            "structured_sparse_dense_soa_single_unpack" => {
+                Ok(Self::ExperimentalStructuredSparseDenseSoaSingleUnpack)
+            }
+            "structured_sparse_dense_diag_soa_single_unpack" => {
+                Ok(Self::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack)
+            }
             "expanded_sparse" => Ok(Self::ExpandedSparse),
             "experimental_expanded_sparse_baseline_packed" => {
                 Ok(Self::ExperimentalExpandedSparseBaselinePacked)
@@ -73,6 +121,36 @@ impl ExecutionMode {
                 | Self::ExperimentalExpandedSparseSplitCoefficients
                 | Self::ExperimentalExpandedSparseSplitInputs
                 | Self::ExperimentalExpandedSparsePrecomputedInputs
+        )
+    }
+
+    fn uses_diag_split(self) -> bool {
+        matches!(
+            self,
+            Self::ExperimentalStructuredSparseDenseDiag
+                | Self::ExperimentalStructuredSparseDenseDiagSoa
+                | Self::ExperimentalStructuredSparseDenseDiagSingleUnpack
+                | Self::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack
+        )
+    }
+
+    fn uses_soa_scratch(self) -> bool {
+        matches!(
+            self,
+            Self::ExperimentalStructuredSparseDenseSoa
+                | Self::ExperimentalStructuredSparseDenseDiagSoa
+                | Self::ExperimentalStructuredSparseDenseSoaSingleUnpack
+                | Self::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack
+        )
+    }
+
+    fn uses_single_unpack(self) -> bool {
+        matches!(
+            self,
+            Self::ExperimentalStructuredSparseDenseSingleUnpack
+                | Self::ExperimentalStructuredSparseDenseDiagSingleUnpack
+                | Self::ExperimentalStructuredSparseDenseSoaSingleUnpack
+                | Self::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack
         )
     }
 }
@@ -523,6 +601,205 @@ fn add_commutator_sparse_upper(
             }
 
             drho_upper[upper_layout.index_unchecked(i, j)] = neg_i * (hrho - rhoh);
+        }
+    }
+}
+
+/// Compute A = H rho using the full row support of the Hermitian sparse pattern,
+/// then form the packed upper commutator from -i(A - A†). The full density rows
+/// are contiguous, so this avoids packed-index/conjugacy lookups in the sparse
+/// multiply. `scratch` is the preallocated full-matrix A workspace.
+fn add_commutator_sparse_dense_upper(
+    pattern: &HermitianSparsePattern,
+    h_sparse: &[Complex64],
+    rho: &[Complex64],
+    scratch: &mut [Complex64],
+    upper_layout: &UpperTriLayout,
+    drho_upper: &mut [Complex64],
+) {
+    let n = pattern.n;
+    scratch.fill(Complex64::ZERO);
+    for i in 0..n {
+        let output_row = &mut scratch[i * n..(i + 1) * n];
+        for ptr in pattern.row_ptrs[i]..pattern.row_ptrs[i + 1] {
+            let h_ik = h_sparse[ptr];
+            if h_ik == Complex64::ZERO {
+                continue;
+            }
+            let k = pattern.col_indices[ptr];
+            let rho_row = &rho[k * n..(k + 1) * n];
+            for j in 0..n {
+                output_row[j] += h_ik * rho_row[j];
+            }
+        }
+        // CSR stores only the upper Hermitian triangle. Recover H[i,k] for
+        // k < i from CSC column i, conjugating the stored H[k,i].
+        for csc_ptr in pattern.col_ptrs[i]..pattern.col_ptrs[i + 1] {
+            let k = pattern.row_indices_csc[csc_ptr];
+            let h_ik = h_sparse[pattern.csc_to_csr[csc_ptr]].conj();
+            if h_ik == Complex64::ZERO {
+                continue;
+            }
+            let rho_row = &rho[k * n..(k + 1) * n];
+            for j in 0..n {
+                output_row[j] += h_ik * rho_row[j];
+            }
+        }
+    }
+
+    let neg_i = -Complex64::I;
+    for i in 0..n {
+        let diagonal = scratch[i * n + i];
+        drho_upper[upper_layout.index_unchecked(i, i)] = Complex64::new(2.0 * diagonal.im, 0.0);
+        for j in (i + 1)..n {
+            let a_ij = scratch[i * n + j];
+            let a_ji = scratch[j * n + i];
+            drho_upper[upper_layout.index_unchecked(i, j)] = neg_i * (a_ij - a_ji.conj());
+        }
+    }
+}
+
+fn add_commutator_sparse_dense_upper_diag(
+    pattern: &HermitianSparsePattern,
+    h_sparse: &[Complex64],
+    h_upper: &[Complex64],
+    rho: &[Complex64],
+    scratch: &mut [Complex64],
+    upper_layout: &UpperTriLayout,
+    drho_upper: &mut [Complex64],
+) {
+    let n = pattern.n;
+    scratch.fill(Complex64::ZERO);
+    for i in 0..n {
+        let output_row = &mut scratch[i * n..(i + 1) * n];
+        for ptr in pattern.row_ptrs[i]..pattern.row_ptrs[i + 1] {
+            let k = pattern.col_indices[ptr];
+            if k == i {
+                continue;
+            }
+            let h_ik = h_sparse[ptr];
+            if h_ik == Complex64::ZERO {
+                continue;
+            }
+            let rho_row = &rho[k * n..(k + 1) * n];
+            for j in 0..n {
+                output_row[j] += h_ik * rho_row[j];
+            }
+        }
+        for csc_ptr in pattern.col_ptrs[i]..pattern.col_ptrs[i + 1] {
+            let k = pattern.row_indices_csc[csc_ptr];
+            let h_ik = h_sparse[pattern.csc_to_csr[csc_ptr]].conj();
+            if h_ik == Complex64::ZERO {
+                continue;
+            }
+            let rho_row = &rho[k * n..(k + 1) * n];
+            for j in 0..n {
+                output_row[j] += h_ik * rho_row[j];
+            }
+        }
+    }
+    for i in 0..n {
+        drho_upper[upper_layout.index_unchecked(i, i)] =
+            Complex64::new(2.0 * scratch[i * n + i].im, 0.0);
+        let h_ii = h_upper[upper_layout.index_unchecked(i, i)].re;
+        for j in (i + 1)..n {
+            let h_jj = h_upper[upper_layout.index_unchecked(j, j)].re;
+            let direct = Complex64::new(0.0, -(h_ii - h_jj)) * rho[i * n + j];
+            let a_ij = scratch[i * n + j];
+            let a_ji = scratch[j * n + i];
+            drho_upper[upper_layout.index_unchecked(i, j)] =
+                direct + Complex64::new(0.0, -1.0) * (a_ij - a_ji.conj());
+        }
+    }
+}
+
+fn add_commutator_sparse_dense_upper_soa(
+    pattern: &HermitianSparsePattern,
+    h_sparse: &[Complex64],
+    h_upper: &[Complex64],
+    rho: &[Complex64],
+    scratch_re: &mut [f64],
+    scratch_im: &mut [f64],
+    upper_layout: &UpperTriLayout,
+    drho_upper: &mut [Complex64],
+    split_diagonal: bool,
+) {
+    let n = pattern.n;
+    scratch_re.fill(0.0);
+    scratch_im.fill(0.0);
+    for i in 0..n {
+        for ptr in pattern.row_ptrs[i]..pattern.row_ptrs[i + 1] {
+            let h = h_sparse[ptr];
+            if split_diagonal && pattern.col_indices[ptr] == i {
+                continue;
+            }
+            if h == Complex64::ZERO {
+                continue;
+            }
+            let k = pattern.col_indices[ptr];
+            for j in 0..n {
+                let r = rho[k * n + j];
+                let idx = i * n + j;
+                scratch_re[idx] += h.re * r.re - h.im * r.im;
+                scratch_im[idx] += h.re * r.im + h.im * r.re;
+            }
+        }
+        for csc_ptr in pattern.col_ptrs[i]..pattern.col_ptrs[i + 1] {
+            let k = pattern.row_indices_csc[csc_ptr];
+            let h = h_sparse[pattern.csc_to_csr[csc_ptr]].conj();
+            if h == Complex64::ZERO {
+                continue;
+            }
+            for j in 0..n {
+                let r = rho[k * n + j];
+                let idx = i * n + j;
+                scratch_re[idx] += h.re * r.re - h.im * r.im;
+                scratch_im[idx] += h.re * r.im + h.im * r.re;
+            }
+        }
+    }
+    for i in 0..n {
+        drho_upper[upper_layout.index_unchecked(i, i)] =
+            Complex64::new(2.0 * scratch_im[i * n + i], 0.0);
+        for j in (i + 1)..n {
+            let ij = i * n + j;
+            let ji = j * n + i;
+            let commutator = Complex64::new(
+                scratch_im[ij] + scratch_im[ji],
+                scratch_re[ji] - scratch_re[ij],
+            );
+            let diagonal = if split_diagonal {
+                let h_ii = h_upper[upper_layout.index_unchecked(i, i)].re;
+                let h_jj = h_upper[upper_layout.index_unchecked(j, j)].re;
+                Complex64::new(0.0, -(h_ii - h_jj)) * rho[ij]
+            } else {
+                Complex64::ZERO
+            };
+            drho_upper[upper_layout.index_unchecked(i, j)] = diagonal + commutator;
+        }
+    }
+}
+
+fn add_structured_dissipator_upper_dense_rho(
+    plan: &PreparedLindbladPlan,
+    upper_layout: &UpperTriLayout,
+    rho: &[Complex64],
+    out_upper: &mut [Complex64],
+) {
+    let n = upper_layout.n;
+    for source in 0..n {
+        let rate_source = plan.source_decay_rates[source];
+        out_upper[upper_layout.index_unchecked(source, source)] -=
+            rate_source * rho[source * n + source];
+        for col in (source + 1)..n {
+            let rate = 0.5 * (rate_source + plan.source_decay_rates[col]);
+            out_upper[upper_layout.index_unchecked(source, col)] -= rate * rho[source * n + col];
+        }
+    }
+    for (target, incoming) in plan.incoming_transfers_by_target.iter().enumerate() {
+        let target_diag = upper_layout.index_unchecked(target, target);
+        for transfer in incoming {
+            out_upper[target_diag] += transfer.rate * rho[transfer.source * n + transfer.source];
         }
     }
 }
@@ -1063,6 +1340,9 @@ pub struct RhsWorkspace {
     drho: Vec<Complex64>,
     drho_upper: Vec<Complex64>,
     scratch: Vec<Complex64>,
+    scratch_re: Vec<f64>,
+    scratch_im: Vec<f64>,
+    cpu_diagonal: Vec<f64>,
     h_sparse_values: Vec<Complex64>,
     expanded_coeff_values: Vec<Complex64>,
     expanded_term_values: Vec<Complex64>,
@@ -1150,6 +1430,13 @@ impl RhsWorkspace {
             drho: vec![Complex64::ZERO; matrix_len],
             drho_upper: vec![Complex64::ZERO; upper_layout.len()],
             scratch: vec![Complex64::ZERO; matrix_len],
+            scratch_re: vec![0.0; matrix_len],
+            scratch_im: vec![0.0; matrix_len],
+            cpu_diagonal: if plan.cpu_kernel.is_original() {
+                Vec::new()
+            } else {
+                vec![0.0; n]
+            },
             h_sparse_values: vec![Complex64::ZERO; plan.hamiltonian_sparse_pattern.nnz],
             expanded_coeff_values: Vec::with_capacity(plan.hamiltonian_plan.coefficients.len()),
             expanded_term_values: Vec::with_capacity(expanded_term_capacity),
@@ -1288,7 +1575,17 @@ fn rhs_from_workspace_rho(
     // Which cache this mode is about to fill; see `HamiltonianCache`.
     let cache_kind = match mode {
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => HamiltonianCache::Dense,
-        ExecutionMode::StructuredUpper => HamiltonianCache::Upper,
+        ExecutionMode::StructuredUpper
+        | ExecutionMode::ExperimentalStructuredSparseDense
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiag
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoaSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack => {
+            HamiltonianCache::Upper
+        }
         _ => HamiltonianCache::ExpandedComplex,
     };
     let can_skip = !plan.is_time_dependent && workspace.hamiltonian_valid_for == Some(cache_kind);
@@ -1331,7 +1628,15 @@ fn rhs_from_workspace_rho(
                     )?;
                 }
             }
-            ExecutionMode::StructuredUpper => {
+            ExecutionMode::StructuredUpper
+            | ExecutionMode::ExperimentalStructuredSparseDense
+            | ExecutionMode::ExperimentalStructuredSparseDenseDiag
+            | ExecutionMode::ExperimentalStructuredSparseDenseSoa
+            | ExecutionMode::ExperimentalStructuredSparseDenseSingleUnpack
+            | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoa
+            | ExecutionMode::ExperimentalStructuredSparseDenseDiagSingleUnpack
+            | ExecutionMode::ExperimentalStructuredSparseDenseSoaSingleUnpack
+            | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack => {
                 plan.hamiltonian_plan.fill_upper_into(
                     workspace.parameter_values.as_slice(),
                     t,
@@ -1405,6 +1710,80 @@ fn rhs_from_workspace_rho(
                 workspace.drho_upper.as_mut_slice(),
             );
         }
+        ExecutionMode::ExperimentalStructuredSparseDense => {
+            workspace
+                .upper_layout
+                .clear(workspace.drho_upper.as_mut_slice())?;
+            if !workspace.h_sparse_valid {
+                fill_sparse_h_values(
+                    &plan.hamiltonian_sparse_pattern,
+                    &workspace.upper_layout,
+                    workspace.hamiltonian_upper.as_slice(),
+                    workspace.h_sparse_values.as_mut_slice(),
+                );
+                workspace.h_sparse_valid = true;
+            }
+            add_commutator_sparse_dense_upper(
+                &plan.hamiltonian_sparse_pattern,
+                workspace.h_sparse_values.as_slice(),
+                workspace.rho.as_slice(),
+                workspace.scratch.as_mut_slice(),
+                &workspace.upper_layout,
+                workspace.drho_upper.as_mut_slice(),
+            );
+        }
+        ExecutionMode::ExperimentalStructuredSparseDenseDiag
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoaSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack => {
+            workspace
+                .upper_layout
+                .clear(workspace.drho_upper.as_mut_slice())?;
+            if !workspace.h_sparse_valid {
+                fill_sparse_h_values(
+                    &plan.hamiltonian_sparse_pattern,
+                    &workspace.upper_layout,
+                    workspace.hamiltonian_upper.as_slice(),
+                    workspace.h_sparse_values.as_mut_slice(),
+                );
+                workspace.h_sparse_valid = true;
+            }
+            if mode.uses_soa_scratch() {
+                add_commutator_sparse_dense_upper_soa(
+                    &plan.hamiltonian_sparse_pattern,
+                    workspace.h_sparse_values.as_slice(),
+                    workspace.hamiltonian_upper.as_slice(),
+                    workspace.rho.as_slice(),
+                    workspace.scratch_re.as_mut_slice(),
+                    workspace.scratch_im.as_mut_slice(),
+                    &workspace.upper_layout,
+                    workspace.drho_upper.as_mut_slice(),
+                    mode.uses_diag_split(),
+                )
+            } else if mode.uses_diag_split() {
+                add_commutator_sparse_dense_upper_diag(
+                    &plan.hamiltonian_sparse_pattern,
+                    workspace.h_sparse_values.as_slice(),
+                    workspace.hamiltonian_upper.as_slice(),
+                    workspace.rho.as_slice(),
+                    workspace.scratch.as_mut_slice(),
+                    &workspace.upper_layout,
+                    workspace.drho_upper.as_mut_slice(),
+                )
+            } else {
+                add_commutator_sparse_dense_upper(
+                    &plan.hamiltonian_sparse_pattern,
+                    workspace.h_sparse_values.as_slice(),
+                    workspace.rho.as_slice(),
+                    workspace.scratch.as_mut_slice(),
+                    &workspace.upper_layout,
+                    workspace.drho_upper.as_mut_slice(),
+                )
+            }
+        }
         ExecutionMode::ExpandedSparse
         | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
         | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
@@ -1445,6 +1824,43 @@ fn rhs_from_workspace_rho(
             workspace.rho_upper.as_slice(),
             workspace.drho_upper.as_mut_slice(),
         ),
+        ExecutionMode::ExperimentalStructuredSparseDense => add_structured_dissipator_upper(
+            plan,
+            &workspace.upper_layout,
+            workspace.rho_upper.as_slice(),
+            workspace.drho_upper.as_mut_slice(),
+        ),
+        ExecutionMode::ExperimentalStructuredSparseDenseDiag
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoa => add_structured_dissipator_upper(
+            plan,
+            &workspace.upper_layout,
+            workspace.rho_upper.as_slice(),
+            workspace.drho_upper.as_mut_slice(),
+        ),
+        ExecutionMode::ExperimentalStructuredSparseDenseDiagSoa => add_structured_dissipator_upper(
+            plan,
+            &workspace.upper_layout,
+            workspace.rho_upper.as_slice(),
+            workspace.drho_upper.as_mut_slice(),
+        ),
+        ExecutionMode::ExperimentalStructuredSparseDenseSingleUnpack => {
+            add_structured_dissipator_upper_dense_rho(
+                plan,
+                &workspace.upper_layout,
+                workspace.rho.as_slice(),
+                workspace.drho_upper.as_mut_slice(),
+            )
+        }
+        ExecutionMode::ExperimentalStructuredSparseDenseDiagSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoaSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack => {
+            add_structured_dissipator_upper_dense_rho(
+                plan,
+                &workspace.upper_layout,
+                workspace.rho.as_slice(),
+                workspace.drho_upper.as_mut_slice(),
+            )
+        }
         ExecutionMode::ExpandedSparse
         | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
         | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
@@ -1488,6 +1904,26 @@ pub fn rhs_matrix_into_with_profile(
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
             workspace.rho.copy_from_slice(rho);
         }
+        ExecutionMode::ExperimentalStructuredSparseDense => {
+            workspace.rho.copy_from_slice(rho);
+            workspace
+                .upper_layout
+                .pack_from_dense(rho, workspace.rho_upper.as_mut_slice())?;
+        }
+        ExecutionMode::ExperimentalStructuredSparseDenseDiag
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoaSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack => {
+            workspace.rho.copy_from_slice(rho);
+            if !mode.uses_single_unpack() {
+                workspace
+                    .upper_layout
+                    .pack_from_dense(rho, workspace.rho_upper.as_mut_slice())?;
+            }
+        }
         ExecutionMode::StructuredUpper
         | ExecutionMode::ExpandedSparse
         | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
@@ -1506,7 +1942,15 @@ pub fn rhs_matrix_into_with_profile(
             mirror_upper_to_lower(workspace.drho.as_mut_slice(), n);
             out.copy_from_slice(workspace.drho.as_slice());
         }
-        ExecutionMode::StructuredUpper
+        ExecutionMode::ExperimentalStructuredSparseDense
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiag
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoaSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack
+        | ExecutionMode::StructuredUpper
         | ExecutionMode::ExpandedSparse
         | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
         | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs
@@ -2087,6 +2531,80 @@ fn rhs_packed_expanded_sparse_experimental_into_with_profile(
     Ok(())
 }
 
+/// Packed D+S+U fast path. Fused commutator/decay/packed stores are attributed
+/// to commutator_seconds; they no longer have separate decay/packing passes.
+fn rhs_packed_cpu_into_with_profile(
+    plan: &PreparedLindbladPlan,
+    packed_state: &[f64],
+    t: f64,
+    workspace: &mut RhsWorkspace,
+    out: &mut [f64],
+    mut profile: Option<&mut RhsProfileStats>,
+) -> Result<(), String> {
+    if out.len() != plan.layout.packed_len() {
+        return Err("packed CPU RHS output length does not match n_states squared".into());
+    }
+    let unpack_start = profile_timer(&profile);
+    plan.layout.unpack_into(packed_state, &mut workspace.rho)?;
+    if let Some(stats) = profile.as_mut() {
+        add_elapsed(&mut stats.unpack_seconds, unpack_start);
+    }
+    let total_start = profile_timer(&profile);
+    let can_skip =
+        !plan.is_time_dependent && workspace.hamiltonian_valid_for == Some(HamiltonianCache::Upper);
+    let parameter_start = profile_timer(&profile);
+    if !can_skip {
+        workspace.evaluate_parameter_graph(plan, t)?;
+    }
+    if let Some(stats) = profile.as_mut() {
+        add_elapsed(&mut stats.parameter_eval_seconds, parameter_start);
+    }
+    let hamiltonian_start = profile_timer(&profile);
+    if !can_skip {
+        plan.hamiltonian_plan.fill_upper_into(
+            &workspace.parameter_values,
+            t,
+            &mut workspace.hamiltonian_temps,
+            &mut workspace.eval_stack,
+            &mut workspace.scalar_stack,
+            &workspace.upper_layout,
+            &mut workspace.hamiltonian_upper,
+        )?;
+        workspace.hamiltonian_valid_for = Some(HamiltonianCache::Upper);
+        workspace.h_sparse_valid = false;
+    }
+    if !workspace.h_sparse_valid {
+        fill_sparse_h_values(
+            &plan.hamiltonian_sparse_pattern,
+            &workspace.upper_layout,
+            &workspace.hamiltonian_upper,
+            &mut workspace.h_sparse_values,
+        );
+        workspace.h_sparse_valid = true;
+    }
+    if let Some(stats) = profile.as_mut() {
+        add_elapsed(&mut stats.hamiltonian_fill_seconds, hamiltonian_start);
+    }
+    let commutator_start = profile_timer(&profile);
+    crate::lindblad::cpu_kernel::packed_rhs(
+        plan,
+        &workspace.upper_layout,
+        &workspace.hamiltonian_upper,
+        &workspace.h_sparse_values,
+        &workspace.rho,
+        &mut workspace.scratch_re,
+        &mut workspace.scratch_im,
+        &mut workspace.cpu_diagonal,
+        out,
+    )?;
+    if let Some(stats) = profile.as_mut() {
+        stats.calls += 1;
+        add_elapsed(&mut stats.commutator_seconds, commutator_start);
+        add_elapsed(&mut stats.total_seconds, total_start);
+    }
+    Ok(())
+}
+
 pub fn rhs_packed_into_with_profile(
     plan: &PreparedLindbladPlan,
     packed_state: &[f64],
@@ -2097,6 +2615,11 @@ pub fn rhs_packed_into_with_profile(
     out: &mut [f64],
     mut profile: Option<&mut RhsProfileStats>,
 ) -> Result<(), String> {
+    if mode == ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack
+        && !plan.cpu_kernel.is_original()
+    {
+        return rhs_packed_cpu_into_with_profile(plan, packed_state, t, workspace, out, profile);
+    }
     if mode == ExecutionMode::ExpandedSparse {
         if plan.n_states() <= PARTITIONED_PACKED_MAX_STATES {
             return rhs_packed_expanded_sparse_into_with_profile(
@@ -2152,6 +2675,28 @@ pub fn rhs_packed_into_with_profile(
             plan.layout
                 .unpack_into(packed_state, workspace.rho.as_mut_slice())?;
         }
+        ExecutionMode::ExperimentalStructuredSparseDense => {
+            plan.layout
+                .unpack_into(packed_state, workspace.rho.as_mut_slice())?;
+            workspace
+                .upper_layout
+                .unpack_packed_state(packed_state, workspace.rho_upper.as_mut_slice())?;
+        }
+        ExecutionMode::ExperimentalStructuredSparseDenseDiag
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoaSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack => {
+            plan.layout
+                .unpack_into(packed_state, workspace.rho.as_mut_slice())?;
+            if !mode.uses_single_unpack() {
+                workspace
+                    .upper_layout
+                    .unpack_packed_state(packed_state, workspace.rho_upper.as_mut_slice())?;
+            }
+        }
         ExecutionMode::StructuredUpper
         | ExecutionMode::ExpandedSparse
         | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
@@ -2173,7 +2718,15 @@ pub fn rhs_packed_into_with_profile(
         ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
             plan.layout.pack_into(workspace.drho.as_slice(), out)?;
         }
-        ExecutionMode::StructuredUpper
+        ExecutionMode::ExperimentalStructuredSparseDense
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiag
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoa
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseSoaSingleUnpack
+        | ExecutionMode::ExperimentalStructuredSparseDenseDiagSoaSingleUnpack
+        | ExecutionMode::StructuredUpper
         | ExecutionMode::ExpandedSparse
         | ExecutionMode::ExperimentalExpandedSparseBaselinePacked
         | ExecutionMode::ExperimentalExpandedSparseCurrentSplitInputs

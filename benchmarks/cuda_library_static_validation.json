@@ -1,0 +1,9 @@
+{
+  "n": 40,
+  "initials": 20,
+  "times": 21,
+  "cases": 420,
+  "max_complex_entry_difference": 1.0547118733938987e-15,
+  "source": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\r2_gpu_reuse_results\\matched_cross_v1",
+  "new_eigendecompositions": 0
+}

@@ -1,0 +1,16 @@
+{
+  "fixture": "production",
+  "span_us": 293.3333333333333,
+  "batch": 128,
+  "integrator": "tsit5",
+  "dt_ns": 4.464285714285714,
+  "variant": "swap_const_schedule_strong",
+  "chunk": 16,
+  "repeats": 1,
+  "atol": 1e-10,
+  "rtol": 1e-09,
+  "gpu_class": "fixed_followup",
+  "kind": "full",
+  "velocity": 150,
+  "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v2_20261012_133710\\012_production_tsit5_swap_const_schedule_strong_b128_t293.3333333333333.json"
+}

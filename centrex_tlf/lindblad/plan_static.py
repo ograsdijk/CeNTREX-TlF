@@ -17,6 +17,19 @@ from .state_layout import PackedHermitianLayout
 
 __all__ = ["PreparedLindbladProblem", "prepare_lindblad_problem"]
 
+STRUCTURED_SPARSE_DENSE_MODES = frozenset(
+    {
+        "structured_sparse_dense",
+        "structured_sparse_dense_diag",
+        "structured_sparse_dense_soa",
+        "structured_sparse_dense_single_unpack",
+        "structured_sparse_dense_diag_soa",
+        "structured_sparse_dense_diag_single_unpack",
+        "structured_sparse_dense_soa_single_unpack",
+        "structured_sparse_dense_diag_soa_single_unpack",
+    }
+)
+
 
 @dataclass
 class PreparedLindbladProblem:
@@ -33,6 +46,12 @@ class PreparedLindbladProblem:
     blas_config: dict[str, Any] | None
     backend: str
     rust_plan: Any | None = None
+    cpu_kernel: str = "auto"
+
+    @property
+    def resolved_cpu_kernel(self) -> str | None:
+        """Kernel selected for packed Rust D+S+U; None for a Python-only plan."""
+        return None if self.rust_plan is None else self.rust_plan.resolved_cpu_kernel
 
     def check_execution_mode(self, execution_mode: str) -> None:
         """Fail fast when the requested execution mode needs a plan we do not have.
@@ -43,6 +62,8 @@ class PreparedLindbladProblem:
         after the solve has already started -- and inside a parallel batch or
         grid scan that surfaces as a worker error far from its cause.
         """
+        if execution_mode in STRUCTURED_SPARSE_DENSE_MODES:
+            return
         if "expanded_sparse" not in execution_mode:
             return
         if self.expanded_rhs_plan is not None:
@@ -57,6 +78,7 @@ class PreparedLindbladProblem:
 
     def to_payload(self) -> dict[str, Any]:
         return {
+            "cpu_kernel": self.cpu_kernel,
             "n_states": int(self.layout.n),
             "parameter_graph": self.parameter_graph,
             "hamiltonian_plan": self.hamiltonian_plan,
@@ -73,13 +95,17 @@ def _locate_scipy_openblas() -> dict[str, Any] | None:
     try:
         import numpy
 
-        candidates.extend(Path(numpy.__file__).resolve().parent.parent.glob("numpy.libs/libscipy_openblas*.dll"))
+        candidates.extend(
+            Path(numpy.__file__).resolve().parent.parent.glob("numpy.libs/libscipy_openblas*.dll")
+        )
     except Exception:
         pass
     try:
         import scipy
 
-        candidates.extend(Path(scipy.__file__).resolve().parent.parent.glob("scipy.libs/libscipy_openblas*.dll"))
+        candidates.extend(
+            Path(scipy.__file__).resolve().parent.parent.glob("scipy.libs/libscipy_openblas*.dll")
+        )
     except Exception:
         pass
     if not candidates:
@@ -139,7 +165,40 @@ def prepare_lindblad_problem(
     parameters: Any,
     backend: str = "rust",
     hamiltonian_representation: str = "decomposed",
+    *,
+    prepared_hamiltonian_assembly: bool = True,
+    shared_coefficient_dag: bool = True,
+    cpu_kernel: str = "auto",
 ) -> PreparedLindbladProblem:
+    """Prepare a reusable OBE problem.
+
+    For decomposed Rust Hamiltonians, ``prepared_hamiltonian_assembly`` caches
+    static upper-triangle values and update offsets, and
+    ``shared_coefficient_dag`` shares repeated scalar coefficient expressions.
+    Both default to True and can be disabled independently for comparisons.
+    Set both to False to use the original assembly/coefficient evaluation path.
+    These preparation options travel with the payload into batch/grid solves;
+    they do not change the execution mode or apply to entrywise/Python evaluation.
+
+    ``cpu_kernel`` selects the packed Rust D+S+U kernel independently of the
+    execution mode. ``auto`` selects AVX2/FMA when supported, AVX2 otherwise,
+    then the original kernel on other CPUs. Optimized kernels fuse decay and
+    packed output and vectorize finalization. Explicit choices are ``original``,
+    ``avx2``, ``avx2_fma``, ``avx512`` and ``avx512_fma``; unsupported explicit
+    choices raise during Rust preparation. Auto never selects AVX-512.
+    Inspect ``prepared.resolved_cpu_kernel``. Other execution modes, matrix/split
+    RHS evaluation, Python and CUDA computations keep their existing paths.
+    """
+    for name, value in (
+        ("prepared_hamiltonian_assembly", prepared_hamiltonian_assembly),
+        ("shared_coefficient_dag", shared_coefficient_dag),
+    ):
+        if not isinstance(value, bool | np.bool_):
+            raise TypeError(f"{name} must be a bool")
+    if not isinstance(cpu_kernel, str):
+        raise TypeError("cpu_kernel must be a string")
+    if cpu_kernel not in {"auto", "original", "avx2", "avx2_fma", "avx512", "avx512_fma"}:
+        raise ValueError(f"unsupported cpu_kernel {cpu_kernel!r}")
     params = adapt_lindblad_parameters(parameters)
     params.check_hamiltonian_symbols(obe_system.H_symbolic)
     layout = PackedHermitianLayout(int(obe_system.H_symbolic.shape[0]))
@@ -153,6 +212,8 @@ def prepare_lindblad_problem(
         tuple_value_names=tuple_value_names,
         representation=hamiltonian_representation,
     )
+    hamiltonian_plan["prepared_hamiltonian_assembly"] = bool(prepared_hamiltonian_assembly)
+    hamiltonian_plan["shared_coefficient_dag"] = bool(shared_coefficient_dag)
     dense_c_array = np.asarray(obe_system.C_array, dtype=np.complex128)
     structured_jumps, source_decay_rates, incoming_transfers_by_target = _lower_structured_jumps(
         dense_c_array
@@ -175,6 +236,7 @@ def prepare_lindblad_problem(
         expanded_rhs_plan=expanded_rhs_plan,
         blas_config=_locate_scipy_openblas() if backend == "rust" else None,
         backend=backend,
+        cpu_kernel=cpu_kernel,
     )
     if backend == "rust":
         from ..centrex_tlf_rust import prepare_lindblad_problem_py

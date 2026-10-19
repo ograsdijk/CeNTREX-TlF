@@ -1,11 +1,14 @@
 from . import (
+    adjoint,
     batch,
+    cuda,
     dense,
     events,
     generate_hamiltonian,
     generate_system_of_equations,
     helper_functions,
     parameters,
+    periodic,
     plan_static,
     reference_dense,
     solve,
@@ -15,13 +18,16 @@ from . import (
     utils_decay,
     utils_setup,
 )
+from .adjoint import *  # noqa
 from .batch import *  # noqa
+from .cuda import *  # noqa
 from .dense import *  # noqa
 from .events import *  # noqa
 from .generate_hamiltonian import *  # noqa
 from .generate_system_of_equations import *  # noqa
 from .helper_functions import *  # noqa
 from .parameters import *  # noqa
+from .periodic import *  # noqa
 from .plan_static import *  # noqa
 from .reference_dense import *  # noqa
 from .solve import *  # noqa
@@ -32,7 +38,10 @@ from .utils_decay import *  # noqa
 from .utils_setup import *  # noqa
 
 __all__ = batch.__all__.copy()
+__all__ += cuda.__all__.copy()
+__all__ += adjoint.__all__.copy()
 __all__ += dense.__all__.copy()
+__all__ += periodic.__all__.copy()
 __all__ += events.__all__.copy()
 __all__ += generate_hamiltonian.__all__.copy()
 __all__ += generate_system_of_equations.__all__.copy()

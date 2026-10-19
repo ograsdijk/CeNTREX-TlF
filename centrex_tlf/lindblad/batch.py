@@ -11,6 +11,7 @@ import sympy as smp
 
 from .events import normalize_stop_event
 from .integral_output import (
+    FULL_AND_INTEGRAL_OUTPUT,
     INTEGRAL_OUTPUTS,
     INTEGRAL_RATE_OUTPUTS,
     cumulative_trapezoid_at,
@@ -89,10 +90,7 @@ def _pack_rho0_batch(prepared: PreparedLindbladProblem, rho0_batch: np.ndarray) 
             "matrix rho0_batch must have shape "
             f"(n_trajectories, {prepared.layout.n}, {prepared.layout.n})"
         )
-    packed = np.empty((batch.shape[0], prepared.layout.packed_len), dtype=np.float64)
-    for idx, rho in enumerate(np.asarray(batch, dtype=np.complex128)):
-        packed[idx] = prepared.layout.pack(rho)
-    return np.ascontiguousarray(packed)
+    return prepared.layout.pack_batch(batch)
 
 
 def _parameter_slot_indices(
@@ -178,8 +176,28 @@ def solve_lindblad_batch(
     gpu_batch_size: int = 8,
     profile_startup: bool = False,
     dense_session: Any = None,
+    cuda_options: Any = None,
 ) -> LindbladBatchResult:
     """Solve a batch of Lindblad trajectories.
+
+    ``output="full"`` returns the packed real Hermitian density state for each
+    trajectory, with shape ``(n_trajectories, packed_len)`` for final output or
+    ``(n_trajectories, n_times, packed_len)`` for save-at output.
+
+    ``output="full_and_integral"`` returns the same packed state followed by
+    one solver-native cumulative weighted integral in the final coordinate.
+    Its output width is ``packed_len + 1``; it requires ``integral_weights``
+    and ``integral_method="solver"``. This lets callers chain endpoint states
+    across segments without a second integral-only solve.
+
+    CUDA ODE integration is opt-in with ``evolution_device="cuda"`` and
+    ``solver="fixed_tsit5"`` or ``"fixed_ck54"``. Set ``cuda_options`` to
+    :class:`CudaSolverOptions`; ``dt`` is a prescribed step and tolerances do
+    not control accuracy. Additional density snapshots are in result metadata.
+
+    For repeated solves with unchanged initial matrices, prepack once with
+    ``packed = prepared.layout.pack_batch(rho0_batch)`` and reuse ``packed``.
+    The packed array is a snapshot; regenerate it when initial states change.
 
     For integral outputs, ``saveat`` controls when cumulative values are
     returned. The default ``integral_method="solver"`` integrates the
@@ -187,6 +205,39 @@ def solve_lindblad_batch(
     ``integral_method="sampled"`` and provide ``integral_saveat`` to choose an
     independent trapezoidal integration grid.
     """
+    if evolution_device == "cuda" and solver != "dense_eig":
+        from .cuda import _solve_cuda_batch
+
+        if profile_startup or dense_session is not None or gpu_batch_size != 8:
+            raise ValueError(
+                "dense_session, profile_startup and gpu_batch_size apply only to dense_eig; use cuda_options.batch_size for CUDA ODEs"
+            )
+        return _solve_cuda_batch(
+            prepared,
+            rho0_batch,
+            t_span,
+            solver=solver,
+            dt=dt,
+            parameter_batch=parameter_batch,
+            parameter_slots=parameter_slots,
+            saveat=saveat,
+            save_start=save_start,
+            output=output,
+            output_indices=output_indices,
+            output_when=output_when,
+            integral_weights=integral_weights,
+            integral_method=integral_method,
+            integral_saveat=integral_saveat,
+            stop_event=stop_event,
+            maxiters=maxiters,
+            collect_stats=collect_stats,
+            metadata=metadata,
+            cuda_options=cuda_options,
+            execution_mode=execution_mode,
+            dense_output=dense_output,
+        )
+    if cuda_options is not None:
+        raise ValueError("cuda_options applies only to CUDA ODE integration")
     if solver == "dense_eig":
         from .dense import _solve_dense_batch
 
@@ -216,8 +267,15 @@ def solve_lindblad_batch(
             profile_startup=profile_startup,
             dense_session=dense_session,
         )
-    if evolution_device != "cpu" or gpu_batch_size != 8 or profile_startup or dense_session is not None:
-        raise ValueError("dense_session, evolution_device, gpu_batch_size and profile_startup apply only to solver='dense_eig'")
+    if (
+        evolution_device != "cpu"
+        or gpu_batch_size != 8
+        or profile_startup
+        or dense_session is not None
+    ):
+        raise ValueError(
+            "dense_session, evolution_device, gpu_batch_size and profile_startup apply only to solver='dense_eig'"
+        )
     if prepared.rust_plan is None:
         raise RuntimeError("solve_lindblad_batch requires a Rust prepared plan")
     prepared.check_execution_mode(execution_mode)
@@ -229,11 +287,12 @@ def solve_lindblad_batch(
         )
     integral_outputs = INTEGRAL_OUTPUTS
     rate_outputs = {"weighted_rate", "photon_rate", "excited_population_rate"}
-    weighted_outputs = integral_outputs | rate_outputs
-    if output not in {"populations", "selected", *weighted_outputs}:
+    mixed_outputs = {FULL_AND_INTEGRAL_OUTPUT}
+    weighted_outputs = integral_outputs | rate_outputs | mixed_outputs
+    if output not in {"full", "populations", "selected", *weighted_outputs}:
         raise NotImplementedError(
-            "batch solving currently supports output='populations', 'selected', "
-            "'weighted_integral', 'photon_integral', 'excited_population', "
+            "batch solving currently supports output='full', 'populations', 'selected', "
+            "'weighted_integral', 'photon_integral', 'excited_population', 'full_and_integral', "
             "'weighted_rate', 'photon_rate', or 'excited_population_rate'"
         )
     if output == "selected" and output_indices is None:
@@ -248,6 +307,10 @@ def solve_lindblad_batch(
         raise ValueError("output_when must be 'final' or 'saveat'")
     if integral_method not in {"solver", "sampled"}:
         raise ValueError("integral_method must be 'solver' or 'sampled'")
+    if output in mixed_outputs and integral_method != "solver":
+        raise ValueError("output='full_and_integral' requires integral_method='solver'")
+    if output in mixed_outputs and solver not in {"dopri5", "tsit5"}:
+        raise ValueError("output='full_and_integral' currently supports only adaptive Rust solvers")
     if integral_saveat is not None and output not in integral_outputs:
         raise ValueError("integral_saveat is only valid with an integral output")
     if integral_saveat is not None and integral_method != "sampled":
@@ -336,7 +399,7 @@ def solve_lindblad_batch(
     )
     elapsed = time.perf_counter() - start
 
-    dtype = np.float64 if output in {"populations", *weighted_outputs} else np.complex128
+    dtype = np.float64 if output in {"full", "populations", *weighted_outputs} else np.complex128
     values = np.asarray(flat_values, dtype=dtype)
     if sampled_integral:
         rate_values = values.reshape((trajectory_count, int(time_count), int(width)))[..., 0]
@@ -450,6 +513,10 @@ def grid_scan(
     """
     if not scan:
         raise ValueError("scan must contain at least one parameter")
+    if kwargs.get("evolution_device") == "cuda" and kwargs.get("solver") != "dense_eig":
+        from .cuda import _cuda_grid_scan
+
+        return _cuda_grid_scan(prepared, rho0, t_span, scan, kwargs)
     if kwargs.get("solver") == "dense_eig":
         from .dense import _dense_grid_scan
 
@@ -574,33 +641,31 @@ def grid_scan(
     from ..centrex_tlf_rust import solve_lindblad_grid_ode_py
 
     start = time.perf_counter()
-    times, flat_values, width, time_count, solver_stats = (
-        solve_lindblad_grid_ode_py(
-            prepared.rust_plan,
-            np.ascontiguousarray(packed, dtype=np.float64),
-            t_span_tuple[0],
-            t_span_tuple[1],
-            abstol,
-            reltol,
-            dt,
-            slot_indices,
-            flat_axes,
-            axis_lengths,
-            None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
-            rust_save_start,
-            maxiters,
-            execution_mode,
-            solver,
-            rust_output,
-            None if output_indices is None else list(output_indices),
-            rust_output_when,
-            None if integral_weights is None else list(integral_weights),
-            parallel,
-            threads,
-            event_spec,
-            use_split_input_rhs,
-            rust_integral_method,
-        )
+    times, flat_values, width, time_count, solver_stats = solve_lindblad_grid_ode_py(
+        prepared.rust_plan,
+        np.ascontiguousarray(packed, dtype=np.float64),
+        t_span_tuple[0],
+        t_span_tuple[1],
+        abstol,
+        reltol,
+        dt,
+        slot_indices,
+        flat_axes,
+        axis_lengths,
+        None if saveat_values is None else np.asarray(saveat_values, dtype=np.float64),
+        rust_save_start,
+        maxiters,
+        execution_mode,
+        solver,
+        rust_output,
+        None if output_indices is None else list(output_indices),
+        rust_output_when,
+        None if integral_weights is None else list(integral_weights),
+        parallel,
+        threads,
+        event_spec,
+        use_split_input_rhs,
+        rust_integral_method,
     )
     elapsed = time.perf_counter() - start
     dtype = np.float64 if output in {"populations", *weighted_outputs} else np.complex128

@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "stage": "complete",
+  "current_job": null,
+  "completed_jobs": 21,
+  "failed_jobs": 0,
+  "timed_out_jobs": 0,
+  "elapsed_s": 1223.2342555522919,
+  "remaining_budget_s": 8361.280849456787,
+  "runner_pid": 39164,
+  "winner": {
+    "integrator": "tsit5",
+    "dt_ns": 4.464285714285714,
+    "variant": "swap_const_schedule_gentle_exact_devicepop_packed_direct"
+  },
+  "kept_optimizations": [
+    "swap_const_schedule_gentle_exact_devicepop_packed_direct"
+  ]
+}

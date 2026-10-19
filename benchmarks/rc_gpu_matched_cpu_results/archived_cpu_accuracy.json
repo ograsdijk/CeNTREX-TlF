@@ -1,0 +1,17 @@
+{
+  "1": {
+    "max_relative_above_cutoff": 0.0016768929993720722,
+    "near_zero_max_abs": 4.5133351715228805e-10,
+    "artifact": "benchmarks\\rc_propagation_results\\cross_system_screen_v3\\nominal\\rc\\cells\\experimental_structured_sparse_dense_diag_soa_single_unpack__full.npz"
+  },
+  "10": {
+    "max_relative_above_cutoff": 0.04780951947156319,
+    "near_zero_max_abs": 6.108101940685885e-09,
+    "artifact": "benchmarks\\rc_propagation_results\\cross_system_long_finalists_v1\\suite10us_v1\\rc\\10us\\cells\\cell_00001.npz"
+  },
+  "200": {
+    "max_relative_above_cutoff": 5.570137209281049e-05,
+    "near_zero_max_abs": 8.712833878688454e-09,
+    "artifact": "benchmarks\\rc_propagation_results\\cross_system_long_finalists_v1\\suite_long_v1\\rc\\200us\\cells\\cell_00001.npz"
+  }
+}

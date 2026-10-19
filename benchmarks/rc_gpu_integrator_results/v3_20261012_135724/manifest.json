@@ -1,0 +1,34 @@
+{
+  "deadline_utc": "2026-10-12T16:37:10+00:00",
+  "sources": {
+    "rc_gpu_integrators.cu": "8fc8a57d006695fe071bdb2e6a86522badef1d090bab0797f154bb1157ee85ed",
+    "rc_gpu_integrators.py": "b73f8bdb4c296c730d9df17d0193338b954eeb6290b4dd5a77bd4a78becadcd1",
+    "run_rc_gpu_integrator_suite.py": "faf7e5ccc47f956c57f8c40267e6d39df2e557fb59f05e9aeafcfdb205246af5",
+    "rc_gpu_sparse_methods.py": "e11f8a8178c308b0d4b7ce9db5794fee1e16472094eb9b9ec630344950d3718a",
+    "rc_gpu_sparse_kernels.cu": "b3ac8a71ec8e7275410d60e264149c88e0fffae2ad4d1552c8064d964741c3b6"
+  },
+  "cpu_odes_rerun": false,
+  "additional_sources": {
+    "rc_gpu_fixed_followup.py": "26920a7a074bdb733432923bf611c00ae2e492ab476adc28895bae44a6b861bc",
+    "rc_gpu_storage_followup.py": "473a8a90926d419a20671df6c6a08c385539f78358c534bce2af63771c276dd9",
+    "rc_gpu_packed.cu": "2246f64ab0e36655e735da02776ec444b2fb212118750fbbf739eea0edf84989",
+    "rc_gpu_integrating_factor.cu": "cea31faa047cea832bbde604eb333f1c960098f7c8bd9c017157be0603d5aede",
+    "run_rc_gpu_storage_followup.py": "6848efb3dd45af604838ba777dd8d6af7a1435d40ba0e57fe5ef76cfa7b3e8c5"
+  },
+  "scope": "Four GPU follow-up experiments, no production changes; original v2 deadline retained",
+  "final_sources": {
+    "rc_gpu_integrators.py": "b73f8bdb4c296c730d9df17d0193338b954eeb6290b4dd5a77bd4a78becadcd1",
+    "rc_gpu_integrators.cu": "8fc8a57d006695fe071bdb2e6a86522badef1d090bab0797f154bb1157ee85ed",
+    "rc_gpu_fixed_followup.py": "26920a7a074bdb733432923bf611c00ae2e492ab476adc28895bae44a6b861bc",
+    "rc_gpu_storage_followup.py": "473a8a90926d419a20671df6c6a08c385539f78358c534bce2af63771c276dd9",
+    "rc_gpu_packed.cu": "2246f64ab0e36655e735da02776ec444b2fb212118750fbbf739eea0edf84989",
+    "rc_gpu_integrating_factor.cu": "cea31faa047cea832bbde604eb333f1c960098f7c8bd9c017157be0603d5aede",
+    "run_rc_gpu_storage_followup.py": "6848efb3dd45af604838ba777dd8d6af7a1435d40ba0e57fe5ef76cfa7b3e8c5",
+    "confirm_rc_gpu_packed_layout.py": "f814779d45f4db0e74422a4fd170bdde9ebe26ccd6f232c42df089c74c99fd2a",
+    "run_rc_gpu_integrator_suite.py": "1c254ab60b104acfdfed59a9f6128c9fc1d96b4a16605aabf50fdf5b6a1036dc",
+    "rc_gpu_sparse_methods.py": "e11f8a8178c308b0d4b7ce9db5794fee1e16472094eb9b9ec630344950d3718a",
+    "rc_gpu_sparse_kernels.cu": "b3ac8a71ec8e7275410d60e264149c88e0fffae2ad4d1552c8064d964741c3b6"
+  },
+  "completed_utc": "2026-10-12T14:21:53.369021+00:00",
+  "completed_jobs": 21
+}

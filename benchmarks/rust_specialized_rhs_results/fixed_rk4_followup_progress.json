@@ -1,0 +1,6 @@
+{
+  "system": "r2",
+  "parameter_point": "nominal",
+  "repeat": 12,
+  "method": "scenario_complete"
+}

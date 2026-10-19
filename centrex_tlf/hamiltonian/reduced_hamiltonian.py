@@ -83,6 +83,8 @@ def generate_diagonalized_hamiltonian(
     keep_order: bool = True,
     return_V_ref: bool = False,
     rtol: Optional[float] = None,
+    *,
+    block_labels: Sequence[float] | None = None,
 ) -> HamiltonianDiagonalized:
     """Diagonalize a Hamiltonian matrix.
 
@@ -96,12 +98,32 @@ def generate_diagonalized_hamiltonian(
         return_V_ref: If True, return reference eigenvectors. Defaults to False.
         rtol: Relative tolerance for zeroing small matrix elements. If provided,
             elements smaller than rtol * max(|H|) are set to zero.
+        block_labels: Conserved basis labels. Diagonalize each block separately,
+            preserving labels even when different blocks are exactly degenerate.
 
     Returns:
         HamiltonianDiagonalized: Dataclass containing diagonalized Hamiltonian (H),
             eigenvectors (V), and optionally reference eigenvectors (V_ref)
     """
-    _ = np.linalg.eigh(hamiltonian)
+    if block_labels is None:
+        _ = np.linalg.eigh(hamiltonian)
+    else:
+        labels = np.asarray(block_labels)
+        if labels.shape != (len(hamiltonian),):
+            raise ValueError("block_labels must contain one label per basis state")
+        cross_block = labels[:, None] != labels[None, :]
+        scale = np.max(np.abs(hamiltonian), initial=0)
+        if np.max(np.abs(hamiltonian[cross_block]), initial=0) > 1e-12 * scale:
+            raise ValueError("Hamiltonian couples different requested blocks")
+        energies = np.empty(len(labels), dtype=float)
+        vectors = np.zeros_like(hamiltonian, dtype=np.complex128)
+        for label in np.unique(labels):
+            indices = np.flatnonzero(labels == label)
+            values, block = np.linalg.eigh(hamiltonian[np.ix_(indices, indices)])
+            energies[indices] = values
+            vectors[np.ix_(indices, indices)] = block
+        order = np.argsort(energies, kind="stable")
+        _ = (energies[order], vectors[:, order])
     D: npt.NDArray[np.complex128] = _[0]
     V: npt.NDArray[np.complex128] = _[1]
     V_ref: Optional[npt.NDArray[np.complex128]] = None
@@ -112,8 +134,7 @@ def generate_diagonalized_hamiltonian(
     hamiltonian_diagonalized = V.conj().T @ hamiltonian @ V
     if rtol:
         hamiltonian_diagonalized[
-            np.abs(hamiltonian_diagonalized)
-            < np.abs(hamiltonian_diagonalized).max() * rtol
+            np.abs(hamiltonian_diagonalized) < np.abs(hamiltonian_diagonalized).max() * rtol
         ] = 0
     if not return_V_ref or not keep_order:
         return HamiltonianDiagonalized(hamiltonian_diagonalized, V)
@@ -227,7 +248,9 @@ def generate_reduced_X_hamiltonian(
             )
         S_transform = transform
         if not np.allclose(S_transform.conj().T @ S_transform, np.eye(len(QN)), atol=1e-10, rtol=0):
-            raise ValueError("transform must be a unitary uncoupled-to-coupled basis transformation")
+            raise ValueError(
+                "transform must be a unitary uncoupled-to-coupled basis transformation"
+            )
 
     H_X_uncoupled = np.asarray(H_X_uc_func(E, B))
     _validate_hamiltonian_matrix(H_X_uncoupled, len(QN), "H_func_X")
@@ -237,7 +260,13 @@ def generate_reduced_X_hamiltonian(
 
     # diagonalize the Hamiltonian
     H_diagonalized = generate_diagonalized_hamiltonian(
-        H_X, keep_order=True, return_V_ref=True, rtol=rtol
+        H_X,
+        keep_order=True,
+        return_V_ref=True,
+        rtol=rtol,
+        block_labels=[qn.mF for qn in QNc]
+        if H_func is None and np.all(np.asarray(E) == 0) and np.all(np.asarray(B) == 0)
+        else None,
     )
 
     # new set of quantum numbers:
@@ -348,7 +377,13 @@ def generate_reduced_B_hamiltonian(
     H_B_matrix = np.asarray(H_B_func(E, B))
     _validate_hamiltonian_matrix(H_B_matrix, len(QN_B), "H_func_B")
     H_diagonalized = generate_diagonalized_hamiltonian(
-        H_B_matrix, keep_order=True, return_V_ref=True, rtol=rtol
+        H_B_matrix,
+        keep_order=True,
+        return_V_ref=True,
+        rtol=rtol,
+        block_labels=[qn.mF for qn in QN_B]
+        if H_func is None and np.all(np.asarray(E) == 0) and np.all(np.asarray(B) == 0)
+        else None,
     )
 
     # new set of quantum numbers:
@@ -610,8 +645,7 @@ def generate_total_reduced_hamiltonian(
 
     if len(B_states_approx) and use_omega_basis and B_states_approx[0].basis == Basis.CoupledP:
         excited_states = [
-            qn.transform_to_parity_basis().remove_small_components(stol)
-            for qn in H_B_red.QN_basis
+            qn.transform_to_parity_basis().remove_small_components(stol) for qn in H_B_red.QN_basis
         ]
 
         excited_states_reduced = _match_excited_states(B_states_approx, excited_states)
@@ -746,11 +780,7 @@ def generate_reduced_hamiltonian_transitions(
         union_states_omega = cast(
             list[CoupledBasisState],
             get_unique_basisstates_from_states(
-                [
-                    qn.transform_to_omega_basis()
-                    for approx in optical_states_approx
-                    for qn in approx
-                ]
+                [qn.transform_to_omega_basis() for approx in optical_states_approx for qn in approx]
             ),
         )
         if H_func_B is not None and not use_omega_basis:
@@ -764,7 +794,9 @@ def generate_reduced_hamiltonian_transitions(
                     nuclear_spins=nuclear_spins,
                 )
             )
-            _validate_construction_bounds(union_states_omega, discovery_min, discovery_max, minimum=1)
+            _validate_construction_bounds(
+                union_states_omega, discovery_min, discovery_max, minimum=1
+            )
             parity_discovery = generate_reduced_B_hamiltonian(
                 discovery_parity,
                 E=E,
@@ -801,20 +833,14 @@ def generate_reduced_hamiltonian_transitions(
     # figure out which rotational ground levels to include per transition
     for excited_states_approx in optical_states_approx:
         excited_states = _match_excited_states(excited_states_approx, dressed_states_parity)
-        excited_states = [
-            s.remove_small_components(minimum_amplitude) for s in excited_states
-        ]
+        excited_states = [s.remove_small_components(minimum_amplitude) for s in excited_states]
 
-        Js_excited: npt.NDArray[np.int_] = np.unique(
-            [s.J for es in excited_states for a, s in es]
-        )
+        Js_excited: npt.NDArray[np.int_] = np.unique([s.J for es in excited_states for a, s in es])
         if Jmax_X is None:
             _Jmax_X = Js_excited.max() + 2
         else:
             _Jmax_X = Jmax_X
-        ground_states = generate_coupled_states_ground(
-            Js=np.arange(0, _Jmax_X + 1).astype(int)
-        )
+        ground_states = generate_coupled_states_ground(Js=np.arange(0, _Jmax_X + 1).astype(int))
         # calculate the coupling between the ground and excited states to determine
         # which states to include
         # Hoist the loop-invariant work. generate_ED_ME_mixed_state transforms
@@ -828,10 +854,7 @@ def generate_reduced_hamiltonian_transitions(
         for gs in ground_states:
             gs_state = 1 * gs
             for es in excited_states_omega:
-                if (
-                    np.abs(generate_ED_ME_mixed_state(gs_state, es))
-                    >= minimum_coupling
-                ):
+                if np.abs(generate_ED_ME_mixed_state(gs_state, es)) >= minimum_coupling:
                     # Only `s.J` of these is ever read, via np.unique below, so
                     # recording gs once is equivalent to appending it for every
                     # excited state it couples to.
@@ -845,14 +868,12 @@ def generate_reduced_hamiltonian_transitions(
     # removing duplicates
     J_ground: List[int] = list(np.unique(_J_ground))
 
-    ground_states_approx_qn_select = QuantumSelector(
-        J=J_ground, electronic=ElectronicState.X, Ω=0
-    )
-    ground_states_approx = list(
-        generate_coupled_states_X(ground_states_approx_qn_select)
-    )
+    ground_states_approx_qn_select = QuantumSelector(J=J_ground, electronic=ElectronicState.X, Ω=0)
+    ground_states_approx = list(generate_coupled_states_X(ground_states_approx_qn_select))
     excited_states_approx = (
-        list(generate_coupled_states_B(excited_states_selectors)) if excited_states_selectors else []
+        list(generate_coupled_states_B(excited_states_selectors))
+        if excited_states_selectors
+        else []
     )
 
     return generate_total_reduced_hamiltonian(

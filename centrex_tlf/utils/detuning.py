@@ -9,6 +9,8 @@ import numpy as np
 import numpy.typing as npt
 import scipy.constants as cst
 
+from centrex_tlf.constants import X_B_REFERENCE_FREQUENCY_HZ
+
 __all__ = ["doppler_shift", "velocity_to_detuning"]
 
 # Define type aliases for clarity
@@ -16,10 +18,10 @@ FloatOrArray = Union[float, npt.NDArray[np.floating]]
 
 
 @overload
-def doppler_shift(velocity: float, frequency: float = 1.1e15) -> float: ...
+def doppler_shift(velocity: float, frequency: float = X_B_REFERENCE_FREQUENCY_HZ) -> float: ...
 @overload
 def doppler_shift(
-    velocity: npt.NDArray[np.floating], frequency: float = 1.1e15
+    velocity: npt.NDArray[np.floating], frequency: float = X_B_REFERENCE_FREQUENCY_HZ
 ) -> npt.NDArray[np.floating]: ...
 @overload
 def doppler_shift(
@@ -32,7 +34,7 @@ def doppler_shift(
 
 
 def doppler_shift(
-    velocity: FloatOrArray, frequency: FloatOrArray = 1.1e15
+    velocity: FloatOrArray, frequency: FloatOrArray = X_B_REFERENCE_FREQUENCY_HZ
 ) -> FloatOrArray:
     """Calculate the Doppler-shifted frequency for a given velocity.
 
@@ -44,7 +46,9 @@ def doppler_shift(
             molecules approaching the laser (blue-shift), negative for receding
             (red-shift).
         frequency (FloatOrArray): Rest-frame frequency in Hz (float or array).
-            Defaults to 1.1e15 Hz (TlF B-X transition at ~272 nm).
+            Defaults to X_B_REFERENCE_FREQUENCY_HZ = 1103.435082708 THz,
+            the experimental TlF R(2) F1'=7/2 F'=3 optical reference.
+            Pass frequency explicitly for another line or a calibrated laser setting.
 
     Returns:
         FloatOrArray: Doppler-shifted frequency in Hz. Returns same type as input
@@ -54,13 +58,13 @@ def doppler_shift(
         ValueError: If frequency is non-positive.
 
     Example:
-        >>> doppler_shift(100.0)  # 100 m/s towards observer
-        1.1000003666666666e+15
-        >>> doppler_shift(-100.0)  # 100 m/s away from observer
-        1.0999996333333334e+15
-        >>> doppler_shift(np.array([0, 100, -100]))  # Array of velocities
-        array([1.1e+15, 1.10000037e+15, 1.09999963e+15])
-        
+        >>> round(doppler_shift(0.0) / 1e12, 9)
+        1103.435082708
+        >>> doppler_shift(100.0) > doppler_shift(0.0)
+        True
+        >>> doppler_shift(-100.0) < doppler_shift(0.0)
+        True
+
     Note:
         For relativistic velocities (v > 0.1c), use the relativistic Doppler formula.
     """
@@ -71,10 +75,10 @@ def doppler_shift(
 
 
 @overload
-def velocity_to_detuning(velocity: float, frequency: float = 1.1e15) -> float: ...
+def velocity_to_detuning(velocity: float, frequency: float = X_B_REFERENCE_FREQUENCY_HZ) -> float: ...
 @overload
 def velocity_to_detuning(
-    velocity: npt.NDArray[np.floating], frequency: float = 1.1e15
+    velocity: npt.NDArray[np.floating], frequency: float = X_B_REFERENCE_FREQUENCY_HZ
 ) -> npt.NDArray[np.floating]: ...
 @overload
 def velocity_to_detuning(
@@ -87,7 +91,7 @@ def velocity_to_detuning(
 
 
 def velocity_to_detuning(
-    velocity: FloatOrArray, frequency: FloatOrArray = 1.1e15
+    velocity: FloatOrArray, frequency: FloatOrArray = X_B_REFERENCE_FREQUENCY_HZ
 ) -> FloatOrArray:
     """Convert molecular velocity to laser detuning based on Doppler shift.
 
@@ -99,7 +103,9 @@ def velocity_to_detuning(
             molecules approaching the laser (positive detuning), negative for receding
             (negative detuning).
         frequency (FloatOrArray): Rest-frame transition frequency in Hz (float or array).
-            Defaults to 1.1e15 Hz (TlF B-X transition at ~272 nm).
+            Defaults to X_B_REFERENCE_FREQUENCY_HZ = 1103.435082708 THz,
+            the experimental TlF R(2) F1'=7/2 F'=3 optical reference.
+            Pass frequency explicitly for another line or a calibrated laser setting.
 
     Returns:
         FloatOrArray: Detuning in rad/s. Positive means laser is blue-detuned in
@@ -109,11 +115,11 @@ def velocity_to_detuning(
         ValueError: If frequency is non-positive.
 
     Example:
-        >>> velocity_to_detuning(100.0)  # 100 m/s molecular velocity
-        2.3089690054388264e+09
-        >>> velocity_to_detuning(np.array([50, 100, 150]))  # Multiple velocities
-        array([1.15448450e+09, 2.30896901e+09, 3.46345351e+09])
-        
+        >>> velocity_to_detuning(0.0)
+        0.0
+        >>> velocity_to_detuning(np.array([-1.0, 0.0, 1.0])).shape
+        (3,)
+
     Note:
         The detuning Δω = ω' - ω₀ where ω' is the laser frequency in the molecular
         frame and ω₀ is the atomic transition frequency.

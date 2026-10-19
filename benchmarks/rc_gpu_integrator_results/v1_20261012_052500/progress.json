@@ -1,0 +1,21 @@
+{
+  "status": "complete",
+  "stage": "complete",
+  "current_job": null,
+  "completed_jobs": 29,
+  "failed_jobs": 0,
+  "timed_out_jobs": 0,
+  "elapsed_s": 1218.352697610855,
+  "remaining_budget_s": 9108.218332529068,
+  "runner_pid": 40108,
+  "winner": {
+    "integrator": "tsit5",
+    "dt_ns": 3.90625,
+    "atol": 1e-10,
+    "rtol": 1e-09
+  },
+  "kept_optimizations": [
+    "base",
+    "graph_steps=16"
+  ]
+}

@@ -1,0 +1,2064 @@
+{
+  "python": "3.11.13 (main, Jul 11 2025, 22:36:59) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "systems": [
+    {
+      "system": "rc",
+      "n_states": 70,
+      "gate_slots": [
+        "PA1",
+        "PY1",
+        "PA2",
+        "PY2"
+      ],
+      "times_by_round_s": [
+        [
+          3.0061129,
+          3.0444237,
+          3.0036549,
+          3.9481702,
+          3.9704185
+        ],
+        [
+          3.011287,
+          3.018819,
+          2.9940683,
+          3.9453495,
+          3.9150039
+        ],
+        [
+          3.0185658,
+          3.0210149,
+          2.9984154,
+          3.9819662,
+          3.9201652
+        ],
+        [
+          3.0427764,
+          3.0227275,
+          2.9974792,
+          3.9327939,
+          3.9639369
+        ],
+        [
+          3.0042414,
+          3.0078859,
+          2.9959954,
+          3.9486289,
+          3.9316107000000002
+        ],
+        [
+          3.006718,
+          3.0157893,
+          2.9929609,
+          3.9123989999999997,
+          3.9545971
+        ],
+        [
+          3.0108403,
+          3.0200486,
+          3.0081398,
+          3.9561287,
+          3.9434966
+        ],
+        [
+          3.0168594,
+          3.0095276,
+          2.9928442,
+          3.9712482,
+          3.9215489999999997
+        ],
+        [
+          3.0049477,
+          3.0149925,
+          2.9998306,
+          3.9368309999999997,
+          3.9554970000000003
+        ],
+        [
+          3.0022225,
+          3.0047996,
+          2.9851369,
+          3.9286702,
+          3.9401989
+        ],
+        [
+          2.9973921,
+          3.0045217,
+          3.0023234,
+          3.9477532,
+          3.9274021
+        ],
+        [
+          3.0121493,
+          3.0230518,
+          3.0037974,
+          3.9655671999999997,
+          3.9354795
+        ]
+      ],
+      "orders": [
+        [
+          "both",
+          "hooked_control",
+          "time_cache",
+          "avx2",
+          "control"
+        ],
+        [
+          "hooked_control",
+          "time_cache",
+          "both",
+          "avx2",
+          "control"
+        ],
+        [
+          "time_cache",
+          "both",
+          "avx2",
+          "control",
+          "hooked_control"
+        ],
+        [
+          "hooked_control",
+          "time_cache",
+          "avx2",
+          "control",
+          "both"
+        ],
+        [
+          "both",
+          "hooked_control",
+          "avx2",
+          "time_cache",
+          "control"
+        ],
+        [
+          "control",
+          "avx2",
+          "both",
+          "time_cache",
+          "hooked_control"
+        ],
+        [
+          "both",
+          "hooked_control",
+          "time_cache",
+          "avx2",
+          "control"
+        ],
+        [
+          "both",
+          "avx2",
+          "hooked_control",
+          "time_cache",
+          "control"
+        ],
+        [
+          "avx2",
+          "control",
+          "time_cache",
+          "hooked_control",
+          "both"
+        ],
+        [
+          "avx2",
+          "control",
+          "hooked_control",
+          "time_cache",
+          "both"
+        ],
+        [
+          "control",
+          "avx2",
+          "both",
+          "time_cache",
+          "hooked_control"
+        ],
+        [
+          "time_cache",
+          "both",
+          "avx2",
+          "control",
+          "hooked_control"
+        ]
+      ],
+      "density_checks": [
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352698686689247,
+              "max_small_absolute": 2.237096482131342e-11,
+              "passed": true
+            },
+            "trace_error": 1.7763568394002505e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 0.00021352701470085927,
+              "max_small_absolute": 2.2370963931247872e-11,
+              "passed": true
+            },
+            "trace_error": 3.3306690738754696e-15,
+            "rhs_calls": 99191,
+            "accepted": 16525,
+            "rejected": 0
+          }
+        ]
+      ],
+      "profile": {
+        "hooked_control": {
+          "fields": [
+            "calls",
+            "rhs_total",
+            "unpack",
+            "parameters",
+            "hamiltonian_fill",
+            "commutator",
+            "dissipator",
+            "pack"
+          ],
+          "values": [
+            99191.0,
+            2.5280894000006384,
+            0.16949319999966364,
+            0.009077100000000147,
+            0.0919921999999817,
+            2.295651799999509,
+            0.11705290000024388,
+            0.07974139999996334
+          ],
+          "repeat_time_summary": {
+            "rhs_evaluations": 99191,
+            "unique_times": 82626,
+            "times_repeated": 16525,
+            "extra_same_time_rhs_calls": 16565,
+            "max_calls_at_one_time": 3
+          },
+          "profiled_wall_s": 3.0565022
+        },
+        "time_cache": {
+          "fields": [
+            "calls",
+            "rhs_total",
+            "unpack",
+            "parameters",
+            "hamiltonian_fill",
+            "commutator",
+            "dissipator",
+            "pack"
+          ],
+          "values": [
+            99191.0,
+            2.5090071000001437,
+            0.17241779999966936,
+            0.00821200000000485,
+            0.0683055000000077,
+            2.301465799999374,
+            0.11666200000022121,
+            0.08107849999997621
+          ],
+          "repeat_time_summary": {
+            "rhs_evaluations": 99191,
+            "unique_times": 82626,
+            "times_repeated": 16525,
+            "extra_same_time_rhs_calls": 16565,
+            "max_calls_at_one_time": 3
+          },
+          "profiled_wall_s": 3.042817
+        }
+      },
+      "stage_times": {
+        "hooked_control": {
+          "rhs_evaluations": 99191,
+          "unique_times": 82626,
+          "times_repeated": 16525,
+          "extra_same_time_rhs_calls": 16565,
+          "max_calls_at_one_time": 3
+        },
+        "time_cache": {
+          "rhs_evaluations": 99191,
+          "unique_times": 82626,
+          "times_repeated": 16525,
+          "extra_same_time_rhs_calls": 16565,
+          "max_calls_at_one_time": 3
+        }
+      },
+      "normalized_rhs_error": 1.9400153920248008e-16,
+      "same_time_gate_change_error": 0.0,
+      "correctness": {
+        "control": {
+          "density": {
+            "max_relative": 0.00021352698686689247,
+            "max_small_absolute": 2.237096482131342e-11,
+            "passed": true
+          },
+          "trace_error": 1.7763568394002505e-15,
+          "rhs_calls": 99191,
+          "accepted": 16525,
+          "rejected": 0
+        },
+        "hooked_control": {
+          "density": {
+            "max_relative": 0.00021352698686689247,
+            "max_small_absolute": 2.237096482131342e-11,
+            "passed": true
+          },
+          "trace_error": 1.7763568394002505e-15,
+          "rhs_calls": 99191,
+          "accepted": 16525,
+          "rejected": 0
+        },
+        "time_cache": {
+          "density": {
+            "max_relative": 0.00021352698686689247,
+            "max_small_absolute": 2.237096482131342e-11,
+            "passed": true
+          },
+          "trace_error": 1.7763568394002505e-15,
+          "rhs_calls": 99191,
+          "accepted": 16525,
+          "rejected": 0
+        },
+        "avx2": {
+          "density": {
+            "max_relative": 0.00021352701470085927,
+            "max_small_absolute": 2.2370963931247872e-11,
+            "passed": true
+          },
+          "trace_error": 3.3306690738754696e-15,
+          "rhs_calls": 99191,
+          "accepted": 16525,
+          "rejected": 0
+        },
+        "both": {
+          "density": {
+            "max_relative": 0.00021352701470085927,
+            "max_small_absolute": 2.2370963931247872e-11,
+            "passed": true
+          },
+          "trace_error": 3.3306690738754696e-15,
+          "rhs_calls": 99191,
+          "accepted": 16525,
+          "rejected": 0
+        }
+      },
+      "median_s": {
+        "control": 3.0087791499999996,
+        "hooked_control": 3.01730415,
+        "time_cache": 2.9979473,
+        "avx2": 3.9479617,
+        "both": 3.9378392
+      },
+      "reductions_vs_control_percent": {
+        "hooked_control": -0.2833375124924098,
+        "time_cache": 0.36000814483175825,
+        "avx2": -31.214738708887978,
+        "both": -30.878306571620605
+      }
+    },
+    {
+      "system": "r2",
+      "n_states": 41,
+      "gate_slots": [],
+      "times_by_round_s": [
+        [
+          0.2510382,
+          0.2554355,
+          0.254607,
+          0.3261828,
+          0.3315972
+        ],
+        [
+          0.2519555,
+          0.2582855,
+          0.2546865,
+          0.3259582,
+          0.3231331
+        ],
+        [
+          0.2517534,
+          0.2566362,
+          0.2557867,
+          0.3241791,
+          0.324486
+        ],
+        [
+          0.2508348,
+          0.2567506,
+          0.254411,
+          0.3275434,
+          0.3244766
+        ],
+        [
+          0.2538515,
+          0.2601943,
+          0.2538998,
+          0.3255711,
+          0.3235862
+        ],
+        [
+          0.2519835,
+          0.256373,
+          0.2564006,
+          0.3264468,
+          0.3251184
+        ],
+        [
+          0.2513949,
+          0.2581631,
+          0.2544342,
+          0.3263436,
+          0.3236893
+        ],
+        [
+          0.2518735,
+          0.256547,
+          0.2564859,
+          0.3254364,
+          0.3269948
+        ],
+        [
+          0.2534687,
+          0.2560269,
+          0.2546214,
+          0.3258141,
+          0.3229002
+        ],
+        [
+          0.2524971,
+          0.2561209,
+          0.2541517,
+          0.3254463,
+          0.3237372
+        ],
+        [
+          0.2540486,
+          0.2557966,
+          0.2552579,
+          0.3309898,
+          0.3233016
+        ],
+        [
+          0.2551144,
+          0.2562263,
+          0.255711,
+          0.3279017,
+          0.3279857
+        ]
+      ],
+      "orders": [
+        [
+          "both",
+          "hooked_control",
+          "time_cache",
+          "avx2",
+          "control"
+        ],
+        [
+          "hooked_control",
+          "time_cache",
+          "both",
+          "avx2",
+          "control"
+        ],
+        [
+          "time_cache",
+          "both",
+          "avx2",
+          "control",
+          "hooked_control"
+        ],
+        [
+          "hooked_control",
+          "time_cache",
+          "avx2",
+          "control",
+          "both"
+        ],
+        [
+          "both",
+          "hooked_control",
+          "avx2",
+          "time_cache",
+          "control"
+        ],
+        [
+          "control",
+          "avx2",
+          "both",
+          "time_cache",
+          "hooked_control"
+        ],
+        [
+          "both",
+          "hooked_control",
+          "time_cache",
+          "avx2",
+          "control"
+        ],
+        [
+          "both",
+          "avx2",
+          "hooked_control",
+          "time_cache",
+          "control"
+        ],
+        [
+          "avx2",
+          "control",
+          "time_cache",
+          "hooked_control",
+          "both"
+        ],
+        [
+          "avx2",
+          "control",
+          "hooked_control",
+          "time_cache",
+          "both"
+        ],
+        [
+          "control",
+          "avx2",
+          "both",
+          "time_cache",
+          "hooked_control"
+        ],
+        [
+          "time_cache",
+          "both",
+          "avx2",
+          "control",
+          "hooked_control"
+        ]
+      ],
+      "density_checks": [
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ],
+        [
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.7130550382323894e-07,
+              "max_small_absolute": 6.801692829938397e-14,
+              "passed": true
+            },
+            "trace_error": 1.3322676295501878e-15,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          },
+          {
+            "density": {
+              "max_relative": 3.713050033796063e-07,
+              "max_small_absolute": 6.801686503375866e-14,
+              "passed": true
+            },
+            "trace_error": 4.440892098500626e-16,
+            "rhs_calls": 38531,
+            "accepted": 6415,
+            "rejected": 0
+          }
+        ]
+      ],
+      "profile": {
+        "hooked_control": {
+          "fields": [
+            "calls",
+            "rhs_total",
+            "unpack",
+            "parameters",
+            "hamiltonian_fill",
+            "commutator",
+            "dissipator",
+            "pack"
+          ],
+          "values": [
+            38531.0,
+            0.19457280000010263,
+            0.022083800000000813,
+            0.002714199999999095,
+            0.008016699999995368,
+            0.15837380000014914,
+            0.01990200000000737,
+            0.011043399999998876
+          ],
+          "repeat_time_summary": {
+            "rhs_evaluations": 38531,
+            "unique_times": 32076,
+            "times_repeated": 6415,
+            "extra_same_time_rhs_calls": 6455,
+            "max_calls_at_one_time": 3
+          },
+          "profiled_wall_s": 0.2691321
+        },
+        "time_cache": {
+          "fields": [
+            "calls",
+            "rhs_total",
+            "unpack",
+            "parameters",
+            "hamiltonian_fill",
+            "commutator",
+            "dissipator",
+            "pack"
+          ],
+          "values": [
+            38531.0,
+            0.19432770000005534,
+            0.022243000000000623,
+            0.0024349999999995447,
+            0.006863699999996505,
+            0.15926230000013428,
+            0.020229400000006625,
+            0.011231099999998835
+          ],
+          "repeat_time_summary": {
+            "rhs_evaluations": 38531,
+            "unique_times": 32076,
+            "times_repeated": 6415,
+            "extra_same_time_rhs_calls": 6455,
+            "max_calls_at_one_time": 3
+          },
+          "profiled_wall_s": 0.2707981
+        }
+      },
+      "stage_times": {
+        "hooked_control": {
+          "rhs_evaluations": 38531,
+          "unique_times": 32076,
+          "times_repeated": 6415,
+          "extra_same_time_rhs_calls": 6455,
+          "max_calls_at_one_time": 3
+        },
+        "time_cache": {
+          "rhs_evaluations": 38531,
+          "unique_times": 32076,
+          "times_repeated": 6415,
+          "extra_same_time_rhs_calls": 6455,
+          "max_calls_at_one_time": 3
+        }
+      },
+      "normalized_rhs_error": 1.8494543211111375e-16,
+      "correctness": {
+        "control": {
+          "density": {
+            "max_relative": 3.7130550382323894e-07,
+            "max_small_absolute": 6.801692829938397e-14,
+            "passed": true
+          },
+          "trace_error": 1.3322676295501878e-15,
+          "rhs_calls": 38531,
+          "accepted": 6415,
+          "rejected": 0
+        },
+        "hooked_control": {
+          "density": {
+            "max_relative": 3.7130550382323894e-07,
+            "max_small_absolute": 6.801692829938397e-14,
+            "passed": true
+          },
+          "trace_error": 1.3322676295501878e-15,
+          "rhs_calls": 38531,
+          "accepted": 6415,
+          "rejected": 0
+        },
+        "time_cache": {
+          "density": {
+            "max_relative": 3.7130550382323894e-07,
+            "max_small_absolute": 6.801692829938397e-14,
+            "passed": true
+          },
+          "trace_error": 1.3322676295501878e-15,
+          "rhs_calls": 38531,
+          "accepted": 6415,
+          "rejected": 0
+        },
+        "avx2": {
+          "density": {
+            "max_relative": 3.713050033796063e-07,
+            "max_small_absolute": 6.801686503375866e-14,
+            "passed": true
+          },
+          "trace_error": 4.440892098500626e-16,
+          "rhs_calls": 38531,
+          "accepted": 6415,
+          "rejected": 0
+        },
+        "both": {
+          "density": {
+            "max_relative": 3.713050033796063e-07,
+            "max_small_absolute": 6.801686503375866e-14,
+            "passed": true
+          },
+          "trace_error": 4.440892098500626e-16,
+          "rhs_calls": 38531,
+          "accepted": 6415,
+          "rejected": 0
+        }
+      },
+      "median_s": {
+        "control": 0.2519695,
+        "hooked_control": 0.25646,
+        "time_cache": 0.25465395,
+        "avx2": 0.3260705,
+        "both": 0.3241069
+      },
+      "reductions_vs_control_percent": {
+        "hooked_control": -1.7821601423981814,
+        "time_cache": -1.0653868821424828,
+        "avx2": -29.40871811866117,
+        "both": -28.629417449334138
+      }
+    }
+  ],
+  "duration_s": 1e-05,
+  "rounds": 12,
+  "modes": [
+    "control",
+    "hooked_control",
+    "time_cache",
+    "avx2",
+    "both"
+  ],
+  "tolerances": {
+    "atol": 1e-11,
+    "rtol": 1e-09,
+    "strict_atol": 1e-13,
+    "strict_rtol": 1e-11
+  },
+  "control_sources": {
+    "wrapper": "f201901d4085fb8c7d35bf612381430b557c3cf9aec28cf03b065a8989ecee56",
+    "rhs": "f7e2aca5a86a789fb6c2c05e15389a363735c487db1f3391702669e2185a65ed",
+    "eval": "245a9e880b14a20806ba1076d97f67212d757afb2527a72861b952c3d0560497",
+    "plan": "14554b2ad628eccf49e5b026ed9b8876d064cbde01e7d7048db8969f61a66621"
+  },
+  "hook_sources": {
+    "wrapper": "99f819050cb1869509115a62d1e4ba621c25d6e63211dd5dc478a1218b7a5f5a",
+    "rhs": "1805d2376c0173751a5c10f65bb5ee8a8c71b272d29e8a9413d5422ad58eabcb",
+    "eval": "245a9e880b14a20806ba1076d97f67212d757afb2527a72861b952c3d0560497",
+    "plan": "14554b2ad628eccf49e5b026ed9b8876d064cbde01e7d7048db8969f61a66621"
+  },
+  "avx2_available": true
+}

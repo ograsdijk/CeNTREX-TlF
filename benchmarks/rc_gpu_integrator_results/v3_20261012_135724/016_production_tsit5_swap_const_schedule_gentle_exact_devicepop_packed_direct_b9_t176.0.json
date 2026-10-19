@@ -1,0 +1,115 @@
+{
+  "job": {
+    "fixture": "production",
+    "span_us": 176.0,
+    "batch": 9,
+    "integrator": "tsit5",
+    "dt_ns": 4.464285714285714,
+    "variant": "swap_const_schedule_gentle_exact_devicepop_packed_direct",
+    "chunk": 16,
+    "repeats": 1,
+    "atol": 1e-10,
+    "rtol": 1e-09,
+    "gpu_class": "storage_followup",
+    "kind": "full",
+    "velocity": 250,
+    "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v3_20261012_135724\\016_production_tsit5_swap_const_schedule_gentle_exact_devicepop_packed_direct_b9_t176.0.json"
+  },
+  "status": "complete",
+  "setup_s": 0.7814486999996006,
+  "evolution_s": [
+    6.752815499989083
+  ],
+  "median_s": 6.752815499989083,
+  "evolution_and_download_wall_s": 6.752884299989091,
+  "accuracy": {
+    "max_abs": 3.566733971004562e-07,
+    "max_relative_above_cutoff": 0.003157064879987254,
+    "max_coherence_relative_above_cutoff": 0.003157064879987254,
+    "worst_per_trajectory_relative": [
+      0.0006770243853681659,
+      0.0003716435805774693,
+      0.0012075241335788745,
+      0.0007054459323008455,
+      0.003157064879987254,
+      0.0006494660593746444,
+      2.432357452989417e-05,
+      2.4323534605451238e-05,
+      1.8806134885093284e-05,
+      1.880611843313037e-05,
+      1.8212890722156925e-05,
+      1.8212873794269756e-05,
+      0.0005921062183050481,
+      0.000592106404917126,
+      0.0010942204764848302,
+      0.00032341533359244335,
+      0.0005753245612649787,
+      0.0005465992169909497
+    ],
+    "near_zero_max_abs": 3.324547910242727e-10,
+    "relative_frobenius": 2.7009374663418324e-05,
+    "trace_error": 2.6645352591003757e-15,
+    "hermiticity_error": 0.0,
+    "min_eigenvalue": -2.594063959868752e-18,
+    "passes_1percent_above_cutoff": true
+  },
+  "stats": [
+    {
+      "accepted": 37229,
+      "rejected": 0
+    }
+  ],
+  "rhs_relative_error": 0.0,
+  "context": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-SPB-testing\\.cache\\simulations\\optical_bloch\\native_rc_v1\\4aebc0feac6a3d3837e529b9\\prepared_context.pkl",
+  "context_sha256": "cd215628debfc223a50ad78fc2641ef627c2193f373f59cb7d4e7ecd2c6cd9a5",
+  "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_5fcc5f13ee68b297.npz",
+  "reference_sha256": "8cf12cbe397f69ba4719848ed9d2398098de0d5cbed59397f6c6353d63beb14f",
+  "source_sha256": "cf3884e1fd84b85e79096a68830458bf28b1debfa3ccb2dd9476d2648eca3e84",
+  "device": "NVIDIA GeForce RTX 5070 Ti",
+  "storage": "float64",
+  "accumulation": "float64",
+  "cupy": "14.2.0",
+  "memory_pool_bytes": 14228992,
+  "final_time": 0.000178475,
+  "coherent_rhs_relative_error": 5.167402776622039e-17,
+  "live_device_allocation_bytes": 4746752,
+  "python_source_hashes": {
+    "rc_gpu_integrators.py": "b73f8bdb4c296c730d9df17d0193338b954eeb6290b4dd5a77bd4a78becadcd1",
+    "run_rc_gpu_integrator_suite.py": "1c254ab60b104acfdfed59a9f6128c9fc1d96b4a16605aabf50fdf5b6a1036dc",
+    "rc_gpu_fixed_followup.py": "26920a7a074bdb733432923bf611c00ae2e492ab476adc28895bae44a6b861bc",
+    "rc_gpu_storage_followup.py": "473a8a90926d419a20671df6c6a08c385539f78358c534bce2af63771c276dd9",
+    "rc_gpu_packed.cu": "2246f64ab0e36655e735da02776ec444b2fb212118750fbbf739eea0edf84989",
+    "rc_gpu_integrating_factor.cu": "cea31faa047cea832bbde604eb333f1c960098f7c8bd9c017157be0603d5aede"
+  },
+  "product_kernel_attributes": {
+    "max_threads_per_block": 1024,
+    "shared_size_bytes": 0,
+    "const_size_bytes": 0,
+    "local_size_bytes": 0,
+    "num_regs": 40,
+    "ptx_version": 120,
+    "binary_version": 120,
+    "cache_mode_ca": 0,
+    "max_dynamic_shared_size_bytes": 49152,
+    "preferred_shared_memory_carveout": -1
+  },
+  "field_exit_wall_s_including_sampling": 6.666797299985774,
+  "full_wall_s_including_sampling_and_post_decay": 6.752815499989083,
+  "accuracy_scope": "All nine endpoints vs finer GPU reference; strict CPU subset separately",
+  "strict_cpu_subset_accuracy": {
+    "max_abs": 1.3011740435109331e-09,
+    "max_relative_above_cutoff": 1.9519201297871032e-05,
+    "max_coherence_relative_above_cutoff": 1.9519201297871032e-05,
+    "worst_per_trajectory_relative": [
+      1.9511420452815566e-05,
+      1.9519201297871032e-05
+    ],
+    "near_zero_max_abs": 2.1363203704136574e-11,
+    "relative_frobenius": 2.736328027362669e-09,
+    "trace_error": 1.1102230246251565e-15,
+    "hermiticity_error": 0.0,
+    "min_eigenvalue": -4.2869090104812403e-35,
+    "passes_1percent_above_cutoff": true
+  },
+  "population_history_max_abs_difference": 5.011654849625125e-07
+}

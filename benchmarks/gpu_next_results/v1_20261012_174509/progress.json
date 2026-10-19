@@ -1,0 +1,9 @@
+{
+  "status": "complete",
+  "stage": "complete",
+  "current_job": null,
+  "completed_jobs": 98,
+  "failed_jobs": 0,
+  "elapsed_s": 2426.283089876175,
+  "runner_pid": 16796
+}

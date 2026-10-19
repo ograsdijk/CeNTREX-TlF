@@ -1,0 +1,47 @@
+[
+  {
+    "system": "R2_EOM",
+    "batch": 1024,
+    "shared_bytes": 32016,
+    "arithmetic": "fp64",
+    "kernel_attributes": {
+      "max_threads_per_block": 1024,
+      "shared_size_bytes": 0,
+      "const_size_bytes": 448,
+      "local_size_bytes": 40,
+      "num_regs": 56,
+      "ptx_version": 120,
+      "binary_version": 120,
+      "cache_mode_ca": 0,
+      "max_dynamic_shared_size_bytes": 32016,
+      "preferred_shared_memory_carveout": -1
+    },
+    "baseline_times": [
+      1.195882799976971,
+      1.1961058999877423,
+      1.1952399000292644
+    ],
+    "variants": {
+      "threads256_steps16": {
+        "accuracy": {
+          "max_abs": 1.727397601521444e-06,
+          "max_relative_above_cutoff": 0.0005943969112923403,
+          "max_coherence_relative_above_cutoff": 0.0005943969112923403,
+          "near_zero_max_abs": 4.559342470753401e-10,
+          "relative_frobenius": 4.360128295037048e-06,
+          "trace_error": 1.5543122344752192e-15,
+          "hermiticity_error": 0.0,
+          "min_eigenvalue": 1.2491725364155467e-13,
+          "passes_1percent_above_cutoff": true
+        },
+        "passed": true,
+        "max_difference_from_baseline": 5.551115123125783e-16,
+        "timings": [
+          1.8810035000205971,
+          1.8802237000199966,
+          1.8798477000091225
+        ]
+      }
+    }
+  }
+]

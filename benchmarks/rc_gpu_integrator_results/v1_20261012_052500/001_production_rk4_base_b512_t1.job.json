@@ -1,0 +1,13 @@
+{
+  "fixture": "production",
+  "span_us": 1,
+  "batch": 512,
+  "integrator": "rk4",
+  "dt_ns": 0.48828125,
+  "variant": "base",
+  "chunk": 16,
+  "repeats": 1,
+  "atol": 1e-10,
+  "rtol": 1e-09,
+  "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v1_20261012_052500\\001_production_rk4_base_b512_t1.json"
+}

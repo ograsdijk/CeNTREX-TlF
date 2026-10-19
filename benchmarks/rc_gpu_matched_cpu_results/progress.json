@@ -1,0 +1,18 @@
+{
+  "status": "complete",
+  "completed": [
+    "rc_1us_b128_s512",
+    "rc_1us_b1024_s512",
+    "rc_10us_b128_s512",
+    "rc_10us_b512_s512",
+    "rc_200us_b128_s512",
+    "rc_200us_b128_s1024"
+  ],
+  "total": 6,
+  "current": null,
+  "additional_completed": [
+    "K20_driven_X_J2_s512_failed_accuracy",
+    "K20_driven_X_J2_s1024_passed",
+    "rc_200us_b128_s256_passed"
+  ]
+}

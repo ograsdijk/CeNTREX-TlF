@@ -1,0 +1,449 @@
+{
+  "generated_at": "2026-10-07T10:37:30.060129-05:00",
+  "scope": "Pure X, 10 mW, existing three detunings, all 20 individually resolved X J=2 population projectors, 1401 cumulative photon samples through 350 us.",
+  "physical_cores": 8,
+  "logical_threads": 16,
+  "thread_repeats": 2,
+  "worker_repeats": 2,
+  "thread_scaling": [
+    {
+      "blas_threads": 1,
+      "repeat": 0,
+      "eig_s": 0.8379443997982889,
+      "lu_s": 0.11399680003523827,
+      "initial_columns_s": 0.0052414999809116125,
+      "photon_traces_s": 0.12446799990721047,
+      "total_s": 1.0816506997216493
+    },
+    {
+      "blas_threads": 2,
+      "repeat": 0,
+      "eig_s": 0.7306900001130998,
+      "lu_s": 0.06221839995123446,
+      "initial_columns_s": 0.003199300030246377,
+      "photon_traces_s": 0.12351940013468266,
+      "total_s": 0.9196271002292633
+    },
+    {
+      "blas_threads": 4,
+      "repeat": 0,
+      "eig_s": 0.6278959000483155,
+      "lu_s": 0.03431710018776357,
+      "initial_columns_s": 0.0025239998940378428,
+      "photon_traces_s": 0.12250529997982085,
+      "total_s": 0.7872423001099378
+    },
+    {
+      "blas_threads": 8,
+      "repeat": 0,
+      "eig_s": 0.6347887001466006,
+      "lu_s": 0.02916690008714795,
+      "initial_columns_s": 0.0035522999241948128,
+      "photon_traces_s": 0.1257923999801278,
+      "total_s": 0.7933003001380712
+    },
+    {
+      "blas_threads": 16,
+      "repeat": 0,
+      "eig_s": 0.7130387001670897,
+      "lu_s": 0.05856620008125901,
+      "initial_columns_s": 0.004477499984204769,
+      "photon_traces_s": 0.12218659999780357,
+      "total_s": 0.898269000230357
+    },
+    {
+      "blas_threads": 16,
+      "repeat": 1,
+      "eig_s": 0.7133188000880182,
+      "lu_s": 0.06819140003062785,
+      "initial_columns_s": 0.0036710998974740505,
+      "photon_traces_s": 0.12196970009244978,
+      "total_s": 0.9071510001085699
+    },
+    {
+      "blas_threads": 8,
+      "repeat": 1,
+      "eig_s": 0.6279390000272542,
+      "lu_s": 0.02622130000963807,
+      "initial_columns_s": 0.0036377999931573868,
+      "photon_traces_s": 0.12182820006273687,
+      "total_s": 0.7796263000927866
+    },
+    {
+      "blas_threads": 4,
+      "repeat": 1,
+      "eig_s": 0.6207892000675201,
+      "lu_s": 0.0350577998906374,
+      "initial_columns_s": 0.002858400112017989,
+      "photon_traces_s": 0.12165239988826215,
+      "total_s": 0.7803577999584377
+    },
+    {
+      "blas_threads": 2,
+      "repeat": 1,
+      "eig_s": 0.7235465000849217,
+      "lu_s": 0.06380459992215037,
+      "initial_columns_s": 0.0031024999916553497,
+      "photon_traces_s": 0.1242674000095576,
+      "total_s": 0.914721000008285
+    },
+    {
+      "blas_threads": 1,
+      "repeat": 1,
+      "eig_s": 0.8441093999426812,
+      "lu_s": 0.1137000999879092,
+      "initial_columns_s": 0.005096500040963292,
+      "photon_traces_s": 0.12398070003837347,
+      "total_s": 1.0868867000099272
+    }
+  ],
+  "worker_scaling": [
+    {
+      "workers": 1,
+      "blas_threads_per_worker": 1,
+      "repeat": 0,
+      "three_point_wall_s": 3.260570500046015,
+      "worker_stages": [
+        {
+          "eig_s": 0.8420961999800056,
+          "lu_s": 0.11307990015484393,
+          "initial_columns_s": 0.00500619993545115,
+          "photon_traces_s": 0.12815899983979762,
+          "total_s": 1.0883412999100983
+        },
+        {
+          "eig_s": 0.8077564002014697,
+          "lu_s": 0.11484940000809729,
+          "initial_columns_s": 0.005295500159263611,
+          "photon_traces_s": 0.1281109000556171,
+          "total_s": 1.0560122004244477
+        },
+        {
+          "eig_s": 0.85355079988949,
+          "lu_s": 0.11479369993321598,
+          "initial_columns_s": 0.005180099979043007,
+          "photon_traces_s": 0.12526010000146925,
+          "total_s": 1.0987846998032182
+        }
+      ]
+    },
+    {
+      "workers": 1,
+      "blas_threads_per_worker": 1,
+      "repeat": 1,
+      "three_point_wall_s": 3.248969600070268,
+      "worker_stages": [
+        {
+          "eig_s": 0.8414159000385553,
+          "lu_s": 0.11357579985633492,
+          "initial_columns_s": 0.005179499974474311,
+          "photon_traces_s": 0.12483029998838902,
+          "total_s": 1.0850014998577535
+        },
+        {
+          "eig_s": 0.8062283000908792,
+          "lu_s": 0.11317000002600253,
+          "initial_columns_s": 0.004960300168022513,
+          "photon_traces_s": 0.12975770002231002,
+          "total_s": 1.0541163003072143
+        },
+        {
+          "eig_s": 0.851536100031808,
+          "lu_s": 0.11268210015259683,
+          "initial_columns_s": 0.00497659994289279,
+          "photon_traces_s": 0.12434220011346042,
+          "total_s": 1.093537000240758
+        }
+      ]
+    },
+    {
+      "workers": 2,
+      "blas_threads_per_worker": 1,
+      "repeat": 0,
+      "three_point_wall_s": 2.2977968000341207,
+      "worker_stages": [
+        {
+          "eig_s": 0.9568811000790447,
+          "lu_s": 0.11799599998630583,
+          "initial_columns_s": 0.005343599943444133,
+          "photon_traces_s": 0.12963540013879538,
+          "total_s": 1.20985610014759
+        },
+        {
+          "eig_s": 0.9206144998315722,
+          "lu_s": 0.11788360006175935,
+          "initial_columns_s": 0.005333200097084045,
+          "photon_traces_s": 0.12900939979590476,
+          "total_s": 1.1728406997863203
+        },
+        {
+          "eig_s": 0.8667554000858217,
+          "lu_s": 0.11434739991091192,
+          "initial_columns_s": 0.004985800012946129,
+          "photon_traces_s": 0.1272620998788625,
+          "total_s": 1.1133506998885423
+        }
+      ]
+    },
+    {
+      "workers": 2,
+      "blas_threads_per_worker": 1,
+      "repeat": 1,
+      "three_point_wall_s": 2.2309212000109255,
+      "worker_stages": [
+        {
+          "eig_s": 0.8732832998503,
+          "lu_s": 0.11843949998728931,
+          "initial_columns_s": 0.005180000094696879,
+          "photon_traces_s": 0.14450290007516742,
+          "total_s": 1.1414057000074536
+        },
+        {
+          "eig_s": 0.8388261999934912,
+          "lu_s": 0.11713459994643927,
+          "initial_columns_s": 0.005452899960801005,
+          "photon_traces_s": 0.14339579991064966,
+          "total_s": 1.104809499811381
+        },
+        {
+          "eig_s": 0.8722023998852819,
+          "lu_s": 0.1126174998935312,
+          "initial_columns_s": 0.004915200173854828,
+          "photon_traces_s": 0.12462810007855296,
+          "total_s": 1.114363200031221
+        }
+      ]
+    },
+    {
+      "workers": 3,
+      "blas_threads_per_worker": 1,
+      "repeat": 0,
+      "three_point_wall_s": 1.142425199970603,
+      "worker_stages": [
+        {
+          "eig_s": 0.8651524998713285,
+          "lu_s": 0.12105510011315346,
+          "initial_columns_s": 0.005687800003215671,
+          "photon_traces_s": 0.1359488999005407,
+          "total_s": 1.1278442998882383
+        },
+        {
+          "eig_s": 0.8376318998634815,
+          "lu_s": 0.12157159997150302,
+          "initial_columns_s": 0.005803599953651428,
+          "photon_traces_s": 0.13298380002379417,
+          "total_s": 1.0979908998124301
+        },
+        {
+          "eig_s": 0.8766459000762552,
+          "lu_s": 0.11947509995661676,
+          "initial_columns_s": 0.006154299946501851,
+          "photon_traces_s": 0.1344675999134779,
+          "total_s": 1.1367428998928517
+        }
+      ]
+    },
+    {
+      "workers": 3,
+      "blas_threads_per_worker": 1,
+      "repeat": 1,
+      "three_point_wall_s": 1.156338999979198,
+      "worker_stages": [
+        {
+          "eig_s": 0.8608973999507725,
+          "lu_s": 0.12446369999088347,
+          "initial_columns_s": 0.0056038000620901585,
+          "photon_traces_s": 0.13160909991711378,
+          "total_s": 1.12257399992086
+        },
+        {
+          "eig_s": 0.8283480999525636,
+          "lu_s": 0.12167910020798445,
+          "initial_columns_s": 0.005564199993386865,
+          "photon_traces_s": 0.1309269000776112,
+          "total_s": 1.0865183002315462
+        },
+        {
+          "eig_s": 0.8954074999783188,
+          "lu_s": 0.11721269995905459,
+          "initial_columns_s": 0.0054830999579280615,
+          "photon_traces_s": 0.1321201000828296,
+          "total_s": 1.150223399978131
+        }
+      ]
+    }
+  ],
+  "population_scaling": [
+    {
+      "population_count": 4,
+      "repeat": 0,
+      "eig_s": 0.8350716000422835,
+      "lu_s": 0.11232079984620214,
+      "initial_columns_s": 0.0018971001263707876,
+      "photon_traces_s": 0.12212710012681782,
+      "total_s": 1.0714166001416743
+    },
+    {
+      "population_count": 4,
+      "repeat": 1,
+      "eig_s": 0.8421893001068383,
+      "lu_s": 0.1147040999494493,
+      "initial_columns_s": 0.001800500089302659,
+      "photon_traces_s": 0.12460489990189672,
+      "total_s": 1.083298800047487
+    },
+    {
+      "population_count": 20,
+      "repeat": 0,
+      "eig_s": 0.8435427001677454,
+      "lu_s": 0.11607099999673665,
+      "initial_columns_s": 0.005312300054356456,
+      "photon_traces_s": 0.14480689982883632,
+      "total_s": 1.1097329000476748
+    },
+    {
+      "population_count": 20,
+      "repeat": 1,
+      "eig_s": 0.8371436998713762,
+      "lu_s": 0.11342469998635352,
+      "initial_columns_s": 0.005027699982747436,
+      "photon_traces_s": 0.1252053000498563,
+      "total_s": 1.0808013998903334
+    }
+  ],
+  "accuracy": [
+    {
+      "detuning_MHz": 6.8,
+      "extract_seconds": 0.0033464001026004553,
+      "max_cached_four_state_error": 1.6467391894536831e-09,
+      "max_scaled_error": 0.0008744669688871631,
+      "all_20_trace_error": 4.47583037299637e-09,
+      "all_20_max_photon_imaginary": 2.0829092365046164e-16,
+      "all_20_min_photon_increment": 3.6835163708579464e-07,
+      "timings_20": {
+        "eig_s": 0.8444738001562655,
+        "lu_s": 0.11818589991889894,
+        "initial_columns_s": 0.005296500166878104,
+        "photon_traces_s": 0.12408289988525212,
+        "total_s": 1.0920391001272947
+      },
+      "all_state_mixture_reference_s": 5.861662399955094,
+      "all_state_mixture_max_error": 7.757879338932128e-10
+    },
+    {
+      "detuning_MHz": 28.2,
+      "extract_seconds": 0.003369899932295084,
+      "max_cached_four_state_error": 8.479372759495618e-11,
+      "max_scaled_error": 0.0003679789125852819,
+      "all_20_trace_error": 7.786410294308155e-09,
+      "all_20_max_photon_imaginary": 4.521264021821837e-18,
+      "all_20_min_photon_increment": 2.1567898564124338e-06,
+      "timings_20": {
+        "eig_s": 0.7967454001773149,
+        "lu_s": 0.1144932999741286,
+        "initial_columns_s": 0.005309399915859103,
+        "photon_traces_s": 0.1242488999851048,
+        "total_s": 1.0407970000524074
+      }
+    },
+    {
+      "detuning_MHz": 80.0,
+      "extract_seconds": 0.0031599998474121094,
+      "max_cached_four_state_error": 3.3163894200272104e-10,
+      "max_scaled_error": 0.0016004076957692299,
+      "all_20_trace_error": 2.6487441129319222e-09,
+      "all_20_max_photon_imaginary": 6.4139171105074586e-21,
+      "all_20_min_photon_increment": 5.289307248945144e-09,
+      "timings_20": {
+        "eig_s": 0.8694970000069588,
+        "lu_s": 0.11322570010088384,
+        "initial_columns_s": 0.004886700073257089,
+        "photon_traces_s": 0.1244743000715971,
+        "total_s": 1.1120837002526969
+      }
+    }
+  ],
+  "resolved_ground_states": [
+    {
+      "index": 0,
+      "label": "|X, J = 2, F\u2081 = 3/2, F = 1, mF = -1, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 1,
+      "label": "|X, J = 2, F\u2081 = 3/2, F = 1, mF = 0, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 2,
+      "label": "|X, J = 2, F\u2081 = 3/2, F = 1, mF = 1, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 3,
+      "label": "|X, J = 2, F\u2081 = 3/2, F = 2, mF = -2, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 4,
+      "label": "|X, J = 2, F\u2081 = 3/2, F = 2, mF = -1, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 5,
+      "label": "|X, J = 2, F\u2081 = 3/2, F = 2, mF = 0, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 6,
+      "label": "|X, J = 2, F\u2081 = 3/2, F = 2, mF = 1, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 7,
+      "label": "|X, J = 2, F\u2081 = 3/2, F = 2, mF = 2, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 8,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 2, mF = -2, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 9,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 2, mF = -1, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 10,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 2, mF = 0, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 11,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 2, mF = 1, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 12,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 2, mF = 2, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 13,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 3, mF = -3, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 14,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 3, mF = -2, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 15,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 3, mF = -1, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 16,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 3, mF = 0, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 17,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 3, mF = 1, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 18,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 3, mF = 2, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    },
+    {
+      "index": 19,
+      "label": "|X, J = 2, F\u2081 = 5/2, F = 3, mF = 3, I\u2081 = 1/2, I\u2082 = 1/2, P = +, \u03a9 = 0>"
+    }
+  ],
+  "other_ground_states": "Three compact decay-only sinks; not individually resolved F1/F/mF states of other J manifolds."
+}

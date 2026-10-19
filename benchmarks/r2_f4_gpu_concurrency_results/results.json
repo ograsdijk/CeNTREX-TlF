@@ -1,0 +1,145 @@
+{
+  "generated_at": "2026-10-07T11:19:26.741659-05:00",
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "torch_version": "2.14.1+cu130",
+  "rows": [
+    {
+      "configuration": "cpu8",
+      "repeat": 0,
+      "tasks": 32,
+      "wall_s": 4.398902399931103,
+      "points_per_second": 7.274541940394312,
+      "max_photon_error": 0.0,
+      "max_imaginary": 0.0,
+      "min_photon_increment": 5.289321263896809e-09,
+      "passed": true
+    },
+    {
+      "configuration": "cpu8_gpu_batch1",
+      "repeat": 0,
+      "tasks": 32,
+      "wall_s": 3.937045899918303,
+      "points_per_second": 8.127921495826103,
+      "max_photon_error": 8.881784197001252e-16,
+      "max_imaginary": 0.0,
+      "min_photon_increment": 5.2893212638972324e-09,
+      "passed": true
+    },
+    {
+      "configuration": "cpu8_gpu_batch8",
+      "repeat": 0,
+      "tasks": 32,
+      "wall_s": 3.617059800075367,
+      "points_per_second": 8.846964597968004,
+      "max_photon_error": 7.993605777301127e-15,
+      "max_imaginary": 0.0,
+      "min_photon_increment": 5.2893212639014676e-09,
+      "passed": true
+    },
+    {
+      "configuration": "cpu8_gpu_batch8",
+      "repeat": 1,
+      "tasks": 32,
+      "wall_s": 3.362435899907723,
+      "points_per_second": 9.516910047527803,
+      "max_photon_error": 7.993605777301127e-15,
+      "max_imaginary": 0.0,
+      "min_photon_increment": 5.2893212639014676e-09,
+      "passed": true
+    },
+    {
+      "configuration": "cpu8_gpu_batch1",
+      "repeat": 1,
+      "tasks": 32,
+      "wall_s": 3.3864639999810606,
+      "points_per_second": 9.449384372660973,
+      "max_photon_error": 8.881784197001252e-16,
+      "max_imaginary": 0.0,
+      "min_photon_increment": 5.2893212638972324e-09,
+      "passed": true
+    },
+    {
+      "configuration": "cpu8",
+      "repeat": 1,
+      "tasks": 32,
+      "wall_s": 3.621470599900931,
+      "points_per_second": 8.836189364860616,
+      "max_photon_error": 0.0,
+      "max_imaginary": 0.0,
+      "min_photon_increment": 5.289321263896809e-09,
+      "passed": true
+    },
+    {
+      "configuration": "gpu_streams1",
+      "repeat": 0,
+      "tasks": 16,
+      "wall_s": 8.93367200018838,
+      "points_per_second": 1.79097687934621,
+      "max_photon_error": 6.226047653153224e-11,
+      "max_imaginary": 4.065961758439786e-16,
+      "min_photon_increment": 5.2892769417594315e-09,
+      "passed": true
+    },
+    {
+      "configuration": "gpu_streams1",
+      "repeat": 1,
+      "tasks": 16,
+      "wall_s": 8.92007190012373,
+      "points_per_second": 1.7937075148214965,
+      "max_photon_error": 6.226047653153224e-11,
+      "max_imaginary": 4.065961758439786e-16,
+      "min_photon_increment": 5.2892769417594315e-09,
+      "passed": true
+    },
+    {
+      "configuration": "gpu_processes2",
+      "repeat": 0,
+      "tasks": 16,
+      "wall_s": 9.218113400042057,
+      "points_per_second": 1.7357130798506992,
+      "max_photon_error": 6.226047653153224e-11,
+      "max_imaginary": 4.065961758439786e-16,
+      "min_photon_increment": 5.2892769417594315e-09,
+      "passed": true
+    },
+    {
+      "configuration": "gpu_processes2",
+      "repeat": 1,
+      "tasks": 16,
+      "wall_s": 9.22913460014388,
+      "points_per_second": 1.7336403350050356,
+      "max_photon_error": 6.226047653153224e-11,
+      "max_imaginary": 4.065961758439786e-16,
+      "min_photon_increment": 5.2892769417594315e-09,
+      "passed": true
+    },
+    {
+      "configuration": "gpu_processes4",
+      "repeat": 0,
+      "tasks": 16,
+      "wall_s": 9.267334799980745,
+      "points_per_second": 1.7264942235639575,
+      "max_photon_error": 6.226047653153224e-11,
+      "max_imaginary": 4.065961758439786e-16,
+      "min_photon_increment": 5.2892769417594315e-09,
+      "passed": true
+    },
+    {
+      "configuration": "gpu_processes4",
+      "repeat": 1,
+      "tasks": 16,
+      "wall_s": 9.240650200052187,
+      "points_per_second": 1.731479890874956,
+      "max_photon_error": 6.226047653153224e-11,
+      "max_imaginary": 4.065961758439786e-16,
+      "min_photon_increment": 5.2892769417594315e-09,
+      "passed": true
+    }
+  ],
+  "failed_configurations": [
+    {
+      "configuration": "gpu_streams2",
+      "error": "cusolver error: CUSOLVER_STATUS_INTERNAL_ERROR, when calling `cusolverDnXgeev( handle, params, jobvl, jobvr, n, CUDA_R_64F, reinterpret_cast<void*>(A), lda, CUDA_R_64F, reinterpret_cast<void*>(W), CUDA_R_64F, reinterpret_cast<void*>(VL), ldvl, CUDA_R_64F, reinterpret_cast<void*>(VR), ldvr, CUDA_R_64F, reinterpret_cast<void*>(bufferOnDevice), workspaceInBytesOnDevice, reinterpret_cast<void*>(bufferOnHost), workspaceInBytesOnHost, info)`. If you keep seeing this error, you may use `torch.backends.cuda.preferred_linalg_library()` to try linear algebra operators with other supported backends. See https://pytorch.org/docs/stable/backends.html#torch.backends.cuda.preferred_linalg_library"
+    }
+  ]
+}

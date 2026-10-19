@@ -264,6 +264,69 @@ def test_density_and_sink_integrals_match_independent_exponential(n):
         )
 
 
+@pytest.mark.parametrize("n", [2, 3])
+@pytest.mark.parametrize("reduce", [False, True])
+@pytest.mark.parametrize("nt", [0, 1, 33, 65])
+def test_batched_density_across_time_chunks(n, reduce, nt, monkeypatch):
+    prepared, H, C = model(n)
+    initial = states(n)
+    factor = prepare_dense_lindblad_propagator(prepared, initial, reduce=reduce)
+    if n == 3 and not reduce:
+        # Full preparation permits initial coherences involving a dark sink.
+        psi = np.array([1, 1j, -1], complex) / np.sqrt(3)
+        initial = np.concatenate((initial, np.outer(psi, psi.conj())[None]))
+    original_solve = la.lu_solve
+    solves = []
+
+    def counted_solve(*args, **kwargs):
+        solves.append(1)
+        return original_solve(*args, **kwargs)
+
+    monkeypatch.setattr(la, "lu_solve", counted_solve)
+    times = np.linspace(2.0, 2.7, nt)
+    density = factor.density_matrices(initial, times, t0=2.0)
+    assert density.shape == (len(initial), nt, n, n)
+    assert density.dtype == np.complex128
+    assert len(solves) == 1
+    if nt:
+        for i, rho in enumerate(initial):
+            np.testing.assert_allclose(
+                density[i], independent(H, C, rho, times - 2.0), atol=3e-13
+            )
+        np.testing.assert_allclose(np.trace(density, axis1=-2, axis2=-1), 1, atol=3e-13)
+
+
+@pytest.mark.parametrize("n", [1, 3])
+def test_sink_only_density_and_empty_inputs(n):
+    zero = prepare_lindblad_problem(
+        SimpleNamespace(H_symbolic=smp.zeros(n), C_array=np.zeros((0, n, n))), {}
+    )
+    initial = np.eye(n)[None] / n
+    factor = prepare_dense_lindblad_propagator(zero, initial)
+    assert len(factor.w) == 0
+    for times in [[], [0.0], np.linspace(0.0, 1.0, 65)]:
+        answer = factor.density_matrices(initial, times)
+        expected = np.broadcast_to(initial[:, None], (1, len(times), n, n))
+        np.testing.assert_array_equal(answer, expected)
+    # Empty initial batches remain invalid, as in the other dense APIs.
+    for empty in [np.empty((0, n, n)), np.empty((0, n * n))]:
+        with pytest.raises(ValueError):
+            factor.density_matrices(empty, [0.0])
+
+
+def test_density_unpack_across_batch_chunks():
+    prepared, H, C = model(2)
+    initial = states(2)[1:]
+    factor = prepare_dense_lindblad_propagator(prepared, initial)
+    times = np.linspace(0.0, 0.7, 2051)
+    density = factor.density_matrices(initial, times)
+    # Straddle the bounded unpacking chunk boundary and check complex signs.
+    indices = [0, 2047, 2048, 2050]
+    np.testing.assert_allclose(
+        density[0, indices], independent(H, C, initial[0], times[indices]), atol=3e-13
+    )
+
+
 def test_single_outputs_and_ode_agreement():
     prepared, _, _ = model()
     rho = states()[1]

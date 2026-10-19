@@ -193,7 +193,7 @@ def _packed_batch(layout: PackedHermitianLayout, rho: Any) -> np.ndarray:
             raise ValueError("density matrix batch has the wrong state dimensions")
         if not np.allclose(array, array.conj().transpose(0, 2, 1), rtol=1e-12, atol=1e-14):
             raise ValueError("initial density matrices must be Hermitian")
-        array = np.stack([layout.pack(np.asarray(r, dtype=complex)) for r in array])
+        array = layout.pack_batch(array)
     if array.ndim != 2 or array.shape[1] != layout.packed_len or not len(array):
         raise ValueError("expected a nonempty batch of packed states or density matrices")
     if np.iscomplexobj(array) and np.any(array.imag != 0):
@@ -432,9 +432,9 @@ class DenseLindbladPropagator:
     ) -> np.ndarray:
         """Return `(initial_state, sample_time, output_width)` values.
 
-        Times are absolute; initial states are specified at ``t0``. Full packed
-        density reconstruction runs on the CPU even when CUDA projection is
-        requested. Analytic integrals include initially populated dark sinks.
+        Times are absolute; initial states are specified at ``t0``. CUDA full
+        reconstruction retains the eigensystem on-device across calls and uses
+        bounded chunks. Analytic integrals include initially populated dark sinks.
         """
         dt = np.asarray(times, dtype=float) - t0
         if dt.ndim != 1 or not np.isfinite(t0) or not np.all(np.isfinite(dt)) or np.any(dt < 0):
@@ -444,29 +444,31 @@ class DenseLindbladPropagator:
             self.layout, output, output_indices, integral_weights
         )
         if output == "full":
+            if evolution_device == "cuda":
+                from ._dense_cuda import FullProjection
+
+                return FullProjection.from_propagator(self, rho0_batch).evaluate(dt)
             C, s0 = self._coefficients(rho0_batch)
             values = np.zeros((C.shape[1], len(dt), self.layout.packed_len))
+            pair_C = C[self.positive] - 1j * C[self.positive + 1]
             for start in range(0, len(dt), 32):
                 ts = dt[start : start + 32]
                 modes = np.empty((len(self.w), C.shape[1], len(ts)))
-                mul = _phi(self.w, ts, 0)
-                modes[self.real] = C[self.real, :, None] * mul[self.real, None, :].real
-                pair = (C[self.positive] - 1j * C[self.positive + 1])[:, :, None] * mul[
-                    self.positive, None, :
-                ]
-                modes[self.positive], modes[self.positive + 1] = pair.real, -pair.imag
-                block = (
-                    (self.basis @ modes.reshape(len(self.w), -1)).reshape(
-                        len(self.keep), C.shape[1], len(ts)
-                    )
-                    if len(self.w)
-                    else np.empty((0, C.shape[1], len(ts)))
-                )
-                values[:, start : start + len(ts), self.keep] = block.transpose(1, 2, 0)
-                sink_rows = np.zeros((len(self.sinks), self.layout.packed_len))
-                sink_rows[np.arange(len(self.sinks)), self.sinks] = 1
-                sinks = self._projection(rho0_batch, sink_rows, False).cpu(ts)
-                values[:, start : start + len(ts), self.sinks] = sinks
+                # Reuse the initial coefficient solve for active evolution and
+                # integrated sink feed, including across sample-time chunks.
+                for order in [0, 1] if len(self.sinks) else [0]:
+                    mul = _phi(self.w, ts, order)
+                    modes[self.real] = C[self.real, :, None] * mul[self.real, None, :].real
+                    pair = pair_C[:, :, None] * mul[self.positive, None, :]
+                    modes[self.positive], modes[self.positive + 1] = pair.real, -pair.imag
+                    basis = self.basis if order == 0 else self.feed_basis
+                    indices = self.keep if order == 0 else self.sinks
+                    block = (
+                        basis @ modes.reshape(len(self.w), C.shape[1] * len(ts))
+                    ).reshape(len(indices), C.shape[1], len(ts)).transpose(1, 2, 0)
+                    if order:
+                        block += s0.T[:, None, :]
+                    values[:, start : start + len(ts), indices] = block
             return values
         package = self._projection(rho0_batch, rows, integrated)
         values = package.cpu(dt) if evolution_device == "cpu" else _cuda_project([package], dt)[0]
@@ -475,14 +477,29 @@ class DenseLindbladPropagator:
         return values
 
     def density_matrices(
-        self, rho0_batch: Any, times: Sequence[float], *, t0: float = 0.0
+        self,
+        rho0_batch: Any,
+        times: Sequence[float],
+        *,
+        t0: float = 0.0,
+        evolution_device: str = "cpu",
     ) -> np.ndarray:
-        packed = self.evaluate(rho0_batch, times, t0=t0)
-        result = np.empty((*packed.shape[:2], self.layout.n, self.layout.n), complex)
-        for i in range(len(packed)):
-            for j in range(packed.shape[1]):
-                result[i, j] = self.layout.unpack(packed[i, j])
-        return result
+        if evolution_device == "cuda":
+            from ._dense_cuda import FullProjection
+
+            dt = np.asarray(times, dtype=float) - t0
+            if dt.ndim != 1 or not np.isfinite(t0) or not np.all(np.isfinite(dt)) or np.any(dt < 0):
+                raise ValueError("sample times must be finite and at or after t0")
+            return FullProjection.from_propagator(self, rho0_batch).evaluate(
+                dt, complex_output=True
+            )
+        packed = self.evaluate(rho0_batch, times, t0=t0, evolution_device=evolution_device)
+        return self.layout.unpack_batch(packed)
+
+    def clear_cuda_cache(self) -> None:
+        """Release this propagator's resident CUDA factors, if any."""
+        if hasattr(self, "_cuda_full_cache"):
+            self._cuda_full_cache.clear()
 
 
 def _factor(
@@ -657,8 +674,13 @@ def _work(
     rows, integrated, selected = _output_rows(
         layout, options["output"], options["output_indices"], options["integral_weights"]
     )
-    if gpu and options["output"] != "full":
-        values = propagator._projection(packed, rows, integrated)
+    if gpu:
+        if options["output"] == "full":
+            from ._dense_cuda import FullProjection
+
+            values = FullProjection.from_propagator(propagator, packed)
+        else:
+            values = propagator._projection(packed, rows, integrated)
     else:
         values = propagator.evaluate(packed, times, **options)
     stats = dict(
@@ -841,7 +863,14 @@ def _solve_dense_batch(
         nonlocal pending_bytes
         array, stats, selected = result
         stats_list.append(stats)
-        if isinstance(array, _Projection):
+        from ._dense_cuda import FullProjection
+
+        if isinstance(array, FullProjection):
+            # Consume one factorization at a time; full reconstruction does
+            # not expand observables into an initials x outputs x modes tensor.
+            flush()
+            put(indices, array.evaluate(times - span[0]))
+        elif isinstance(array, _Projection):
             size = array.active.nbytes + array.feed.nbytes
             if pending_bytes + size > 128_000_000:
                 flush()
@@ -931,7 +960,7 @@ def _solve_dense_batch(
         pool_reused=pool_reused,
         session_startup_seconds=None if dense_session is None else dense_session.startup_seconds,
         factorizations=stats_list,
-        full_reconstruction_device="cpu",
+        full_reconstruction_device=evolution_device if output == "full" else "cpu",
         function_evaluations=0,
     )
     return LindbladBatchResult(

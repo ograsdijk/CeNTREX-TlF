@@ -1,0 +1,131 @@
+{
+  "configuration": {
+    "transition": "R2_F1_7o2_F4",
+    "compact": true,
+    "retain_opposite_parity_levels": true,
+    "E_V_cm": [
+      0.0,
+      0.0,
+      -170.0
+    ],
+    "B_G": [
+      -0.01327,
+      0.19433,
+      -0.48889
+    ],
+    "Jmin_X": 0,
+    "Jmax_X": 4,
+    "Jmin_B": 1,
+    "Jmax_B": 5,
+    "polarization": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "rabi_rad_s": 10101010.1010101,
+    "detuning_rad_s": 0.0,
+    "decay_rate_rad_s": 10101010.1010101,
+    "solver": "dopri5",
+    "execution_mode": "structured",
+    "t_span_s": [
+      0.0,
+      1e-06
+    ],
+    "dt_s": 2e-09,
+    "rtol": 1e-07,
+    "atol": 1e-09,
+    "hamiltonian_representation": "decomposed"
+  },
+  "metadata": {
+    "state_count": 40,
+    "packed_length": 1600,
+    "main_ground_label": "|X, J = 2, F1 = 5/2, F = 3, mF = 0, P = +, \u03a9 = 0>",
+    "main_excited_label": "|B, J = 3, F1 = 7/2, F = 4, mF = 1, P = -, \u03a9 = 1>",
+    "initial_label": "|X, J = 2, F1 = 5/2, F = 3, mF = 0, P = +, \u03a9 = 0>",
+    "selected_labels_4": [
+      "X_J2_F1_2o5_F3o0_mF-1",
+      "X_J2_F1_2o5_F3o0_mF0",
+      "X_J2_F1_2o5_F3o0_mF1",
+      "X_J2_F1_2o5_F3o0_mF2"
+    ],
+    "selected_indices_4": [
+      15,
+      16,
+      17,
+      18
+    ],
+    "group_label": "B_total",
+    "group_indices": [
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+    ],
+    "excited_indices": [
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+    ],
+    "main_coupling": 0.23657862755295292,
+    "runtime_values": {
+      "rabi_rad_s": 10101010.1010101,
+      "detuning_rad_s": 0.0,
+      "polarization_amplitude": 1.0
+    },
+    "native_extension_path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\centrex_tlf\\centrex_tlf_rust.cp311-win_amd64.pyd",
+    "native_extension_sha256": "8ae86750bfc7514ff91b0bb634c0df10ce07522fd6fece3e652fd98ff148ae77",
+    "fixture_builder_sha256": "aaaa1c820558c7926ad7280fcfdecfedcee090e99f92a43504b57bb6bbd0caa9"
+  },
+  "initial_index": 16,
+  "ground_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ]
+}

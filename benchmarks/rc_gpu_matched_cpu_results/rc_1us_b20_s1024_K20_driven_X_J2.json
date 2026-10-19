@@ -1,0 +1,307 @@
+{
+  "status": "complete",
+  "duration_us": 1,
+  "batch": 20,
+  "repeats": 3,
+  "dt_ns": 0.244140625,
+  "method": "staged_soa_minor",
+  "precision": "float64/complex128",
+  "configuration": {
+    "name": "nominal",
+    "optical_rabi_over_gamma": 1.0,
+    "microwave_rabi_over_gamma": 1.0,
+    "detuning_mhz": 0.0,
+    "duration_s": 1e-06,
+    "entry_phase_s": 1.25e-07,
+    "optical_rabi_rad_s": 10101010.1010101,
+    "microwave_rabi_rad_s": 10101010.1010101,
+    "detuning_rad_s": 0.0,
+    "E_V_cm": [
+      0.0,
+      0.0,
+      200.0
+    ],
+    "B_G": [
+      0.0,
+      0.0,
+      0.01
+    ],
+    "eom_frequency_hz": 1600000.0,
+    "eom_beta": 3.8,
+    "switch_frequency_hz": 1000000.0,
+    "switch_phase_offset_rad": 1.5707963267948963,
+    "switch_override_slots": [
+      "\u03c91",
+      "\u03c61",
+      "\u03c92",
+      "\u03c62"
+    ],
+    "compact": false,
+    "retain_opposite_parity_levels": true,
+    "Jmax_X": 5,
+    "Jmax_B": 3,
+    "solver": "dopri5",
+    "execution_mode": "structured",
+    "t_span_s": [
+      1.25e-07,
+      1.125e-06
+    ],
+    "dt_s": 2e-09,
+    "rtol": 1e-07,
+    "atol": 1e-09,
+    "hamiltonian_representation": "decomposed",
+    "amplitude_envelope": "constant"
+  },
+  "metadata": {
+    "state_count": 70,
+    "packed_length": 4900,
+    "initial_label": "X_J2_F1_5o2_F2_mF0",
+    "selected_labels_4": [
+      "X_J2_F1_2o5_F2o0_mF-1",
+      "X_J2_F1_2o5_F2o0_mF0",
+      "X_J2_F1_2o5_F2o0_mF1",
+      "X_J2_F1_2o5_F2o0_mF2"
+    ],
+    "selected_indices_4": [
+      25,
+      26,
+      27,
+      28
+    ],
+    "group_label": "B_total",
+    "group_indices": [
+      64,
+      65,
+      66,
+      67,
+      68,
+      69
+    ],
+    "excited_indices": [
+      64,
+      65,
+      66,
+      67,
+      68,
+      69
+    ],
+    "main_pair_labels": {
+      "ground": "|X, J = 2, F1 = 5/2, F = 2, mF = 0, P = +, \u03a9 = 0>",
+      "excited": "|B, J = 1, F1 = 3/2, F = 1, mF = 1, P = -, \u03a9 = 1>"
+    },
+    "main_coupling": 0.08442658979322588,
+    "runtime_values": {
+      "optical_rabi_rad_s": 10101010.1010101,
+      "microwave_rabi_rad_s": 10101010.1010101,
+      "detuning_rad_s": 0.0,
+      "eom_beta": 3.8,
+      "eom_angular_frequency_rad_s": 10053096.491487337,
+      "switch_angular_frequency_rad_s": 6283185.307179586,
+      "switch_phase_offset_rad": 1.5707963267948963
+    },
+    "configuration": {
+      "name": "nominal",
+      "optical_rabi_over_gamma": 1.0,
+      "microwave_rabi_over_gamma": 1.0,
+      "detuning_mhz": 0.0,
+      "duration_s": 1e-06,
+      "entry_phase_s": 1.25e-07,
+      "optical_rabi_rad_s": 10101010.1010101,
+      "microwave_rabi_rad_s": 10101010.1010101,
+      "detuning_rad_s": 0.0,
+      "E_V_cm": [
+        0.0,
+        0.0,
+        200.0
+      ],
+      "B_G": [
+        0.0,
+        0.0,
+        0.01
+      ],
+      "eom_frequency_hz": 1600000.0,
+      "eom_beta": 3.8,
+      "switch_frequency_hz": 1000000.0,
+      "switch_phase_offset_rad": 1.5707963267948963,
+      "switch_override_slots": [
+        "\u03c91",
+        "\u03c61",
+        "\u03c92",
+        "\u03c62"
+      ],
+      "compact": false,
+      "retain_opposite_parity_levels": true,
+      "Jmax_X": 5,
+      "Jmax_B": 3,
+      "solver": "dopri5",
+      "execution_mode": "structured",
+      "t_span_s": [
+        1.25e-07,
+        1.125e-06
+      ],
+      "dt_s": 2e-09,
+      "rtol": 1e-07,
+      "atol": 1e-09,
+      "hamiltonian_representation": "decomposed",
+      "amplitude_envelope": "constant"
+    },
+    "entry_phase_s": 1.25e-07,
+    "switch_override_slots": [
+      "\u03c91",
+      "\u03c61",
+      "\u03c92",
+      "\u03c62"
+    ],
+    "native_extension_path": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\centrex_tlf\\centrex_tlf_rust.cp311-win_amd64.pyd",
+    "native_extension_sha256": "8ae86750bfc7514ff91b0bb634c0df10ce07522fd6fece3e652fd98ff148ae77",
+    "fixture_builder_sha256": "aaaa1c820558c7926ad7280fcfdecfedcee090e99f92a43504b57bb6bbd0caa9",
+    "bench_rc_propagation_sha256": "43e823ca3134eff9520104f552cf5d9cbbbb9a30d34602f0d9a8a49bf63ec1db"
+  },
+  "initial_state": "K20_driven_X_J2",
+  "batch_semantics": "Exact archived initial-state batch, one trajectory per listed state",
+  "cpu": {
+    "source": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_propagation_results\\cross_system_batch_amortization_v2\\stage4_batch_v2_retry1\\rc\\result.json",
+    "median_s": 0.20889538500050547,
+    "times_s": [
+      0.20889538500050547
+    ],
+    "tolerance": {
+      "rtol": 1e-07,
+      "atol": 1e-09
+    },
+    "native_sha256": "1240a38cc73e185283a40f9708f8540dcb286c174b6f3c5e7c81798fd96eed21",
+    "measured_8thread_batch_s": 1.0892840000014985,
+    "reference_solver": [
+      "dopri5",
+      "tsit5"
+    ],
+    "sha256": "deea6bef4a369b3794e9d040b6e531e4bf71f0d4785456562ddb3e417629a380",
+    "accuracy": {
+      "max_abs": 7.172751907056197e-07,
+      "max_relative_above_cutoff": 0.0086870082876777,
+      "max_coherence_relative_above_cutoff": 0.0086870082876777,
+      "worst_per_trajectory_relative": [
+        0.003626238081980301,
+        0.0016138815778795343,
+        0.00070415486705654,
+        0.000643312773196294,
+        0.002416179617152945,
+        0.002349268668812138,
+        0.0014942195649688835,
+        0.002952951713215097,
+        0.0022757442744952387,
+        0.0016252125204464815,
+        0.0016768929993720722,
+        0.0027110064669889637,
+        0.00404913077205552,
+        0.0019196714726031842,
+        0.0086870082876777,
+        0.004628924052606825,
+        0.005508810682308251,
+        0.0013718279363555488,
+        0.00394718478013611,
+        0.007521485165291378
+      ],
+      "near_zero_max_abs": 4.293856755775025e-09,
+      "relative_frobenius": 3.7593402326165214e-06,
+      "trace_error": 1.1102230246251565e-15,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": 1.227680002504888e-09,
+      "passes_1percent_above_cutoff": true
+    }
+  },
+  "evolution_s": [
+    0.6936032000230625,
+    0.6932757000031415,
+    0.7016778000106569
+  ],
+  "median_s": 0.6936032000230625,
+  "capture_s": 0.004776999994646758,
+  "seconds_per_trajectory": 0.03468016000115313,
+  "speedup_vs_serial_cpu": 6.02348388800858,
+  "speedup_vs_ideal_12thread_cpu": 0.5019569906673816,
+  "rhs_checks": [
+    {
+      "t": 1.25e-07,
+      "relative_frobenius": 8.501227482084214e-17
+    },
+    {
+      "t": 3.75e-07,
+      "relative_frobenius": 7.699768722345161e-17
+    },
+    {
+      "t": 6.25e-07,
+      "relative_frobenius": 8.481462442387148e-17
+    },
+    {
+      "t": 8.75e-07,
+      "relative_frobenius": 8.917879863717774e-17
+    },
+    {
+      "t": 1.125e-06,
+      "relative_frobenius": 9.366559221334357e-17
+    }
+  ],
+  "device": "NVIDIA GeForce RTX 5070 Ti",
+  "final_time": 1.125e-06,
+  "start": 1.25e-07,
+  "end": 1.125e-06,
+  "fixture_sha256": "05ee9b9e4f883db6cfe3c05b550116f889a16e5705898710aed33bf86ccedeb6",
+  "initial_batch": "K20_driven_X_J2",
+  "initial_indices": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "speedup_vs_measured_8thread_cpu": 1.570471416460131,
+  "accuracy_vs_archived_reference": {
+    "max_abs": 2.3205587771902718e-07,
+    "max_relative_above_cutoff": 0.001314894434318218,
+    "max_coherence_relative_above_cutoff": 0.001314894434318218,
+    "worst_per_trajectory_relative": [
+      0.00011970895521091944,
+      0.000349518022211204,
+      3.355282653279727e-05,
+      3.868014562437245e-05,
+      7.357764531688693e-05,
+      0.0002650761152080015,
+      0.000127772441376887,
+      0.00010268322201153967,
+      0.000557560499815877,
+      0.00016969710040053246,
+      0.0003680923697959825,
+      8.59310303849414e-05,
+      0.001314894434318218,
+      8.356884049097255e-05,
+      0.0010976040502364418,
+      0.00028406903356400555,
+      0.0004956928124893088,
+      3.083317319409626e-05,
+      0.0005808675921490906,
+      0.00029672071953455487
+    ],
+    "near_zero_max_abs": 4.3674077060551787e-10,
+    "relative_frobenius": 1.2077445489449156e-06,
+    "trace_error": 1.7763568394002505e-15,
+    "hermiticity_error": 0.0,
+    "min_eigenvalue": 1.2279854405063046e-09,
+    "passes_1percent_above_cutoff": true
+  }
+}

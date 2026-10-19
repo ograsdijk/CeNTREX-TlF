@@ -1,0 +1,117 @@
+{
+  "system": "rc",
+  "n_states": 70,
+  "generation_s": 1.0077558000048157,
+  "compile_s": 7.7759317999880295,
+  "generators": {
+    "hamiltonian_cse_temporaries": 6,
+    "dissipator_cse_temporaries": 0,
+    "hamiltonian_dynamic_entries": 448,
+    "dissipator_active_packed_entries": 858
+  },
+  "source_sha256": "96669ecddc0de28eabb33ffad7d3f351b77dff0532b7c41cebeba3b095002b71",
+  "baseline_rhs_source_sha256": "f7e2aca5a86a789fb6c2c05e15389a363735c487db1f3391702669e2185a65ed",
+  "normalized_rhs_error": 9.453388505037784e-20,
+  "rhs": [
+    {
+      "method": "D+S+U",
+      "median_s": 3.203925e-05,
+      "samples_s": [
+        3.2130625e-05,
+        3.2061125e-05,
+        3.1996125e-05,
+        3.2015375000000003e-05,
+        3.203925e-05
+      ]
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "median_s": 2.9276e-05,
+      "samples_s": [
+        2.930875e-05,
+        3.018775e-05,
+        2.9226125e-05,
+        2.9276e-05,
+        2.9247875e-05
+      ]
+    }
+  ],
+  "trajectories": [
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-06,
+      "median_s": 0.6166279,
+      "samples_s": [
+        0.6166279,
+        0.6164578,
+        0.6290285
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.517571365736462e-06,
+        "max_small_absolute": 2.0254842282308326e-12,
+        "passed": true
+      },
+      "trace_error": 1.3322676295501878e-15
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "duration_s": 1e-06,
+      "median_s": 0.5538849,
+      "samples_s": [
+        0.5538849,
+        0.5523866,
+        0.5652145
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.517571256468454e-06,
+        "max_small_absolute": 2.0254842067927506e-12,
+        "passed": true
+      },
+      "trace_error": 2.220446049250313e-16
+    },
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-05,
+      "median_s": 3.2460414,
+      "samples_s": [
+        3.2407733,
+        3.3116199,
+        3.2460414
+      ],
+      "rhs_calls": 99191,
+      "accepted": 16525,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 0.00021352698686689247,
+        "max_small_absolute": 2.237096482131342e-11,
+        "passed": true
+      },
+      "trace_error": 1.7763568394002505e-15
+    },
+    {
+      "method": "generated_H_plus_DSU_plus_generated_dissipator",
+      "duration_s": 1e-05,
+      "median_s": 2.9948853,
+      "samples_s": [
+        3.0020705,
+        2.9948853,
+        2.9652454
+      ],
+      "rhs_calls": 99191,
+      "accepted": 16525,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 0.0002135270026325721,
+        "max_small_absolute": 2.237096415702351e-11,
+        "passed": true
+      },
+      "trace_error": 1.1102230246251565e-16
+    }
+  ]
+}

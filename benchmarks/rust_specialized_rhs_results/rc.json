@@ -1,0 +1,187 @@
+{
+  "system": "rc",
+  "n_states": 70,
+  "generation_s": 0.4705862999835517,
+  "compile_s": 154.67242109999643,
+  "source_sha256": "cdfd03cfb40fd5f024d206a8fa1511010cf489d44630ae6194f5ed1297329459",
+  "rhs": [
+    {
+      "method": "D+S+U",
+      "median_s": 3.259175e-05,
+      "samples_s": [
+        3.260925e-05,
+        3.259175e-05,
+        3.2976875e-05,
+        3.2563875e-05,
+        3.25025e-05
+      ],
+      "normalized_RHS_error": 0.0
+    },
+    {
+      "method": "expanded_sparse",
+      "median_s": 0.00014746924999999998,
+      "samples_s": [
+        0.000146678,
+        0.00014746924999999998,
+        0.000147470625,
+        0.000146492625,
+        0.00014886475
+      ],
+      "normalized_RHS_error": 3.9256344633199596e-16
+    },
+    {
+      "method": "generated_rows",
+      "median_s": 4.2556125000000006e-05,
+      "samples_s": [
+        4.2556125000000006e-05,
+        4.2591125e-05,
+        4.2503374999999995e-05,
+        4.2451e-05,
+        4.2687e-05
+      ],
+      "normalized_RHS_error": 7.668202773565334e-19
+    },
+    {
+      "method": "generated_packed",
+      "median_s": 0.00031085487500000003,
+      "samples_s": [
+        0.0003151305,
+        0.00031151325,
+        0.0003082845,
+        0.00030737212499999997,
+        0.00031085487500000003
+      ],
+      "normalized_RHS_error": 3.9256344633199596e-16
+    },
+    {
+      "method": "generated_packed_compiled_coeffs",
+      "median_s": 0.0003101395,
+      "samples_s": [
+        0.000310880625,
+        0.0003106985,
+        0.0003101395,
+        0.000305726375,
+        0.000306727625
+      ],
+      "normalized_RHS_error": 3.9256344633199596e-16
+    }
+  ],
+  "trajectories": [
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-06,
+      "median_s": 0.6108054,
+      "samples_s": [
+        0.6111043,
+        0.6108054,
+        0.6103397
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.517571365736462e-06,
+        "max_small_absolute": 2.0254842282308326e-12,
+        "passed": true
+      },
+      "trace_error": 1.3322676295501878e-15,
+      "min_eigenvalue": 2.791147249629318e-09
+    },
+    {
+      "method": "expanded_sparse",
+      "duration_s": 1e-06,
+      "median_s": 2.8276243,
+      "samples_s": [
+        2.8388363,
+        2.8182634,
+        2.8276243
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.517571269484281e-06,
+        "max_small_absolute": 2.0254842066431077e-12,
+        "passed": true
+      },
+      "trace_error": 2.220446049250313e-16,
+      "min_eigenvalue": 2.791147251681253e-09
+    },
+    {
+      "method": "generated_rows",
+      "duration_s": 1e-06,
+      "median_s": 0.9239662,
+      "samples_s": [
+        0.9239662,
+        0.9137152,
+        0.9321859
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.5175712363366e-06,
+        "max_small_absolute": 2.0254841493064764e-12,
+        "passed": true
+      },
+      "trace_error": 0.0,
+      "min_eigenvalue": 2.7911472517878783e-09
+    },
+    {
+      "method": "generated_packed",
+      "duration_s": 1e-06,
+      "median_s": 5.8395215,
+      "samples_s": [
+        5.8395215,
+        5.8318339,
+        5.8453365999999995
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.517571376097483e-06,
+        "max_small_absolute": 2.025484199429863e-12,
+        "passed": true
+      },
+      "trace_error": 3.3306690738754696e-16,
+      "min_eigenvalue": 2.7911472492911416e-09
+    },
+    {
+      "method": "generated_packed_compiled_coeffs",
+      "duration_s": 1e-06,
+      "median_s": 5.8335745,
+      "samples_s": [
+        5.8321083,
+        5.838516,
+        5.8335745
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.517571376097483e-06,
+        "max_small_absolute": 2.025484199429863e-12,
+        "passed": true
+      },
+      "trace_error": 3.3306690738754696e-16,
+      "min_eigenvalue": 2.7911472492911416e-09
+    }
+  ],
+  "fields": {
+    "E_V_cm": [
+      0,
+      0,
+      200
+    ],
+    "B_G": [
+      0,
+      0,
+      0.01
+    ]
+  },
+  "qn_compact": false,
+  "EOM_Hz": 1600000.0,
+  "beta": 3.8,
+  "compiler": "cargo release opt3 fat LTO; no fastmath"
+}

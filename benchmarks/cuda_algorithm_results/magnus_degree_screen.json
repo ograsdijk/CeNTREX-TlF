@@ -1,0 +1,244 @@
+[
+  {
+    "system": "RC",
+    "batch": 64,
+    "span": [
+      0.000146,
+      0.000147
+    ],
+    "baseline_seconds": [
+      0.1136685999808833
+    ],
+    "rows": [
+      {
+        "step_ns": 4.0,
+        "degree": 8,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.32304749998729676
+        ],
+        "setup_seconds": 0.0505843999562785,
+        "check": {
+          "max_abs": 3.962594185112046e-09,
+          "max_relative_above_1e6": 9.89188151428403e-05,
+          "max_abs_below_1e6": 0.0,
+          "trace_error": 1.1102230246251565e-15,
+          "min_eigenvalue": -1.3552527156068848e-20,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 4.0,
+        "degree": 12,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.5349708999856375
+        ],
+        "setup_seconds": 0.05159559997264296,
+        "check": {
+          "max_abs": 3.9624147203087225e-09,
+          "max_relative_above_1e6": 9.891002166828609e-05,
+          "max_abs_below_1e6": 0.0,
+          "trace_error": 2.886579864025407e-15,
+          "min_eigenvalue": -2.032879073410322e-20,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 4.0,
+        "degree": 18,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.6962900999933481
+        ],
+        "setup_seconds": 0.06827499996870756,
+        "check": {
+          "max_abs": 3.962414721307635e-09,
+          "max_relative_above_1e6": 9.891002170812769e-05,
+          "max_abs_below_1e6": 0.0,
+          "trace_error": 2.6645352591003757e-15,
+          "min_eigenvalue": -1.355252715606887e-20,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 8.0,
+        "degree": 8,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.1698579000076279
+        ],
+        "setup_seconds": 0.05149319994961843,
+        "check": {
+          "max_abs": 6.095121812821347e-08,
+          "max_relative_above_1e6": 0.0012621117904744886,
+          "max_abs_below_1e6": 0.0,
+          "trace_error": 7.771561172376096e-16,
+          "min_eigenvalue": -1.3552527156068965e-20,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 8.0,
+        "degree": 12,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.2505228000227362
+        ],
+        "setup_seconds": 0.061557000037282705,
+        "check": {
+          "max_abs": 6.094268195297459e-08,
+          "max_relative_above_1e6": 0.0012606230763211122,
+          "max_abs_below_1e6": 0.0,
+          "trace_error": 1.3322676295501878e-15,
+          "min_eigenvalue": -1.3552527156068842e-20,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 8.0,
+        "degree": 18,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.35476610000478104
+        ],
+        "setup_seconds": 0.06785809999564663,
+        "check": {
+          "max_abs": 6.094268194343361e-08,
+          "max_relative_above_1e6": 0.0012606230663853822,
+          "max_abs_below_1e6": 0.0,
+          "trace_error": 1.2212453270876722e-15,
+          "min_eigenvalue": -6.776263578034445e-21,
+          "passed": true
+        }
+      }
+    ]
+  },
+  {
+    "system": "R2_EOM",
+    "batch": 64,
+    "span": [
+      1.25e-07,
+      1.125e-06
+    ],
+    "baseline_seconds": [
+      0.12881889997515827
+    ],
+    "rows": [
+      {
+        "step_ns": 4.0,
+        "degree": 8,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.15745790000073612
+        ],
+        "setup_seconds": 0.03840630000922829,
+        "check": {
+          "max_abs": 8.558117959459575e-07,
+          "max_relative_above_1e6": 0.00015786110145831936,
+          "max_abs_below_1e6": 1.3219646462257267e-10,
+          "trace_error": 7.216449660063518e-15,
+          "min_eigenvalue": 1.249202191537148e-13,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 4.0,
+        "degree": 12,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.23226910002995282
+        ],
+        "setup_seconds": 0.04496859997743741,
+        "check": {
+          "max_abs": 8.5468103249427e-07,
+          "max_relative_above_1e6": 0.000153047286104499,
+          "max_abs_below_1e6": 1.3213285111870979e-10,
+          "trace_error": 7.993605777301127e-15,
+          "min_eigenvalue": 1.2492018866954366e-13,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 4.0,
+        "degree": 18,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.3580645999754779
+        ],
+        "setup_seconds": 0.0585222999798134,
+        "check": {
+          "max_abs": 8.546810251571652e-07,
+          "max_relative_above_1e6": 0.00015304714081256553,
+          "max_abs_below_1e6": 1.32132849421044e-10,
+          "trace_error": 7.993605777301127e-15,
+          "min_eigenvalue": 1.2492018925428766e-13,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 8.0,
+        "degree": 8,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.0787138000014238
+        ],
+        "setup_seconds": 0.03614829998696223,
+        "check": {
+          "max_abs": 1.6459978872474363e-05,
+          "max_relative_above_1e6": 0.004472320224566932,
+          "max_abs_below_1e6": 2.888336330423221e-09,
+          "trace_error": 3.1086244689504383e-15,
+          "min_eigenvalue": 1.2495001295986173e-13,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 8.0,
+        "degree": 12,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.11732940003275871
+        ],
+        "setup_seconds": 0.044422100007068366,
+        "check": {
+          "max_abs": 1.613648271435951e-05,
+          "max_relative_above_1e6": 0.0031032869311793396,
+          "max_abs_below_1e6": 2.827126208460774e-09,
+          "trace_error": 3.4416913763379853e-15,
+          "min_eigenvalue": 1.2492939454721814e-13,
+          "passed": true
+        }
+      },
+      {
+        "step_ns": 8.0,
+        "degree": 18,
+        "scale": 1,
+        "rhs": "structured",
+        "timings": [
+          0.17556589999003336
+        ],
+        "setup_seconds": 0.06601469998713583,
+        "check": {
+          "max_abs": 1.613650676049707e-05,
+          "max_relative_above_1e6": 0.0031030409779632677,
+          "max_abs_below_1e6": 2.827114948865782e-09,
+          "trace_error": 5.329070518200751e-15,
+          "min_eigenvalue": 1.249294189066742e-13,
+          "passed": true
+        }
+      }
+    ]
+  }
+]

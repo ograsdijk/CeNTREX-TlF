@@ -1,0 +1,271 @@
+{
+  "generated_at": "2026-10-07T11:10:46.184102-05:00",
+  "torch_version": "2.14.1+cu130",
+  "cuda_build": "13.0",
+  "gpu": [
+    {
+      "point": 0,
+      "repeat": 0,
+      "batch_size": 1,
+      "host_to_device_s": 0.0027276999317109585,
+      "eig_s": 0.5279969999101013,
+      "initial_states_s": 0.0286724001634866,
+      "photon_projection_s": 0.0020538000389933586,
+      "device_to_host_s": 0.0001330999657511711,
+      "total_s": 0.5615882000420243
+    },
+    {
+      "point": 0,
+      "repeat": 1,
+      "batch_size": 1,
+      "host_to_device_s": 0.002923400141298771,
+      "eig_s": 0.5255273999646306,
+      "initial_states_s": 0.029642099980264902,
+      "photon_projection_s": 0.002793600084260106,
+      "device_to_host_s": 0.00014440016821026802,
+      "total_s": 0.5610347001347691
+    },
+    {
+      "point": 1,
+      "repeat": 0,
+      "batch_size": 1,
+      "host_to_device_s": 0.002844100119546056,
+      "eig_s": 0.5109333998989314,
+      "initial_states_s": 0.028599399840459228,
+      "photon_projection_s": 0.002020800020545721,
+      "device_to_host_s": 9.599979966878891e-05,
+      "total_s": 0.544497000053525
+    },
+    {
+      "point": 1,
+      "repeat": 1,
+      "batch_size": 1,
+      "host_to_device_s": 0.0028057999443262815,
+      "eig_s": 0.509461099980399,
+      "initial_states_s": 0.02864850009791553,
+      "photon_projection_s": 0.0020526000298559666,
+      "device_to_host_s": 0.00010089995339512825,
+      "total_s": 0.5430731999222189
+    },
+    {
+      "point": 2,
+      "repeat": 0,
+      "batch_size": 1,
+      "host_to_device_s": 0.002864500042051077,
+      "eig_s": 0.5504016999620944,
+      "initial_states_s": 0.028611100045964122,
+      "photon_projection_s": 0.002027299953624606,
+      "device_to_host_s": 8.849985897541046e-05,
+      "total_s": 0.5839970000088215
+    },
+    {
+      "point": 2,
+      "repeat": 1,
+      "batch_size": 1,
+      "host_to_device_s": 0.002764299977570772,
+      "eig_s": 0.5432333000935614,
+      "initial_states_s": 0.02900100010447204,
+      "photon_projection_s": 0.0020369000267237425,
+      "device_to_host_s": 0.00011529983021318913,
+      "total_s": 0.5771546000614762
+    },
+    {
+      "repeat": 0,
+      "max_photon_difference": 6.226047652899114e-11,
+      "max_scaled_error": 0.000622141771763623,
+      "batch_size": 3,
+      "host_to_device_s": 0.009596599964424968,
+      "eig_s": 1.5792346999514848,
+      "initial_states_s": 0.1130961999297142,
+      "photon_projection_s": 0.018660400062799454,
+      "device_to_host_s": 0.00025400007143616676,
+      "total_s": 1.720845199888572
+    },
+    {
+      "repeat": 1,
+      "max_photon_difference": 6.226047652899114e-11,
+      "max_scaled_error": 0.000622141771763623,
+      "batch_size": 3,
+      "host_to_device_s": 0.009586300002411008,
+      "eig_s": 1.5801813998259604,
+      "initial_states_s": 0.10124240000732243,
+      "photon_projection_s": 0.006823200033977628,
+      "device_to_host_s": 0.0002686998341232538,
+      "total_s": 1.6981041999533772
+    },
+    {
+      "repeat": 0,
+      "max_photon_difference": 6.226047652899114e-11,
+      "max_scaled_error": 0.000622141771763623,
+      "batch_size": 8,
+      "host_to_device_s": 0.031568100210279226,
+      "eig_s": 4.2222040998749435,
+      "initial_states_s": 0.21019369992427528,
+      "photon_projection_s": 0.024459399981424212,
+      "device_to_host_s": 0.0005085000302642584,
+      "total_s": 4.488936500158161
+    },
+    {
+      "repeat": 1,
+      "max_photon_difference": 6.226047652899114e-11,
+      "max_scaled_error": 0.000622141771763623,
+      "batch_size": 8,
+      "host_to_device_s": 0.020202800165861845,
+      "eig_s": 4.207814699970186,
+      "initial_states_s": 0.2119158001150936,
+      "photon_projection_s": 0.019399699987843633,
+      "device_to_host_s": 0.00046769995242357254,
+      "total_s": 4.459803600097075
+    }
+  ],
+  "gpu_memory_bytes": 17094475776,
+  "cuda_capability": [
+    12,
+    0
+  ],
+  "linalg_backend": "_LinalgBackend.Default",
+  "dtype": "float64 / complex128",
+  "autograd": false,
+  "scope": "Three saved reduced 1444-dimensional Liouvillians, pure X 10 mW; all 20 populations; 1401 photon samples. Batch-eight cycles over the same three inputs; no new scan points.",
+  "cpu": [
+    {
+      "point": 0,
+      "repeat": 0,
+      "eig_s": 0.5971730998717248,
+      "real_basis_s": 0.00934009999036789,
+      "lu_s": 0.02399060013704002,
+      "initial_columns_s": 0.0013381000608205795,
+      "photon_traces_s": 0.0623371999245137,
+      "total_s": 0.694179099984467
+    },
+    {
+      "point": 0,
+      "repeat": 1,
+      "eig_s": 0.6010980999562889,
+      "real_basis_s": 0.008064900059252977,
+      "lu_s": 0.024543700041249394,
+      "initial_columns_s": 0.0012786001898348331,
+      "photon_traces_s": 0.06210539978928864,
+      "total_s": 0.6970907000359148
+    },
+    {
+      "point": 1,
+      "repeat": 0,
+      "eig_s": 0.5706126999575645,
+      "real_basis_s": 0.006584499962627888,
+      "lu_s": 0.02330569992773235,
+      "initial_columns_s": 0.0013093000743538141,
+      "photon_traces_s": 0.05943179992027581,
+      "total_s": 0.6612439998425543
+    },
+    {
+      "point": 1,
+      "repeat": 1,
+      "eig_s": 0.5723582999780774,
+      "real_basis_s": 0.006843900075182319,
+      "lu_s": 0.022885499987751245,
+      "initial_columns_s": 0.001216700067743659,
+      "photon_traces_s": 0.059675500029698014,
+      "total_s": 0.6629799001384526
+    },
+    {
+      "point": 2,
+      "repeat": 0,
+      "eig_s": 0.605991099961102,
+      "real_basis_s": 0.006874100072309375,
+      "lu_s": 0.023123899940401316,
+      "initial_columns_s": 0.001253599999472499,
+      "photon_traces_s": 0.060305200051516294,
+      "total_s": 0.6975479000248015
+    },
+    {
+      "point": 2,
+      "repeat": 1,
+      "eig_s": 0.607843599980697,
+      "real_basis_s": 0.006711299996823072,
+      "lu_s": 0.02297019981779158,
+      "initial_columns_s": 0.0012289001606404781,
+      "photon_traces_s": 0.06015909998677671,
+      "total_s": 0.6989130999427289
+    }
+  ],
+  "validation": [
+    {
+      "point": 0,
+      "repeat": 0,
+      "max_photon_difference": 2.40842068510716e-11,
+      "max_scaled_error": 4.3764675890655425e-05,
+      "passed": true,
+      "max_trace_error": 3.7061465008036976e-11,
+      "max_photon_imaginary": 4.065961758439786e-16,
+      "min_photon_increment": 3.683516332126878e-07,
+      "min_photons": 0.0
+    },
+    {
+      "point": 0,
+      "repeat": 1,
+      "max_photon_difference": 2.40842068510716e-11,
+      "max_scaled_error": 4.3764675890655425e-05,
+      "passed": true,
+      "max_trace_error": 3.7061465008036976e-11,
+      "max_photon_imaginary": 4.065961758439786e-16,
+      "min_photon_increment": 3.683516332126878e-07,
+      "min_photons": 0.0
+    },
+    {
+      "point": 1,
+      "repeat": 0,
+      "max_photon_difference": 3.267107591409246e-11,
+      "max_scaled_error": 0.00017977938530194516,
+      "passed": true,
+      "max_trace_error": 3.463784814528026e-11,
+      "max_photon_imaginary": 1.7514831122296604e-17,
+      "min_photon_increment": 2.156789858972445e-06,
+      "min_photons": 0.0
+    },
+    {
+      "point": 1,
+      "repeat": 1,
+      "max_photon_difference": 3.267107591409246e-11,
+      "max_scaled_error": 0.00017977938530194516,
+      "passed": true,
+      "max_trace_error": 3.463784814528026e-11,
+      "max_photon_imaginary": 1.7514831122296604e-17,
+      "min_photon_increment": 2.156789858972445e-06,
+      "min_photons": 0.0
+    },
+    {
+      "point": 2,
+      "repeat": 0,
+      "max_photon_difference": 6.226047653153224e-11,
+      "max_scaled_error": 0.0006221417717890152,
+      "passed": true,
+      "max_trace_error": 8.082223779126707e-11,
+      "max_photon_imaginary": 1.6449081025234443e-20,
+      "min_photon_increment": 5.2892769417594315e-09,
+      "min_photons": 0.0
+    },
+    {
+      "point": 2,
+      "repeat": 1,
+      "max_photon_difference": 6.226047653153224e-11,
+      "max_scaled_error": 0.0006221417717890152,
+      "passed": true,
+      "max_trace_error": 8.082223779126707e-11,
+      "max_photon_imaginary": 1.6449081025234443e-20,
+      "min_photon_increment": 5.2892769417594315e-09,
+      "min_photons": 0.0
+    }
+  ],
+  "gpu_warmup": {
+    "batch_size": 1,
+    "host_to_device_s": 0.0037816001567989588,
+    "eig_s": 0.6317139000166208,
+    "initial_states_s": 0.10572630004025996,
+    "photon_projection_s": 0.17536980006843805,
+    "device_to_host_s": 0.00019660010002553463,
+    "total_s": 0.9167932001873851
+  },
+  "peak_gpu_allocated_bytes": 1802335232,
+  "peak_gpu_reserved_bytes": 3047161856
+}

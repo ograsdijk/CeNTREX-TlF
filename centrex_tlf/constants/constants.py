@@ -75,6 +75,8 @@ __all__ = [
     "HamiltonianConstants",
     "TlFNuclearSpins",
     "XConstants",
+    "X_B_REFERENCE_FREQUENCY_HZ",
+    "X_B_REFERENCE_WAVELENGTH_M",
     "a0",
 ]
 
@@ -85,6 +87,14 @@ __all__ = [
 
 # Bohr radius.
 a0 = cst.value("Bohr radius")  # m
+
+# Experimental optical-frequency reference for 205TlF X(v=0) -> B(v'=0).
+# R(2), F1'=7/2, F'=3: IR 275858770.677 MHz, frequency quadrupled.
+# Source: CeNTREX-transition-finder/calibration.py, R2_F1_7_2_F_3;
+# UV frequency confirmed by the experimenter. This is a reference line,
+# not the vibrational band origin or the exact frequency of every X->B line.
+X_B_REFERENCE_FREQUENCY_HZ = 4 * 275858770.677e6
+X_B_REFERENCE_WAVELENGTH_M = cst.c / X_B_REFERENCE_FREQUENCY_HZ
 
 # Debye in SI units.
 #

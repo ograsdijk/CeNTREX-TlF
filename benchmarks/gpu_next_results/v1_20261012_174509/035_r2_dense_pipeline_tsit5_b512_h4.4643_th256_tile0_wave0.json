@@ -1,0 +1,65 @@
+{
+  "job": {
+    "system": "r2",
+    "kind": "dense_pipeline",
+    "span_us": 5,
+    "batch": 512,
+    "dt_ns": 4.464285714285714,
+    "integrator": "tsit5",
+    "variant": "swap_const_schedule_gentle_exact_devicepop_packed_direct",
+    "threads": 256,
+    "tile": 0,
+    "waveform": false,
+    "repeats": 3,
+    "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\035_r2_dense_pipeline_tsit5_b512_h4.4643_th256_tile0_wave0.json"
+  },
+  "status": "complete",
+  "kind": "R2 cached eigensystem, full complex matrix outputs",
+  "cases": 10020,
+  "rows": [
+    {
+      "chunk": 512,
+      "overlap": false,
+      "seconds": [
+        0.10746989998733625,
+        0.10431529997731559,
+        0.10261220001848415
+      ],
+      "median_s": 0.10431529997731559,
+      "all_complex_output_abs_vs_cpu": 3.608224830031759e-16
+    },
+    {
+      "chunk": 512,
+      "overlap": true,
+      "seconds": [
+        0.09952899999916553,
+        0.10035920000518672,
+        0.09915549997822382
+      ],
+      "median_s": 0.09952899999916553,
+      "all_complex_output_abs_vs_cpu": 3.608224830031759e-16
+    },
+    {
+      "chunk": 2048,
+      "overlap": false,
+      "seconds": [
+        0.08562779999920167,
+        0.08242640001117252,
+        0.08222219999879599
+      ],
+      "median_s": 0.08242640001117252,
+      "all_complex_output_abs_vs_cpu": 3.608224830031759e-16
+    },
+    {
+      "chunk": 2048,
+      "overlap": true,
+      "seconds": [
+        0.08162710000760853,
+        0.08066430001053959,
+        0.08096089999889955
+      ],
+      "median_s": 0.08096089999889955,
+      "all_complex_output_abs_vs_cpu": 3.608224830031759e-16
+    }
+  ]
+}

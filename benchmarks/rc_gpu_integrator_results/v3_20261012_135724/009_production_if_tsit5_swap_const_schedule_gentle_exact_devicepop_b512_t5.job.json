@@ -1,0 +1,14 @@
+{
+  "fixture": "production",
+  "span_us": 5,
+  "batch": 512,
+  "integrator": "if_tsit5",
+  "dt_ns": 4.464285714285714,
+  "variant": "swap_const_schedule_gentle_exact_devicepop",
+  "chunk": 16,
+  "repeats": 1,
+  "atol": 1e-10,
+  "rtol": 1e-09,
+  "gpu_class": "storage_followup",
+  "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v3_20261012_135724\\009_production_if_tsit5_swap_const_schedule_gentle_exact_devicepop_b512_t5.json"
+}

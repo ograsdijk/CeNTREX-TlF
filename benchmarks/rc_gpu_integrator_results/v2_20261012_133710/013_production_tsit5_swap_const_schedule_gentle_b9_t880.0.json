@@ -1,0 +1,110 @@
+{
+  "job": {
+    "fixture": "production",
+    "span_us": 879.9999999999999,
+    "batch": 9,
+    "integrator": "tsit5",
+    "dt_ns": 4.464285714285714,
+    "variant": "swap_const_schedule_gentle",
+    "chunk": 16,
+    "repeats": 1,
+    "atol": 1e-10,
+    "rtol": 1e-09,
+    "gpu_class": "fixed_followup",
+    "kind": "full",
+    "velocity": 50,
+    "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v2_20261012_133710\\013_production_tsit5_swap_const_schedule_gentle_b9_t880.0.json"
+  },
+  "status": "complete",
+  "setup_s": 0.3700729999982286,
+  "evolution_s": [
+    28.05617679998977
+  ],
+  "median_s": 28.05617679998977,
+  "evolution_and_download_wall_s": 28.056262199999765,
+  "accuracy": {
+    "max_abs": 9.1287057217386e-07,
+    "max_relative_above_cutoff": 0.0025602943665174087,
+    "max_coherence_relative_above_cutoff": 0.0025602943665174087,
+    "worst_per_trajectory_relative": [
+      0.002105289538387026,
+      0.0021052896434786902,
+      0.00210604480684547,
+      0.0021060448769570253,
+      0.002560294366459518,
+      0.0025602943665174087,
+      1.4899294973358718e-09,
+      1.4899311442667398e-09,
+      5.574412530915796e-10,
+      5.574428667492023e-10,
+      5.743970076081532e-10,
+      5.743987561543058e-10,
+      0.0014357609743663382,
+      0.001435760934855898,
+      0.002203171073364244,
+      0.002203170893989155,
+      0.0024332135203210693,
+      0.0024332138882428053
+    ],
+    "near_zero_max_abs": 4.014432177122659e-10,
+    "relative_frobenius": 3.887561951327851e-05,
+    "trace_error": 9.992007221626409e-15,
+    "hermiticity_error": 0.0,
+    "min_eigenvalue": -3.1126075051894684e-18,
+    "passes_1percent_above_cutoff": true
+  },
+  "stats": [
+    {
+      "accepted": 183619,
+      "rejected": 0
+    }
+  ],
+  "rhs_relative_error": 0.0,
+  "context": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-SPB-testing\\.cache\\simulations\\optical_bloch\\native_rc_v1\\4aebc0feac6a3d3837e529b9\\prepared_context.pkl",
+  "context_sha256": "cd215628debfc223a50ad78fc2641ef627c2193f373f59cb7d4e7ecd2c6cd9a5",
+  "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_0656b75583b99238.npz",
+  "reference_sha256": "ce32496a2b15f4dfe58b6690e5592223b36544988dbd82ff50ac8ba2d8922e6e",
+  "source_sha256": "64f4007ae8dd33edffcaa3f563413870a6fb41f760a48302667614adfca80954",
+  "device": "NVIDIA GeForce RTX 5070 Ti",
+  "storage": "float64",
+  "accumulation": "float64",
+  "cupy": "14.2.0",
+  "memory_pool_bytes": 17019392,
+  "final_time": 0.0008824749999999999,
+  "python_source_hashes": {
+    "rc_gpu_integrators.py": "b73f8bdb4c296c730d9df17d0193338b954eeb6290b4dd5a77bd4a78becadcd1",
+    "run_rc_gpu_integrator_suite.py": "8eb218c4f89f7fd9d010d7d5e31647548286d20a66ce75eae7291682197b8c54",
+    "rc_gpu_fixed_followup.py": "26920a7a074bdb733432923bf611c00ae2e492ab476adc28895bae44a6b861bc"
+  },
+  "product_kernel_attributes": {
+    "max_threads_per_block": 1024,
+    "shared_size_bytes": 0,
+    "const_size_bytes": 0,
+    "local_size_bytes": 0,
+    "num_regs": 40,
+    "ptx_version": 120,
+    "binary_version": 120,
+    "cache_mode_ca": 0,
+    "max_dynamic_shared_size_bytes": 49152,
+    "preferred_shared_memory_carveout": -1
+  },
+  "field_exit_wall_s_including_sampling": 27.980531500012148,
+  "full_wall_s_including_sampling_and_post_decay": 28.05617679998977,
+  "accuracy_scope": "All nine endpoints vs finer GPU reference; strict CPU subset separately",
+  "strict_cpu_subset_accuracy": {
+    "max_abs": 3.1131783262416945e-10,
+    "max_relative_above_cutoff": 3.126231498431633e-09,
+    "max_coherence_relative_above_cutoff": 0.0,
+    "worst_per_trajectory_relative": [
+      3.123860292180848e-09,
+      3.126231498431633e-09
+    ],
+    "near_zero_max_abs": 1.481231956762359e-10,
+    "relative_frobenius": 2.135906537899258e-09,
+    "trace_error": 9.547918011776346e-15,
+    "hermiticity_error": 0.0,
+    "min_eigenvalue": -7.88860905222807e-31,
+    "passes_1percent_above_cutoff": true
+  },
+  "population_history_max_abs_difference": 1.090126311699413e-06
+}

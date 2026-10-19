@@ -1,0 +1,82 @@
+{
+  "job": {
+    "start": 0.000146,
+    "end": 0.000147,
+    "detunings_MHz": [
+      -20,
+      -20,
+      -20,
+      -1,
+      -1,
+      -1,
+      0,
+      0,
+      0,
+      20,
+      20,
+      20
+    ],
+    "initial_J": [
+      1,
+      2,
+      3,
+      1,
+      2,
+      3,
+      1,
+      2,
+      3,
+      1,
+      2,
+      3
+    ],
+    "threads": 1,
+    "repeats": 1,
+    "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_cpu_exact_probe.json"
+  },
+  "python": "3.13.12 (main, Mar 10 2026, 18:14:40) [MSC v.1944 64 bit (AMD64)]",
+  "native_binary": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\centrex_tlf\\centrex_tlf_rust.cp313-win_amd64.pyd",
+  "native_sha256": "8f0bb9a30fee390ee1195610dfb88873803df6bebdcaefa47a3af137e94aa031",
+  "production_status_at_start": {
+    "label": "RC 250mW UV 500mW MW three-J mixtures fixed entry phase - native Rust parallel",
+    "status": "running",
+    "stage": "native Rust integration",
+    "total": 10143,
+    "completed": 2280,
+    "calculated": 1032,
+    "reused": 1248,
+    "failed": 0,
+    "runner_pid": 8532,
+    "rust_threads": 12,
+    "python_processes": 1,
+    "current_batch": {
+      "forward_velocity_m_s": 90,
+      "detunings_MHz": [
+        9.0,
+        9.25,
+        9.5,
+        9.75
+      ],
+      "initial_J": [
+        1,
+        2,
+        3
+      ],
+      "size": 12,
+      "saved": 0,
+      "fraction": 0.6330681818181818,
+      "phase": "in_light"
+    },
+    "elapsed_seconds": 6141.728616899985,
+    "eta_seconds": 43032.17331716693,
+    "updated_utc": "2026-10-12T00:09:06.956867+00:00"
+  },
+  "concurrent_production": true,
+  "timings": [
+    {
+      "wall_s": 3.863686900003813,
+      "process_cpu_s": 3.875
+    }
+  ],
+  "max_trace_error": 3.3306690738754696e-16
+}

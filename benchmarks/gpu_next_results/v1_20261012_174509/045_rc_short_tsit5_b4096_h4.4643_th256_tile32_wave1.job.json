@@ -1,0 +1,14 @@
+{
+  "system": "rc",
+  "kind": "short",
+  "span_us": 5,
+  "batch": 4096,
+  "dt_ns": 4.464285714285714,
+  "integrator": "tsit5",
+  "variant": "swap_const_schedule_gentle_exact_devicepop_packed",
+  "threads": 256,
+  "tile": 32,
+  "waveform": true,
+  "repeats": 1,
+  "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\045_rc_short_tsit5_b4096_h4.4643_th256_tile32_wave1.json"
+}

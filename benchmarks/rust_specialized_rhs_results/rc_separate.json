@@ -1,0 +1,89 @@
+{
+  "system": "rc",
+  "n_states": 70,
+  "model_prep_s": 12.818064899998717,
+  "generation_s": 124.8853206000058,
+  "compile_s": 89.03396010000142,
+  "generators": {
+    "hamiltonian_cse_temporaries": 9740,
+    "upper_equations": 2485,
+    "cse_optimizations": "basic",
+    "operations_before": 389107,
+    "operations_after": 223558,
+    "dissipator_cse_temporaries": 0,
+    "dissipator_active_packed_entries": 858
+  },
+  "source_sha256": "38f8e465b3e3d6b65ef01a393c8b43ac790fa869f6828441ce8c17ac1af19537",
+  "candidate_calls": [
+    "direct_coefficients",
+    "generated_hamiltonian_rhs",
+    "generated_dissipator"
+  ],
+  "candidate_uses_generic_commutator": false,
+  "normalized_rhs_error": 3.7424246690110305e-16,
+  "rhs": [
+    {
+      "method": "D+S+U",
+      "median_s": 3.2176425e-05,
+      "samples_s": [
+        3.2106525e-05,
+        3.2176425e-05,
+        3.217875e-05,
+        3.204125e-05,
+        3.22805e-05
+      ]
+    },
+    {
+      "method": "separately_generated_H_rhs_and_D_rhs",
+      "median_s": 0.0001717493,
+      "samples_s": [
+        0.0001718143,
+        0.000171509025,
+        0.000171104225,
+        0.0001717493,
+        0.000172337725
+      ]
+    }
+  ],
+  "trajectories": [
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-06,
+      "median_s": 0.5999625,
+      "samples_s": [
+        0.6046477,
+        0.5972521,
+        0.5999625
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.517571365736462e-06,
+        "max_small_absolute": 2.0254842282308326e-12,
+        "passed": true
+      },
+      "trace_error": 1.3322676295501878e-15
+    },
+    {
+      "method": "separately_generated_H_rhs_and_D_rhs",
+      "duration_s": 1e-06,
+      "median_s": 3.2827922,
+      "samples_s": [
+        3.2753475,
+        3.2828026,
+        3.2827922
+      ],
+      "rhs_calls": 18683,
+      "accepted": 3113,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 7.517571329658198e-06,
+        "max_small_absolute": 2.0254842509482164e-12,
+        "passed": true
+      },
+      "trace_error": 2.220446049250313e-16
+    }
+  ],
+  "long_trajectory_screened_out": true
+}

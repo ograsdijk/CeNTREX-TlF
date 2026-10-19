@@ -1,0 +1,30 @@
+{
+  "rc": {
+    "system": "rc",
+    "kind": "short",
+    "span_us": 5,
+    "batch": 512,
+    "dt_ns": 4.464285714285714,
+    "integrator": "tsit5",
+    "variant": "swap_const_schedule_gentle_exact_devicepop_packed",
+    "threads": 256,
+    "tile": 32,
+    "waveform": true,
+    "repeats": 3,
+    "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\031_rc_short_tsit5_b512_h4.4643_th256_tile32_wave1.json"
+  },
+  "r2": {
+    "system": "r2",
+    "kind": "short",
+    "span_us": 1,
+    "batch": 512,
+    "dt_ns": 2.0,
+    "integrator": "tsit5",
+    "variant": "swap_const_exact_packed",
+    "threads": 256,
+    "tile": 32,
+    "waveform": true,
+    "repeats": 3,
+    "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\032_r2_short_tsit5_b512_h2_th256_tile32_wave1.json"
+  }
+}

@@ -115,3 +115,12 @@ dmypy.json
 
 # vscode
 .vscode/
+
+# RC propagation benchmark keeps full density matrices as local validation artifacts.
+benchmarks/rc_propagation_results/*.npz
+benchmarks/rc_propagation_results/pytest_tmp/
+
+# Local GPU benchmark environment and compiler/test caches.
+benchmarks/.venv-gpu-bench/
+benchmarks/.cupy_cache/
+benchmarks/.pytesttemp/

@@ -1,0 +1,185 @@
+[
+  {
+    "velocity": 150.0,
+    "elapsed_seconds": 17.467504500003997,
+    "accuracy": {
+      "max_abs": 5.959309000803337e-07,
+      "max_relative_above_cutoff": 0.0034342212634757203,
+      "max_coherence_relative_above_cutoff": 0.0034342212634757203,
+      "worst_per_trajectory_relative": [
+        0.0013777706479841452,
+        0.0013777706476890454,
+        0.0016375459290466985,
+        0.0016375458797195214,
+        0.0034342212634757203,
+        0.000721785074686123,
+        1.4771624869763314e-06,
+        1.4771624869763314e-06,
+        1.461907858304411e-06,
+        1.461907858304411e-06,
+        1.5180538765860777e-06,
+        1.5180538765860777e-06,
+        0.001491236126891661,
+        0.0014912359665871725,
+        0.0021246185064640764,
+        0.0021246185057856057,
+        0.0010440005289015359,
+        0.0010440005354877327
+      ],
+      "near_zero_max_abs": 5.3941830704934494e-12,
+      "relative_frobenius": 3.877080489233618e-05,
+      "trace_error": 3.4416913763379853e-15,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -7.977352607137108e-18,
+      "passes_1percent_above_cutoff": true
+    },
+    "population_history_max_abs": 7.836840176904392e-07,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_a3d11a0c83cbbf43.npz",
+    "stats": {
+      "solver": "fixed_tsit5",
+      "evolution_device": "cuda",
+      "fixed_step": true,
+      "error_control": false,
+      "steps_per_trajectory": 61238,
+      "accepted_steps": 551142,
+      "rejected_steps": 0,
+      "rhs_calls": 3324285,
+      "function_evaluations": 3324285,
+      "saved_points": 201,
+      "total_seconds": 17.224646400019992,
+      "chunks": [
+        {
+          "trajectories": 9,
+          "steps_per_trajectory": 61238,
+          "rhs_calls": 3324285,
+          "shared_offdiagonal_hamiltonian": true,
+          "precomputed_waveforms": true,
+          "tile_size": 32,
+          "setup_seconds": 0.10378770000534132
+        }
+      ]
+    }
+  },
+  {
+    "velocity": 50.0,
+    "elapsed_seconds": 56.564929200016195,
+    "accuracy": {
+      "max_abs": 9.128546126658393e-07,
+      "max_relative_above_cutoff": 0.002560198600024162,
+      "max_coherence_relative_above_cutoff": 0.002560198600024162,
+      "worst_per_trajectory_relative": [
+        0.002105287508709217,
+        0.002105287613976969,
+        0.002106029397831947,
+        0.0021060294682424393,
+        0.002560198599968036,
+        0.002560198600024162,
+        1.4899288111146769e-09,
+        1.489930183557067e-09,
+        5.574095178249989e-10,
+        5.574109970111531e-10,
+        5.743452237413272e-10,
+        5.743467032803794e-10,
+        0.0014359616199156337,
+        0.0014359615803436316,
+        0.0022034572638587767,
+        0.0022034570842081043,
+        0.0024332326591108727,
+        0.0024332330276353046
+      ],
+      "near_zero_max_abs": 4.01429432961261e-10,
+      "relative_frobenius": 3.8875585261252015e-05,
+      "trace_error": 1.4654943925052066e-14,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -4.678546951326254e-18,
+      "passes_1percent_above_cutoff": true
+    },
+    "population_history_max_abs": 1.0901433669559257e-06,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_0656b75583b99238.npz",
+    "stats": {
+      "solver": "fixed_tsit5",
+      "evolution_device": "cuda",
+      "fixed_step": true,
+      "error_control": false,
+      "steps_per_trajectory": 183704,
+      "accepted_steps": 1653336,
+      "rejected_steps": 0,
+      "rhs_calls": 9956160,
+      "function_evaluations": 9956160,
+      "saved_points": 201,
+      "total_seconds": 56.29689339999459,
+      "chunks": [
+        {
+          "trajectories": 9,
+          "steps_per_trajectory": 183704,
+          "rhs_calls": 9956160,
+          "shared_offdiagonal_hamiltonian": true,
+          "precomputed_waveforms": false,
+          "tile_size": 32,
+          "setup_seconds": 0.3962564000103157
+        }
+      ]
+    }
+  },
+  {
+    "velocity": 250.0,
+    "elapsed_seconds": 10.565285899996525,
+    "accuracy": {
+      "max_abs": 3.5665969663867743e-07,
+      "max_relative_above_cutoff": 0.0031571958409867553,
+      "max_coherence_relative_above_cutoff": 0.0031571958409867553,
+      "worst_per_trajectory_relative": [
+        0.000677084588011577,
+        0.0003715586460706163,
+        0.0012074915340255985,
+        0.0007052580344600061,
+        0.0031571958409867553,
+        0.0006494508430602385,
+        2.4322839699665325e-05,
+        2.432279948941413e-05,
+        1.8806082503921842e-05,
+        1.880606595846789e-05,
+        1.821327046976138e-05,
+        1.8213253443586166e-05,
+        0.0005921694319946839,
+        0.0005921696198361926,
+        0.0010942069981919914,
+        0.0003234063191627413,
+        0.0005753556879103655,
+        0.0005465344471844153
+      ],
+      "near_zero_max_abs": 3.3247012848255257e-10,
+      "relative_frobenius": 2.7008639540836494e-05,
+      "trace_error": 5.773159728050814e-15,
+      "hermiticity_error": 0.0,
+      "min_eigenvalue": -1.1515395908321863e-17,
+      "passes_1percent_above_cutoff": true
+    },
+    "population_history_max_abs": 5.011490266070007e-07,
+    "reference": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_sparse_results\\v1_20261011_235549\\full_staged_soa_minor_5fcc5f13ee68b297.npz",
+    "stats": {
+      "solver": "fixed_tsit5",
+      "evolution_device": "cuda",
+      "fixed_step": true,
+      "error_control": false,
+      "steps_per_trajectory": 36781,
+      "accepted_steps": 331029,
+      "rejected_steps": 0,
+      "rhs_calls": 1994886,
+      "function_evaluations": 1994886,
+      "saved_points": 201,
+      "total_seconds": 10.337603299994953,
+      "chunks": [
+        {
+          "trajectories": 9,
+          "steps_per_trajectory": 36781,
+          "rhs_calls": 1994886,
+          "shared_offdiagonal_hamiltonian": true,
+          "precomputed_waveforms": true,
+          "tile_size": 32,
+          "setup_seconds": 0.012396100006299093
+        }
+      ]
+    }
+  }
+]

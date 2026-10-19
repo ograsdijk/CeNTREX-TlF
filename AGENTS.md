@@ -342,6 +342,26 @@ Capabilities that already exist — check here before building something new.
 - SciPy `scipy_bdf` / `scipy_radau` exist only as stiff fallbacks and are much slower for scans.
   `python_rk45` is for correctness checks.
 - Prepare once, scan many times — symbolic lowering happens in `prepare_lindblad_problem`.
+- Prepack unchanged initial matrices once with `prepared.layout.pack_batch(initial_states)`
+  and reuse the packed snapshot across batch/grid calls. Matrix batch packing is vectorized;
+  CUDA grids pack distinct states before parameter expansion. Regenerate the snapshot when
+  initial states change.
+- Packed Rust D+S+U (`execution_mode="structured_sparse_dense_diag_soa_single_unpack"`)
+  uses `cpu_kernel="auto"` from preparation: AVX2/FMA when available, AVX2
+  otherwise, with original-kernel fallback. Optimized kernels fuse decay and
+  direct packed output and vectorize finalization. Select `"original"` to opt
+  out, or explicitly `"avx2"`, `"avx2_fma"`, `"avx512"`, `"avx512_fma"`.
+  Unsupported explicit ISA choices raise during Rust preparation. Auto never
+  selects AVX-512. Inspect `prepared.resolved_cpu_kernel`; settings travel with
+  batch/grid payloads. Other execution modes, Python and CUDA are unchanged.
+- Decomposed Rust plans also cache static upper-triangle values and update offsets;
+  upper-triangle kernels (including D+S+U) use these automatically. Repeated scalar
+  coefficient expressions share a prepared DAG, with the original evaluator retained
+  when sharing is absent or unsupported. Both use generic kernels, without per-system
+  native compilation. Set `prepared_hamiltonian_assembly=False` and/or
+  `shared_coefficient_dag=False` in `prepare_lindblad_problem` to opt out;
+  both default to True. These choices carry through batch/grid payloads.
+  See `benchmarks/rust_specialized_rhs_results/PREPARED_HAMILTONIAN_INTEGRATION.md`.
 - Cache expensive rebuilds with `@lru_cache` keyed on **integer grid indices**, not floats.
 - Cost anchor (29-level system, 109 µs trajectory, 8-core laptop): ~1 s per OBE build,
   ~130 ms per trajectory, so ~50 s for a 380-point detuning spectrum with `parallel=True`.
@@ -367,9 +387,15 @@ Capabilities that already exist — check here before building something new.
 - `prepare_dense_lindblad_propagator` exposes factorization reuse and full density
   reconstruction. Exact reachability/sink reduction is checked; use `reduce=False`
   if later initial coherences may lie outside the reduced subspace.
+- CPU full reconstruction reuses one initial coefficient solve for active
+  evolution and sink feed across time chunks; complex density unpacking uses
+  bounded vectorized batches automatically. This speeds reconstruction, not
+  eigendecomposition; no accuracy settings or generator coordinates change.
 - Optional `evolution_device="cuda"`, `gpu_batch_size=8` uses CPU decomposition
   plus forward-only PyTorch projection. PyTorch is optional (`gpu` extra); full
-  packed density reconstruction remains on the CPU. See README_OBE_SOLVER.md.
+  packed and complex density reconstruction can run on the GPU. Reusable
+  propagators retain full-density factors on-device; `clear_cuda_cache()` releases
+  them. See README_OBE_SOLVER.md.
 
 ## Sanity checks worth running
 
@@ -403,3 +429,41 @@ Capabilities that already exist — check here before building something new.
 
 Note that `examples/ramsey_rf/` contains only cached artifacts — its driver scripts are not in the
 working tree.
+
+## Optional CUDA ODE solver
+
+- Opt-in exact CUDA coordinate reduction: `CudaSolverOptions(density_reduction=True)`
+  (default False), compact structured direct RHS, full-density reconstruction,
+  and all existing outputs/integrals. No magnitude cutoff; support is recomputed
+  for each initial batch chunk. May be slower if little support is removed.
+- Opt-in periodic maps: `prepare_periodic_lindblad_propagator(prepared, period,
+  rho0_batch=..., dt=..., parameter_values=...)`, then `.evaluate(initial_states,
+  times, t0=...)` or `.density_matrices(...)`. Fixed periodic generator only;
+  Gaussian envelopes/noncommensurate drives are rejected. J mixtures and
+  duration-only forward velocities reuse maps; changed detuning/power/profile
+  needs new preparation. Prefix/remainder phases are directly integrated.
+  Full/population/selected outputs only; no photon integral. No default changes.
+
+- Use `evolution_device="cuda"`, `solver="fixed_tsit5"` or `"fixed_ck54"`, and
+  `cuda_options=CudaSolverOptions(batch_size=512)` in the usual solve/batch/scan APIs.
+- Requires the optional CuPy `cuda` (CUDA 12) or `cuda13` extra and a compatible GPU.
+  The separate static dense CUDA path uses the PyTorch `gpu` extra.
+- These are fixed-step methods: validate `dt`; `abstol`/`reltol` do not control accuracy.
+  Check complex coherences as well as populations. CPU defaults remain unchanged.
+- Prepared Hamiltonians must be decomposed; execution mode is `expanded_sparse`.
+  Affine polarization-switch boundaries are clipped automatically. Declare other
+  jumps with `CudaSolverOptions(discontinuities=[...])`.
+- `density_saveat=[...]` saves additional packed full-density snapshots in result
+  metadata independently of the population/photon output grid. All density
+  coordinates are evolved by default even with photon-only output; exact
+  coordinate reduction is separately opt-in.
+- No terminal events or sampled quadrature. Prescribed `step_schedule` is supported.
+  See README_OBE_SOLVER.md and benchmarks/CUDA_LIBRARY_INTEGRATION.md.
+- CUDA coefficient/H sharing is controlled independently with
+  `CudaSolverOptions(coefficient_sharing="auto", hamiltonian_sharing="auto")`;
+  use `"off"` to disable either. Shared waveforms/static factors and eligible
+  direct-RHS H components preserve the existing physical model and timestep.
+  `hamiltonian_sharing="on"` bypasses the arithmetic performance heuristic for
+  explicit benchmarking; unsupported factors still fall back. Auto avoids the
+  measured multiple-component RC slowdown. See README_OBE_SOLVER.md for budgets
+  and chunk diagnostics; independently varied powers do not guarantee a speedup.

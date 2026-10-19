@@ -1,0 +1,20 @@
+{
+  "mode": "eom",
+  "input": "benchmarks\\r2_gpu_reuse_results\\matched_cross_v1\\inputs.npz",
+  "input_sha256": "515811eb40b8c849bd6837118605d47680d3af47b7062fe93a8ce92529fe26d5",
+  "sources_sha256": {
+    "run_r2_gpu_reuse.py": "617a052dc81cb4f253a6ee32b4c2fb91824c099a93a03f492a0e438b47ee17bc",
+    "prepare_r2_gpu_cross_fixture.py": "fc62533f61201681e8a45d8def261947703bd729c0da39fbdbf81ca3f5c12bd4",
+    "rc_gpu_sparse_methods.py": "e11f8a8178c308b0d4b7ce9db5794fee1e16472094eb9b9ec630344950d3718a",
+    "rc_gpu_integrators.py": "b73f8bdb4c296c730d9df17d0193338b954eeb6290b4dd5a77bd4a78becadcd1",
+    "rc_gpu_fixed_followup.py": "26920a7a074bdb733432923bf611c00ae2e492ab476adc28895bae44a6b861bc",
+    "rc_gpu_storage_followup.py": "473a8a90926d419a20671df6c6a08c385539f78358c534bce2af63771c276dd9",
+    "rc_gpu_sparse_kernels.cu": "b3ac8a71ec8e7275410d60e264149c88e0fffae2ad4d1552c8064d964741c3b6",
+    "rc_gpu_integrators.cu": "8fc8a57d006695fe071bdb2e6a86522badef1d090bab0797f154bb1157ee85ed",
+    "rc_gpu_packed.cu": "2246f64ab0e36655e735da02776ec444b2fb212118750fbbf739eea0edf84989",
+    "rc_gpu_integrating_factor.cu": "cea31faa047cea832bbde604eb333f1c960098f7c8bd9c017157be0603d5aede"
+  },
+  "cupy_version": "14.2.0",
+  "numpy_version": "2.4.6",
+  "device": "b'NVIDIA GeForce RTX 5070 Ti'"
+}

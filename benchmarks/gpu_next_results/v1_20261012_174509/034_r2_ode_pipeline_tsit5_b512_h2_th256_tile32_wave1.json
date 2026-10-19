@@ -1,0 +1,41 @@
+{
+  "job": {
+    "system": "r2",
+    "kind": "ode_pipeline",
+    "span_us": 1,
+    "batch": 512,
+    "dt_ns": 2.0,
+    "integrator": "tsit5",
+    "variant": "swap_const_exact_packed",
+    "threads": 256,
+    "tile": 32,
+    "waveform": true,
+    "repeats": 3,
+    "output": "benchmarks\\gpu_next_results\\v1_20261012_174509\\034_r2_ode_pipeline_tsit5_b512_h2_th256_tile32_wave1.json"
+  },
+  "status": "complete",
+  "chunks": 4,
+  "rows": [
+    {
+      "overlap": false,
+      "seconds": [
+        2.1077808999980334,
+        2.1043451000005007,
+        2.107420300017111
+      ],
+      "median_s": 2.107420300017111,
+      "all_output_abs_vs_sequential": 0.0
+    },
+    {
+      "overlap": true,
+      "seconds": [
+        2.1018007999809925,
+        2.105487799999537,
+        2.1019094999937806
+      ],
+      "median_s": 2.1019094999937806,
+      "all_output_abs_vs_sequential": 0.0
+    }
+  ],
+  "speedup": 1.0026218065160972
+}

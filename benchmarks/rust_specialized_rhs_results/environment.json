@@ -1,0 +1,19 @@
+{
+  "cpu": "AMD Ryzen 7 9800X3D",
+  "physical_cores": 8,
+  "logical_cpus": 16,
+  "bench_threads": 1,
+  "compiler": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "cargo": "cargo 1.98.0",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "note": "Rust-only, isolated compiled benchmark extensions; installed library binary unchanged",
+  "source_hashes": {
+    "benchmarks\\bench_rust_specialized_rhs.py": "3e26ee39be9f2563a8faccf015493a75e2f20fea398638ffabdfbd71d6826c50",
+    "benchmarks\\bench_rust_cse_rhs.py": "2211a07bf93819b8ccacc73922b91d5fdc2036e7d51d0934158965df66e3dc4b",
+    "benchmarks\\specialized_rhs_native.rs": "cd1243c9472dfed6480081f259c0cb162328a63e497dcd0d3145670b45fd09d7",
+    "rust\\src\\lindblad\\rhs.rs": "f7e2aca5a86a789fb6c2c05e15389a363735c487db1f3391702669e2185a65ed",
+    "rust\\src\\lindblad\\plan.rs": "d9863ac03b23a3f23b3eb49c97473cced17c8164a7a1e065bc9f83967f6e9df1",
+    "rust\\src\\lindblad\\eval.rs": "e9fb79b2a72b00f17e2672a689ce8ffe76037d50384dea2e6c99ac593dd12774",
+    "rust\\src\\ode\\tsit5.rs": "6fb99112be5702c604d26746d65a969da37ad21af4b14723ef83001de85432f5"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "python": "3.11.13 (main, Jul 11 2025, 22:36:59) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "cupy": "14.2.0",
+  "numpy": "2.4.6",
+  "scipy": "1.16.0",
+  "device": "NVIDIA GeForce RTX 5070 Ti",
+  "reproducer_sha256": {
+    "benchmarks/check_cuda_algorithms.py": "5731131ef2085d5e5d2cfd5840a41657f9c3e767ed1dd9a0046c071733d04d26",
+    "benchmarks/check_cuda_algorithm_finalists.py": "a2aead2351901143d74b68c89d249bc26be83c9ac74a2db09a073ddbad7438a5",
+    "benchmarks/report_cuda_algorithms.py": "c48082cf542dade1e291f577516ee262622e4568c9c61f361318b3a394095b96",
+    "benchmarks/test_cuda_algorithms.py": "68155e5f7ed8478f295423da86548f4cbc88ff9210b4e4344fa693810a441976",
+    "centrex_tlf/lindblad/cuda.py": "5fc645ba2f25450c069d09f892a2a8fb4d9d3d0ef77b5c2e20950f48c0563b0e",
+    "centrex_tlf/lindblad/_cuda_kernels.py": "adce33a2928b9cbba84dbf99665e1d8860223458f8483e79f962561e119ed5ea"
+  },
+  "note": "Hashes identify the final reproducer. During the first expanded-sparse reduction run, the setup timer also included an initial full baseline solve; evolution timings are separate and comparable. Later runs allocate/capture without that extra solve. Benchmark timings exclude CPU output reconstruction except where explicitly described."
+}

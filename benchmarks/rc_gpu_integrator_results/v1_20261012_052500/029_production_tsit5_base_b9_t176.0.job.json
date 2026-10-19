@@ -1,0 +1,15 @@
+{
+  "fixture": "production",
+  "span_us": 176.0,
+  "batch": 9,
+  "integrator": "tsit5",
+  "dt_ns": 3.90625,
+  "variant": "base",
+  "chunk": 16,
+  "repeats": 1,
+  "atol": 1e-10,
+  "rtol": 1e-09,
+  "kind": "full",
+  "velocity": 250,
+  "output": "C:\\Users\\ogras\\Documents\\GitHub\\CeNTREX-TlF\\benchmarks\\rc_gpu_integrator_results\\v1_20261012_052500\\029_production_tsit5_base_b9_t176.0.json"
+}

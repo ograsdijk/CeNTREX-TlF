@@ -1,7 +1,8 @@
 use crate::lindblad::blas::BlasConfig;
+use crate::lindblad::cpu_kernel::CpuKernel;
 use crate::lindblad::eval::{
     eval_expression_into, eval_scalar_expression_into, scalar_value, CompiledExpression,
-    Instruction, InstructionOp, RuntimeValue,
+    Instruction, InstructionOp, RuntimeValue, ScalarCoefficientDag,
 };
 use crate::lindblad::layout::{PackedHermitianLayout, UpperTriLayout};
 use num_complex::Complex64;
@@ -236,6 +237,10 @@ pub struct HamiltonianPlan {
     pub static_matrix: Vec<Complex64>,
     pub coefficients: Vec<DecomposedHamiltonianCoefficient>,
     pub row_plans: Vec<DenseRowPlan>,
+    pub static_upper: Vec<Complex64>,
+    pub upper_updates: Vec<Vec<(usize, Complex64)>>,
+    pub coefficient_dag: Option<ScalarCoefficientDag>,
+    pub prepared_hamiltonian_assembly: bool,
 }
 
 impl HamiltonianPlan {
@@ -252,6 +257,11 @@ impl HamiltonianPlan {
         }
         out.clear();
         out.reserve(self.coefficients.len());
+        if let Some(dag) = &self.coefficient_dag {
+            dag.evaluate_into(parameter_values, t, eval_stack, scalar_stack)?;
+            out.extend((0..self.coefficients.len()).map(|i| dag.coefficient(i, eval_stack)));
+            return Ok(());
+        }
         for coefficient in &self.coefficients {
             let value = if coefficient.expression.scalar_only {
                 eval_scalar_expression_into(
@@ -275,6 +285,32 @@ impl HamiltonianPlan {
         Ok(())
     }
 
+    fn coefficient_value(
+        &self,
+        index: usize,
+        parameter_values: &[RuntimeValue],
+        t: f64,
+        dag_values: &[RuntimeValue],
+        eval_stack: &mut Vec<RuntimeValue>,
+        scalar_stack: &mut Vec<Complex64>,
+    ) -> Result<Complex64, String> {
+        if let Some(dag) = &self.coefficient_dag {
+            return Ok(dag.coefficient(index, dag_values));
+        }
+        let expression = &self.coefficients[index].expression;
+        if expression.scalar_only {
+            eval_scalar_expression_into(expression, parameter_values, t, &[], scalar_stack)
+        } else {
+            scalar_value(eval_expression_into(
+                expression,
+                parameter_values,
+                t,
+                &[],
+                eval_stack,
+            )?)
+        }
+    }
+
     pub fn fill_into(
         &self,
         parameter_values: &[RuntimeValue],
@@ -292,27 +328,21 @@ impl HamiltonianPlan {
             ));
         }
         if self.kind == HamiltonianKind::Decomposed {
+            if let Some(dag) = &self.coefficient_dag {
+                dag.evaluate_into(parameter_values, t, temps, scalar_stack)?;
+            }
             matrix.copy_from_slice(self.static_matrix.as_slice());
             let coeff_values = if !self.row_plans.is_empty() {
                 let mut values = Vec::with_capacity(self.coefficients.len());
-                for coefficient in &self.coefficients {
-                    let value = if coefficient.expression.scalar_only {
-                        eval_scalar_expression_into(
-                            &coefficient.expression,
-                            parameter_values,
-                            t,
-                            &[],
-                            scalar_stack,
-                        )?
-                    } else {
-                        scalar_value(eval_expression_into(
-                            &coefficient.expression,
-                            parameter_values,
-                            t,
-                            &[],
-                            eval_stack,
-                        )?)?
-                    };
+                for index in 0..self.coefficients.len() {
+                    let value = self.coefficient_value(
+                        index,
+                        parameter_values,
+                        t,
+                        temps,
+                        eval_stack,
+                        scalar_stack,
+                    )?;
                     values.push(value);
                 }
                 Some(values)
@@ -340,24 +370,15 @@ impl HamiltonianPlan {
                 }
                 return Ok(());
             }
-            for coefficient in &self.coefficients {
-                let value = if coefficient.expression.scalar_only {
-                    eval_scalar_expression_into(
-                        &coefficient.expression,
-                        parameter_values,
-                        t,
-                        &[],
-                        scalar_stack,
-                    )?
-                } else {
-                    scalar_value(eval_expression_into(
-                        &coefficient.expression,
-                        parameter_values,
-                        t,
-                        &[],
-                        eval_stack,
-                    )?)?
-                };
+            for (index, coefficient) in self.coefficients.iter().enumerate() {
+                let value = self.coefficient_value(
+                    index,
+                    parameter_values,
+                    t,
+                    temps,
+                    eval_stack,
+                    scalar_stack,
+                )?;
                 if !coefficient.basis_row_segments.is_empty() {
                     for segment in &coefficient.basis_row_segments {
                         let row_offset = segment.row * self.n;
@@ -439,50 +460,66 @@ impl HamiltonianPlan {
                 upper_layout.n, self.n
             ));
         }
-        upper_layout.clear(upper)?;
         if self.kind == HamiltonianKind::Decomposed {
-            for i in 0..self.n {
-                for j in i..self.n {
-                    let dense_index = i * self.n + j;
-                    upper[upper_layout.index(i, j)?] = self.static_matrix[dense_index];
+            if !self.prepared_hamiltonian_assembly {
+                upper_layout.clear(upper)?;
+                if let Some(dag) = &self.coefficient_dag {
+                    dag.evaluate_into(parameter_values, t, temps, scalar_stack)?;
                 }
-            }
-            for coefficient in &self.coefficients {
-                let value = if coefficient.expression.scalar_only {
-                    eval_scalar_expression_into(
-                        &coefficient.expression,
+                for i in 0..self.n {
+                    for j in i..self.n {
+                        upper[upper_layout.index(i, j)?] = self.static_matrix[i * self.n + j];
+                    }
+                }
+                for (index, coefficient) in self.coefficients.iter().enumerate() {
+                    let value = self.coefficient_value(
+                        index,
                         parameter_values,
                         t,
-                        &[],
-                        scalar_stack,
-                    )?
-                } else {
-                    scalar_value(eval_expression_into(
-                        &coefficient.expression,
-                        parameter_values,
-                        t,
-                        &[],
+                        temps,
                         eval_stack,
-                    )?)?
-                };
-                if !coefficient.basis_row_segments.is_empty() {
-                    for segment in &coefficient.basis_row_segments {
-                        for (offset, entry) in segment.values.iter().enumerate() {
-                            let col = segment.start_col + offset;
-                            let index = upper_layout.index(segment.row, col)?;
-                            upper[index] += value * *entry;
+                        scalar_stack,
+                    )?;
+                    if !coefficient.basis_row_segments.is_empty() {
+                        for segment in &coefficient.basis_row_segments {
+                            for (offset, entry) in segment.values.iter().enumerate() {
+                                upper[upper_layout
+                                    .index(segment.row, segment.start_col + offset)?] +=
+                                    value * *entry;
+                            }
+                        }
+                    } else {
+                        for term in &coefficient.basis_terms {
+                            upper[upper_layout.index(term.i, term.j)?] += value * term.value;
                         }
                     }
-                } else {
-                    for basis_term in &coefficient.basis_terms {
-                        let index = upper_layout.index(basis_term.i, basis_term.j)?;
-                        upper[index] += value * basis_term.value;
-                    }
+                }
+                return Ok(());
+            }
+            if upper.len() != self.static_upper.len() {
+                return Err("Hamiltonian upper-triangle buffer length mismatch".to_string());
+            }
+            if let Some(dag) = &self.coefficient_dag {
+                dag.evaluate_into(parameter_values, t, temps, scalar_stack)?;
+            }
+            upper.copy_from_slice(&self.static_upper);
+            for (index, updates) in self.upper_updates.iter().enumerate() {
+                let value = self.coefficient_value(
+                    index,
+                    parameter_values,
+                    t,
+                    temps,
+                    eval_stack,
+                    scalar_stack,
+                )?;
+                for &(offset, multiplier) in updates {
+                    upper[offset] += value * multiplier;
                 }
             }
             return Ok(());
         }
 
+        upper_layout.clear(upper)?;
         temps.clear();
         for temp in &self.temps {
             temps.push(if temp.scalar_only {
@@ -664,6 +701,8 @@ pub struct ExpandedSparseRhsPlan {
 #[pyclass(module = "centrex_tlf.centrex_tlf_rust")]
 #[derive(Clone)]
 pub struct PreparedLindbladPlan {
+    pub cpu_kernel: CpuKernel,
+    pub cpu_kernel_requested: String,
     pub layout: PackedHermitianLayout,
     pub parameter_graph: ParameterGraph,
     pub hamiltonian_plan: HamiltonianPlan,
@@ -677,6 +716,18 @@ pub struct PreparedLindbladPlan {
     pub hamiltonian_sparse_pattern: HermitianSparsePattern,
     pub is_time_dependent: bool,
     pub dynamic_hamiltonian_coefficients: Vec<bool>,
+}
+
+#[pymethods]
+impl PreparedLindbladPlan {
+    #[getter(cpu_kernel)]
+    fn requested_cpu_kernel(&self) -> &str {
+        &self.cpu_kernel_requested
+    }
+    #[getter]
+    fn resolved_cpu_kernel(&self) -> &str {
+        self.cpu_kernel.as_str()
+    }
 }
 
 impl PreparedLindbladPlan {
@@ -938,6 +989,70 @@ fn parse_hamiltonian_plan(obj: &Bound<'_, PyAny>) -> PyResult<HamiltonianPlan> {
                 basis_row_segments,
             });
         }
+        if static_values.len() != n * n {
+            return Err(PyValueError::new_err(
+                "static Hamiltonian dimension mismatch",
+            ));
+        }
+        let prepared_hamiltonian_assembly = dict
+            .get_item("prepared_hamiltonian_assembly")?
+            .map(|value| value.extract::<bool>())
+            .transpose()?
+            .unwrap_or(true);
+        let shared_coefficient_dag = dict
+            .get_item("shared_coefficient_dag")?
+            .map(|value| value.extract::<bool>())
+            .transpose()?
+            .unwrap_or(true);
+        let mut static_upper = Vec::new();
+        let mut upper_updates = Vec::new();
+        if prepared_hamiltonian_assembly {
+            let upper_layout = UpperTriLayout::new(n).map_err(PyValueError::new_err)?;
+            static_upper.reserve(upper_layout.len());
+            for i in 0..n {
+                for j in i..n {
+                    static_upper.push(static_values[i * n + j]);
+                }
+            }
+            upper_updates.reserve(coefficients.len());
+            for coefficient in &coefficients {
+                let mut updates = Vec::new();
+                if !coefficient.basis_row_segments.is_empty() {
+                    for segment in &coefficient.basis_row_segments {
+                        for (offset, &value) in segment.values.iter().enumerate() {
+                            let col = segment.start_col.checked_add(offset).ok_or_else(|| {
+                                PyValueError::new_err("basis column index overflow")
+                            })?;
+                            updates.push((
+                                upper_layout
+                                    .index(segment.row, col)
+                                    .map_err(PyValueError::new_err)?,
+                                value,
+                            ));
+                        }
+                    }
+                } else {
+                    for term in &coefficient.basis_terms {
+                        updates.push((
+                            upper_layout
+                                .index(term.i, term.j)
+                                .map_err(PyValueError::new_err)?,
+                            term.value,
+                        ));
+                    }
+                }
+                upper_updates.push(updates);
+            }
+        }
+        let coefficient_dag = if shared_coefficient_dag {
+            ScalarCoefficientDag::prepare(
+                coefficients
+                    .iter()
+                    .map(|coefficient| &coefficient.expression),
+            )
+        } else {
+            None
+        };
         return Ok(HamiltonianPlan {
             n,
             temps: Vec::new(),
@@ -955,6 +1070,10 @@ fn parse_hamiltonian_plan(obj: &Bound<'_, PyAny>) -> PyResult<HamiltonianPlan> {
                 }
             },
             static_matrix: static_values,
+            static_upper,
+            upper_updates,
+            coefficient_dag,
+            prepared_hamiltonian_assembly,
             coefficients,
             row_plans: {
                 let row_plans = match dict.get_item("row_plans")? {
@@ -1055,6 +1174,10 @@ fn parse_hamiltonian_plan(obj: &Bound<'_, PyAny>) -> PyResult<HamiltonianPlan> {
         static_matrix: vec![Complex64::ZERO; n * n],
         coefficients: Vec::new(),
         row_plans: Vec::new(),
+        static_upper: Vec::new(),
+        upper_updates: Vec::new(),
+        coefficient_dag: None,
+        prepared_hamiltonian_assembly: false,
     })
 }
 
@@ -1154,11 +1277,22 @@ fn parse_expanded_sparse_rhs_plan(
 
 pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbladPlan> {
     let dict: &Bound<'_, PyDict> = payload.cast()?;
+    let cpu_kernel_requested: String = dict
+        .get_item("cpu_kernel")?
+        .map(|v| v.extract())
+        .transpose()?
+        .unwrap_or_else(|| "auto".to_string());
+    let cpu_kernel = CpuKernel::resolve(&cpu_kernel_requested).map_err(PyValueError::new_err)?;
     let n_states: usize = required_item(dict, "n_states")?.extract()?;
     let layout = PackedHermitianLayout::new(n_states).map_err(PyValueError::new_err)?;
 
     let parameter_graph = parse_parameter_graph(&required_item(dict, "parameter_graph")?)?;
     let hamiltonian_plan = parse_hamiltonian_plan(&required_item(dict, "hamiltonian_plan")?)?;
+    if hamiltonian_plan.n != n_states {
+        return Err(PyValueError::new_err(
+            "Hamiltonian dimension does not match n_states",
+        ));
+    }
 
     let source_decay_array: PyReadonlyArray1<'_, f64> =
         required_item(dict, "source_decay_rates")?.extract()?;
@@ -1181,6 +1315,11 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
         .to_vec();
 
     let n_collapse_count = dense_shape[0];
+    if source_decay_rates.len() != n_states {
+        return Err(PyValueError::new_err(
+            "source_decay_rates length must match n_states",
+        ));
+    }
     let collapse_size = n_states * n_states;
     let zero = Complex64::ZERO;
     let mut dense_cdagger_c = vec![zero; n_collapse_count * collapse_size];
@@ -1213,6 +1352,16 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
             });
         }
         incoming_transfers_by_target.push(transfers);
+    }
+    if incoming_transfers_by_target.len() != n_states
+        || incoming_transfers_by_target
+            .iter()
+            .flatten()
+            .any(|transfer| transfer.source >= n_states)
+    {
+        return Err(PyValueError::new_err(
+            "invalid incoming decay transfer dimensions or source index",
+        ));
     }
 
     let expanded_rhs_plan = match dict.get_item("expanded_rhs_plan")? {
@@ -1291,6 +1440,8 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
     };
 
     Ok(PreparedLindbladPlan {
+        cpu_kernel,
+        cpu_kernel_requested,
         layout,
         parameter_graph,
         hamiltonian_plan,

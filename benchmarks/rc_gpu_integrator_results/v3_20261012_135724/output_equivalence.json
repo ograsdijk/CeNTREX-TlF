@@ -1,0 +1,32 @@
+[
+  {
+    "job": 2,
+    "variant": "swap_const_schedule_gentle_exact",
+    "density_max_absolute_difference_from_v3_baseline": 4.0245584642661925e-16,
+    "population_max_absolute_difference_from_v3_baseline": 1.2417150641041985e-14
+  },
+  {
+    "job": 3,
+    "variant": "swap_const_schedule_gentle_devicepop",
+    "density_max_absolute_difference_from_v3_baseline": 0.0,
+    "population_max_absolute_difference_from_v3_baseline": 0.0
+  },
+  {
+    "job": 4,
+    "variant": "swap_const_schedule_gentle_exact_devicepop",
+    "density_max_absolute_difference_from_v3_baseline": 4.0245584642661925e-16,
+    "population_max_absolute_difference_from_v3_baseline": 1.2417150641041985e-14
+  },
+  {
+    "job": 8,
+    "variant": "swap_const_schedule_gentle_exact_devicepop_packed_direct",
+    "density_max_absolute_difference_from_v3_baseline": 4.0245584642661925e-16,
+    "population_max_absolute_difference_from_v3_baseline": 1.2417150641041985e-14
+  },
+  {
+    "job": 21,
+    "variant": "swap_const_schedule_gentle_exact_devicepop_packed",
+    "density_max_absolute_difference_from_v3_baseline": 4.0245584642661925e-16,
+    "population_max_absolute_difference_from_v3_baseline": 1.2417150641041985e-14
+  }
+]

@@ -1,0 +1,239 @@
+{
+  "system": "q1",
+  "n_states": 26,
+  "generation_s": 0.03890799998771399,
+  "compile_s": 9.388175100000808,
+  "source_sha256": "c998cef7b570448e13ac961068aac1c3108045105802b9b629010ba871045759",
+  "rhs": [
+    {
+      "method": "D+S+U",
+      "median_s": 2.52925e-06,
+      "samples_s": [
+        2.5461249999999997e-06,
+        2.52925e-06,
+        2.5755e-06,
+        2.5106249999999998e-06,
+        2.52575e-06
+      ],
+      "normalized_RHS_error": 0.0
+    },
+    {
+      "method": "expanded_sparse",
+      "median_s": 5.4546249999999995e-06,
+      "samples_s": [
+        5.41925e-06,
+        5.425125000000001e-06,
+        5.4546249999999995e-06,
+        5.64075e-06,
+        5.58025e-06
+      ],
+      "normalized_RHS_error": 3.32590590096582e-16
+    },
+    {
+      "method": "generated_rows",
+      "median_s": 2.9986249999999996e-06,
+      "samples_s": [
+        3.001125e-06,
+        2.9986249999999996e-06,
+        2.9956250000000002e-06,
+        2.9956250000000002e-06,
+        2.999125e-06
+      ],
+      "normalized_RHS_error": 0.0
+    },
+    {
+      "method": "generated_packed",
+      "median_s": 3.8851249999999995e-06,
+      "samples_s": [
+        3.908625e-06,
+        3.8851249999999995e-06,
+        3.888e-06,
+        3.885e-06,
+        3.88375e-06
+      ],
+      "normalized_RHS_error": 1.6629535039671439e-16
+    },
+    {
+      "method": "generated_packed_compiled_coeffs",
+      "median_s": 3.839375e-06,
+      "samples_s": [
+        3.847999999999999e-06,
+        3.839375e-06,
+        3.839125e-06,
+        3.8396250000000005e-06,
+        3.838125e-06
+      ],
+      "normalized_RHS_error": 1.6629535039671439e-16
+    }
+  ],
+  "trajectories": [
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-06,
+      "median_s": 0.0330338,
+      "samples_s": [
+        0.0330947,
+        0.0330332,
+        0.0330338
+      ],
+      "rhs_calls": 11249,
+      "accepted": 1874,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 6.493968978302789e-05,
+        "max_small_absolute": 1.0280126060708553e-11,
+        "passed": true
+      },
+      "trace_error": 3.3306690738754696e-16,
+      "min_eigenvalue": 4.345826396930295e-09
+    },
+    {
+      "method": "expanded_sparse",
+      "duration_s": 1e-06,
+      "median_s": 0.0658275,
+      "samples_s": [
+        0.0655676,
+        0.0658275,
+        0.06711
+      ],
+      "rhs_calls": 11249,
+      "accepted": 1874,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 6.493968978163831e-05,
+        "max_small_absolute": 1.028012605975178e-11,
+        "passed": true
+      },
+      "trace_error": 4.440892098500626e-16,
+      "min_eigenvalue": 4.345826396769622e-09
+    },
+    {
+      "method": "generated_rows",
+      "duration_s": 1e-06,
+      "median_s": 0.0387084,
+      "samples_s": [
+        0.0387181,
+        0.0387084,
+        0.0387027
+      ],
+      "rhs_calls": 11249,
+      "accepted": 1874,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 6.493968978302789e-05,
+        "max_small_absolute": 1.0280126060708553e-11,
+        "passed": true
+      },
+      "trace_error": 3.3306690738754696e-16,
+      "min_eigenvalue": 4.345826396930295e-09
+    },
+    {
+      "method": "generated_packed",
+      "duration_s": 1e-06,
+      "median_s": 0.0484883,
+      "samples_s": [
+        0.0489247,
+        0.0484044,
+        0.0484883
+      ],
+      "rhs_calls": 11249,
+      "accepted": 1874,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 6.493968989448857e-05,
+        "max_small_absolute": 1.0280126076388615e-11,
+        "passed": true
+      },
+      "trace_error": 4.440892098500626e-16,
+      "min_eigenvalue": 4.345826392267626e-09
+    },
+    {
+      "method": "generated_packed_compiled_coeffs",
+      "duration_s": 1e-06,
+      "median_s": 0.0478662,
+      "samples_s": [
+        0.0478928,
+        0.0478351,
+        0.0478662
+      ],
+      "rhs_calls": 11249,
+      "accepted": 1874,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 6.493968989448857e-05,
+        "max_small_absolute": 1.0280126076388615e-11,
+        "passed": true
+      },
+      "trace_error": 4.440892098500626e-16,
+      "min_eigenvalue": 4.345826392267626e-09
+    },
+    {
+      "method": "D+S+U",
+      "duration_s": 1e-05,
+      "median_s": 0.1617639,
+      "samples_s": [
+        0.1617639,
+        0.1617971,
+        0.1609532
+      ],
+      "rhs_calls": 54353,
+      "accepted": 9052,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.9762552312775704e-07,
+        "max_small_absolute": 1.9329653952451899e-13,
+        "passed": true
+      },
+      "trace_error": 8.881784197001252e-16,
+      "min_eigenvalue": 8.828328074590224e-10
+    },
+    {
+      "method": "generated_rows",
+      "duration_s": 1e-05,
+      "median_s": 0.1870789,
+      "samples_s": [
+        0.1870789,
+        0.1871554,
+        0.1869316
+      ],
+      "rhs_calls": 54353,
+      "accepted": 9052,
+      "rejected": 0,
+      "accuracy": {
+        "max_relative": 1.9762552312775704e-07,
+        "max_small_absolute": 1.9329653952451899e-13,
+        "passed": true
+      },
+      "trace_error": 8.881784197001252e-16,
+      "min_eigenvalue": 8.828328074590224e-10
+    }
+  ],
+  "fields": {
+    "E_V_cm": [
+      0,
+      0,
+      200
+    ],
+    "B_G": [
+      0,
+      0,
+      0.01
+    ]
+  },
+  "qn_compact": true,
+  "EOM_Hz": 1600000.0,
+  "beta": 3.8,
+  "compiler": "cargo release opt3 fat LTO; no fastmath",
+  "hardware": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+    "logical_cpus": 16
+  },
+  "baseline_rhs_source_sha256": "f7e2aca5a86a789fb6c2c05e15389a363735c487db1f3391702669e2185a65ed",
+  "tsit5_source_sha256": "6fb99112be5702c604d26746d65a969da37ad21af4b14723ef83001de85432f5",
+  "long_trajectory_screened_out": [
+    "expanded_sparse",
+    "generated_packed",
+    "generated_packed_compiled_coeffs"
+  ]
+}

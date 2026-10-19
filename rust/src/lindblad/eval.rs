@@ -488,6 +488,244 @@ pub struct CompiledExpression {
     pub output_is_tuple: bool,
 }
 
+#[derive(Clone, Debug)]
+struct ScalarDagNode {
+    instruction: Instruction,
+    args: Vec<usize>,
+}
+
+/// Immutable shared scalar coefficient expressions. Evaluation scratch belongs
+/// to the caller so cloned plans can be used by independent batch workers.
+#[derive(Clone, Debug)]
+pub struct ScalarCoefficientDag {
+    nodes: Vec<ScalarDagNode>,
+    roots: Vec<usize>,
+}
+
+impl ScalarCoefficientDag {
+    pub fn prepare<'a>(expressions: impl Iterator<Item = &'a CompiledExpression>) -> Option<Self> {
+        let mut nodes = Vec::new();
+        let mut roots = Vec::new();
+        let mut intern = std::collections::HashMap::new();
+        let mut original_count = 0;
+        for expression in expressions {
+            if !expression.scalar_only || expression.output_is_tuple {
+                return None;
+            }
+            let mut stack: Vec<usize> = Vec::new();
+            for ins in &expression.instructions {
+                original_count += 1;
+                let argc = match ins.op {
+                    InstructionOp::Const | InstructionOp::Slot | InstructionOp::Time => 0,
+                    // Decomposed coefficients do not normally reference temps.
+                    // Keep the existing evaluator for any expression that does.
+                    InstructionOp::Temp => return None,
+                    InstructionOp::Neg | InstructionOp::Conj => 1,
+                    InstructionOp::BuiltinFunc | InstructionOp::HelperFunc => ins.argc,
+                    _ => 2,
+                };
+                let start = stack.len().checked_sub(argc)?;
+                let args: Vec<usize> = stack.drain(start..).collect();
+                let key = (
+                    ins.op as u8,
+                    ins.index,
+                    ins.argc,
+                    ins.function,
+                    ins.value.re.to_bits(),
+                    ins.value.im.to_bits(),
+                    args.clone(),
+                );
+                let idx = *intern.entry(key).or_insert_with(|| {
+                    let idx = nodes.len();
+                    nodes.push(ScalarDagNode {
+                        instruction: ins.clone(),
+                        args,
+                    });
+                    idx
+                });
+                stack.push(idx);
+            }
+            if stack.len() != 1 {
+                return None;
+            }
+            roots.push(stack[0]);
+        }
+        // No shared work: retain the cheaper existing expression evaluator.
+        if nodes.len() >= original_count {
+            return None;
+        }
+        Some(Self { nodes, roots })
+    }
+
+    pub fn evaluate_into(
+        &self,
+        slots: &[RuntimeValue],
+        t: f64,
+        values: &mut Vec<RuntimeValue>,
+        args: &mut Vec<Complex64>,
+    ) -> Result<(), String> {
+        values.clear();
+        for node in &self.nodes {
+            let ins = &node.instruction;
+            let arg = |i: usize| as_scalar(&values[node.args[i]]);
+            let value = match ins.op {
+                InstructionOp::Const => ins.value,
+                InstructionOp::Slot => as_scalar(&slots[ins.index])?,
+                InstructionOp::Time => Complex64::new(t, 0.0),
+                InstructionOp::Add => arg(0)? + arg(1)?,
+                InstructionOp::Sub => arg(0)? - arg(1)?,
+                InstructionOp::Mul => arg(0)? * arg(1)?,
+                InstructionOp::Div => arg(0)? / arg(1)?,
+                InstructionOp::Pow => arg(0)?.powc(arg(1)?),
+                InstructionOp::Neg => -arg(0)?,
+                InstructionOp::Conj => arg(0)?.conj(),
+                InstructionOp::BuiltinFunc => apply_builtin_scalar(ins.function, arg(0)?)?,
+                InstructionOp::HelperFunc => {
+                    args.clear();
+                    for &idx in &node.args {
+                        args.push(as_scalar(&values[idx])?);
+                    }
+                    apply_helper_scalar(ins.function, args)?
+                }
+                InstructionOp::Gt
+                | InstructionOp::Ge
+                | InstructionOp::Lt
+                | InstructionOp::Le
+                | InstructionOp::Eq
+                | InstructionOp::Ne => {
+                    let a = arg(0)?.re;
+                    let b = arg(1)?.re;
+                    let result = match ins.op {
+                        InstructionOp::Gt => a > b,
+                        InstructionOp::Ge => a >= b,
+                        InstructionOp::Lt => a < b,
+                        InstructionOp::Le => a <= b,
+                        InstructionOp::Eq => a == b,
+                        InstructionOp::Ne => a != b,
+                        _ => unreachable!(),
+                    };
+                    Complex64::new(if result { 1.0 } else { 0.0 }, 0.0)
+                }
+                InstructionOp::Temp => unreachable!("temps use the original evaluator"),
+            };
+            values.push(RuntimeValue::Scalar(value));
+        }
+        Ok(())
+    }
+
+    pub fn coefficient(&self, index: usize, values: &[RuntimeValue]) -> Complex64 {
+        match values[self.roots[index]] {
+            RuntimeValue::Scalar(value) => value,
+            RuntimeValue::Tuple(_) => unreachable!("scalar DAG values"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod coefficient_dag_tests {
+    use super::*;
+
+    fn instruction(op: InstructionOp, index: usize, argc: usize, function: i64) -> Instruction {
+        Instruction {
+            op,
+            index,
+            argc,
+            function,
+            value: Complex64::new(0.0, 1.0),
+        }
+    }
+
+    #[test]
+    fn shared_complex_coefficients_follow_time_and_slot_updates() {
+        let prefix = vec![
+            instruction(InstructionOp::Slot, 0, 0, 0),
+            instruction(InstructionOp::Time, 0, 0, 0),
+            instruction(InstructionOp::Add, 0, 0, 0),
+            instruction(InstructionOp::BuiltinFunc, 0, 1, 1),
+        ];
+        let mut a = prefix.clone();
+        a.extend([
+            instruction(InstructionOp::Slot, 1, 0, 0),
+            instruction(InstructionOp::Mul, 0, 0, 0),
+        ]);
+        let mut b = prefix;
+        b.extend([
+            instruction(InstructionOp::Conj, 0, 0, 0),
+            instruction(InstructionOp::Const, 0, 0, 0),
+            instruction(InstructionOp::Mul, 0, 0, 0),
+        ]);
+        let expressions = [a, b].map(|instructions| CompiledExpression {
+            instructions,
+            scalar_only: true,
+            output_is_tuple: false,
+        });
+        let dag = ScalarCoefficientDag::prepare(expressions.iter()).unwrap();
+        assert!(dag.nodes.len() < expressions.iter().map(|e| e.instructions.len()).sum());
+        let mut values = Vec::new();
+        let mut scratch = Vec::new();
+        for x in [0.0, 0.3, 1.7] {
+            for t in [0.0, 0.23, 1.2] {
+                let slots = [
+                    RuntimeValue::Scalar(Complex64::new(x, 0.2)),
+                    RuntimeValue::Scalar(Complex64::new(0.4, -x)),
+                ];
+                dag.evaluate_into(&slots, t, &mut values, &mut scratch)
+                    .unwrap();
+                for (i, e) in expressions.iter().enumerate() {
+                    let expected =
+                        eval_scalar_expression_into(e, &slots, t, &[], &mut scratch).unwrap();
+                    assert!((dag.coefficient(i, &values) - expected).norm() < 1e-14);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn shared_helpers_match_existing_evaluator() {
+        let expression = CompiledExpression {
+            scalar_only: true,
+            output_is_tuple: false,
+            instructions: vec![
+                instruction(InstructionOp::Time, 0, 0, 0),
+                instruction(InstructionOp::Slot, 0, 0, 0),
+                instruction(InstructionOp::Slot, 1, 0, 0),
+                instruction(InstructionOp::HelperFunc, 0, 3, 3),
+            ],
+        };
+        let expressions = [expression.clone(), expression];
+        let dag = ScalarCoefficientDag::prepare(expressions.iter()).unwrap();
+        let slots = [
+            RuntimeValue::Scalar(Complex64::new(0.7, 0.0)),
+            RuntimeValue::Scalar(Complex64::new(2.1, 0.0)),
+        ];
+        let mut values = Vec::new();
+        let mut scratch = Vec::new();
+        for t in [0.0, 0.2, 1.5] {
+            dag.evaluate_into(&slots, t, &mut values, &mut scratch)
+                .unwrap();
+            let reference =
+                eval_scalar_expression_into(&expressions[0], &slots, t, &[], &mut scratch).unwrap();
+            assert_eq!(dag.coefficient(0, &values), reference);
+            assert_eq!(dag.coefficient(1, &values), reference);
+        }
+    }
+
+    #[test]
+    fn unsupported_or_unshared_expressions_keep_existing_evaluator() {
+        let mut expression = CompiledExpression {
+            scalar_only: true,
+            output_is_tuple: false,
+            instructions: vec![instruction(InstructionOp::Slot, 0, 0, 0)],
+        };
+        assert!(ScalarCoefficientDag::prepare([&expression].into_iter()).is_none());
+        expression.scalar_only = false;
+        assert!(ScalarCoefficientDag::prepare([&expression, &expression].into_iter()).is_none());
+        expression.scalar_only = true;
+        expression.instructions[0].op = InstructionOp::Temp;
+        assert!(ScalarCoefficientDag::prepare([&expression, &expression].into_iter()).is_none());
+    }
+}
+
 pub fn eval_expression_into(
     expression: &CompiledExpression,
     slots: &[RuntimeValue],
