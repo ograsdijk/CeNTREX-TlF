@@ -468,6 +468,9 @@ The single, batch, and scan APIs also support time-dependent CUDA ODEs:
 Install `centrex-tlf[cuda]` for CUDA 12 or `centrex-tlf[cuda13]` for CUDA 13.
 CuPy and a compatible NVIDIA driver are required; the existing static dense
 CUDA path uses the separate PyTorch `gpu` extra. CPU-only imports require neither.
+CuPy also needs matching CUDA runtime libraries, NVRTC and toolkit headers for
+compiling the custom kernels. If these are not installed system-wide, install
+CuPy's toolkit extra, for example `pip install "cupy-cuda13x[ctk]>=14"` for CUDA 13.
 On Windows, when both are installed, the solver loads PyTorch before CuPy to
 resolve bundled CUDA DLLs consistently. If importing these packages yourself,
 use that same order before initializing CUDA.
