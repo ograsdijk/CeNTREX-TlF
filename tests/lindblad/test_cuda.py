@@ -216,6 +216,306 @@ def gpu():
         pytest.skip(str(exc))
 
 
+def sharing_model(nonseparable=False, complex_factor=False):
+    """Independent drives with overlapping H support and an exact multipass factor."""
+    a, b, d = smp.symbols("a b d")
+    H = smp.Matrix(
+        [[0, a + 0.2 * b, b], [smp.conjugate(a + 0.2 * b), d, 0], [smp.conjugate(b), 0, 0.3]]
+    )
+    C = np.zeros((2, 3, 3), complex)
+    C[0, 2, 1], C[1, 0, 2] = np.sqrt(0.3), np.sqrt(0.2)
+    params = lindblad.LindbladParameters()
+    t = params.time()
+    y = params.real("height", 0.0)
+    pa, pb = params.real("power_a", 1.0), params.real("power_b", 1.0)
+    freq = params.real("frequency", 3.0)
+    amps = params.real("intensities", (1.0, 0.7))
+    xs = params.real("centers", (0.02, 0.08))
+    ys = params.real("heights", (0.0, 0.0))
+    envelope = lindblad.multipass_2d_intensity(t, y, amps, xs, ys, 0.02, 0.3)
+    gate = lindblad.square_wave(2 * t, 2 * np.pi * (freq if nonseparable else 3.0), 0.0)
+    params.bind(a, pa**0.5 * envelope * gate, finalize=False)
+    drive = pb**0.5 * envelope * (1 + 0.2j) * (1 + 0.1 * lindblad.sine(t, angular_frequency=2.0))
+    if complex_factor:
+        drive = drive * lindblad.phase_modulation(1.0, y, 1.0)
+    params.bind(b, drive, finalize=False)
+    params.bind(d, 0.1 + y, finalize=False)
+    params._finalize()
+    p = lindblad.prepare_lindblad_problem(
+        SimpleNamespace(H_symbolic=H, C_array=C),
+        params,
+        backend="rust",
+        hamiltonian_representation="decomposed",
+    )
+    rho = np.array([[0.6, 0.1 + 0.03j, 0.02j], [0.1 - 0.03j, 0.3, 0.01], [-0.02j, 0.01, 0.1]])
+    pars = np.array(
+        [[0, 0, 0.3, 3], [0.2, 0.5, 1.0, 4.1], [0.1, 1.0, 0, 3.6], [0.3, 0.2, 0.7, 2.8]]
+    )
+    return p, rho, pars, ["height", "power_a", "power_b", "frequency"]
+
+
+@pytest.mark.parametrize("solver", ["fixed_tsit5", "fixed_ck54"])
+@pytest.mark.parametrize(
+    "coeff,hshare", [("off", "off"), ("auto", "off"), ("off", "auto"), ("auto", "auto")]
+)
+@pytest.mark.parametrize("precompute", [False, True])
+def test_coefficient_and_component_sharing(gpu, solver, coeff, hshare, precompute):
+    p, rho, pars, slots = sharing_model()
+    kwargs = dict(
+        parameter_slots=slots,
+        parameter_batch=pars,
+        solver=solver,
+        evolution_device="cuda",
+        dt=0.001,
+        output="full_and_integral",
+        integral_weights=[(1, 0.3)],
+        output_when="saveat",
+        saveat=[0, 0.051, 0.103],
+        collect_stats=True,
+    )
+    control = lindblad.parameter_scan(
+        p,
+        rho,
+        (0.0, 0.103),
+        cuda_options=CudaSolverOptions(
+            coefficient_sharing="off", hamiltonian_sharing="off", batch_size=2, graph_steps=8
+        ),
+        **kwargs,
+    )
+    got = lindblad.parameter_scan(
+        p,
+        rho,
+        (0.0, 0.103),
+        cuda_options=CudaSolverOptions(
+            coefficient_sharing=coeff,
+            hamiltonian_sharing=hshare,
+            precompute=precompute,
+            density_reduction=True,
+            density_saveat=[0, 0.051, 0.103],
+            batch_size=2,
+            graph_steps=8,
+        ),
+        **kwargs,
+    )
+    np.testing.assert_allclose(got.values, control.values, rtol=2e-12, atol=2e-14)
+    np.testing.assert_allclose(
+        got.metadata["density_values"], control.values[..., :-1], rtol=2e-12, atol=2e-14
+    )
+    assert len(got.solver_stats["chunks"]) == 2
+
+
+@pytest.mark.parametrize(
+    "nonseparable,complex_factor", [(False, False), (True, False), (False, True)]
+)
+@pytest.mark.parametrize("hshare", ["auto", "on"])
+def test_sharing_components_and_fallback_diagnostics(gpu, nonseparable, complex_factor, hshare):
+    p, rho, pars, slots = sharing_model(nonseparable, complex_factor)
+    options = CudaSolverOptions(
+        coefficient_sharing="auto", hamiltonian_sharing=hshare, rhs="direct", batch_size=4
+    )
+    got = lindblad.parameter_scan(
+        p,
+        rho,
+        (0.0, 0.103),
+        parameter_slots=slots,
+        parameter_batch=pars,
+        evolution_device="cuda",
+        solver="fixed_tsit5",
+        dt=0.001,
+        output="full",
+        collect_stats=True,
+        cuda_options=options,
+    )
+    old = lindblad.parameter_scan(
+        p,
+        rho,
+        (0.0, 0.103),
+        parameter_slots=slots,
+        parameter_batch=pars,
+        evolution_device="cuda",
+        solver="fixed_tsit5",
+        dt=0.001,
+        output="full",
+        cuda_options=CudaSolverOptions(
+            rhs="direct", coefficient_sharing="off", hamiltonian_sharing="off"
+        ),
+    )
+    np.testing.assert_allclose(got.values, old.values, rtol=2e-12, atol=2e-14)
+    chunk = got.solver_stats["chunks"][0]
+    assert chunk["static_subexpressions"] > 0
+    if complex_factor:
+        assert chunk["shared_hamiltonian_components"] == 0
+    elif nonseparable:
+        assert chunk["shared_hamiltonian_components"] == 1
+        assert chunk["per_trajectory_hamiltonian_edges"] > 0
+    else:
+        assert chunk["shared_hamiltonian_components"] == 2
+
+
+@pytest.mark.parametrize("name", ["coefficient_sharing", "hamiltonian_sharing"])
+def test_sharing_option_validation(name):
+    with pytest.raises(ValueError, match=name):
+        CudaSolverOptions(**{name: "invalid"})
+
+
+def test_sharing_plan_budget_without_gpu():
+    from centrex_tlf.lindblad._cuda_lowering import TIME, ScalarCompiler
+    from centrex_tlf.lindblad._cuda_sharing import CoefficientProgram
+
+    p, _, batch, slots = sharing_model()
+    graph = p.parameter_graph
+    parameters = np.zeros((len(batch), len(graph["slot_names"])), complex)
+    for k, value in enumerate(graph["base_values"]):
+        if value["kind"] == "scalar":
+            parameters[:, k] = complex(value["re"], value["im"])
+    parameters[:, [graph["slot_names"].index(s) for s in slots]] = batch
+    compiler = ScalarCompiler(graph, [c["expression"] for c in p.hamiltonian_plan["coefficients"]])
+    varying = {
+        k for k in range(parameters.shape[1]) if np.any(parameters[:, k] != parameters[0, k])
+    }
+    varied = np.asarray([bool(c.dependencies & varying) for c in compiler.coefficients])
+    program = CoefficientProgram(
+        p,
+        compiler,
+        parameters,
+        varied,
+        cuda_module._basis(p),
+        np.zeros((101, 2)),
+        CudaSolverOptions(
+            rhs="direct", coefficient_sharing="auto", hamiltonian_sharing="auto", precompute_bytes=1
+        ),
+        cuda_module.TS_C,
+    )
+    assert not program.precompute
+    assert program.shared_count == 0
+    assert all(not n.symbolic.has(TIME) for n in program.static)
+    assert len(program.amplitudes) == 2
+    assert all(not (program.h_roots[k].dependencies & varying) for k in program.h_indices)
+
+
+def test_shared_components_zero_drive_budget_and_outputs(gpu):
+    p, rho, pars, slots = sharing_model()
+    pars[:, 1:3] = 0
+    kwargs = dict(
+        parameter_slots=slots,
+        parameter_batch=pars,
+        evolution_device="cuda",
+        solver="fixed_tsit5",
+        dt=0.001,
+        output_when="saveat",
+        saveat=[0, 0.051, 0.103],
+    )
+    for output in ["populations", "selected", "photon_integral", "photon_rate"]:
+        extra = {"integral_weights": [(1, 0.3)]} if output.startswith("photon") else {}
+        if output == "selected":
+            extra["output_indices"] = [(0, 1), (1, 1)]
+        old = lindblad.parameter_scan(
+            p,
+            rho,
+            (0, 0.103),
+            output=output,
+            **kwargs,
+            **extra,
+            cuda_options=CudaSolverOptions(
+                rhs="direct", coefficient_sharing="off", hamiltonian_sharing="off"
+            ),
+        )
+        new = lindblad.parameter_scan(
+            p,
+            rho,
+            (0, 0.103),
+            output=output,
+            **kwargs,
+            **extra,
+            cuda_options=CudaSolverOptions(
+                rhs="direct",
+                coefficient_sharing="auto",
+                hamiltonian_sharing="auto",
+                precompute_bytes=1,
+                density_saveat=[0.051],
+                batch_size=3,
+            ),
+        )
+        np.testing.assert_allclose(new.values, old.values, rtol=2e-12, atol=2e-14)
+        assert new.metadata["density_values"].shape == (4, 1, 9)
+
+
+def test_sharing_preserves_real_geometry_argument_errors(gpu):
+    p, rho, pars, slots = sharing_model()
+    # Isolate the helper check: a complex height must not also make detuning
+    # complex and race with the separate real-diagonal validation.
+    d = next(s for s in p.obe_system.H_symbolic.free_symbols if str(s) == "d")
+    p.parameters.bind(d, 0.1)
+    p = lindblad.prepare_lindblad_problem(
+        p.obe_system, p.parameters, hamiltonian_representation="decomposed"
+    )
+    pars = pars.astype(complex)
+    pars[1, 0] = 0.2j
+    for coefficient, hamiltonian in [("off", "off"), ("auto", "off"), ("auto", "auto")]:
+        with pytest.raises(RuntimeError, match="complex argument"):
+            lindblad.parameter_scan(
+                p,
+                rho,
+                (0, 0.01),
+                parameter_slots=slots,
+                parameter_batch=pars,
+                evolution_device="cuda",
+                solver="fixed_tsit5",
+                dt=0.001,
+                cuda_options=CudaSolverOptions(
+                    rhs="direct", coefficient_sharing=coefficient, hamiltonian_sharing=hamiltonian
+                ),
+            )
+
+
+def test_sharing_complex_overrides_keep_conjugation(gpu):
+    from centrex_tlf.lindblad.parameters import RuntimeExpression
+
+    a, b = smp.symbols("a b")
+    H = smp.Matrix(
+        [[0, a + 0.2 * b, b], [smp.conjugate(a + 0.2 * b), 0.1, 0], [smp.conjugate(b), 0, 0.3]]
+    )
+    params = lindblad.LindbladParameters()
+    u, v = params.complex("u", 0.0), params.complex("v", 0.0)
+    params.bind(a, RuntimeExpression(smp.conjugate(u.symbol), {u.name: u}) + v, finalize=False)
+    params.bind(b, u + v, finalize=False)
+    params._finalize()
+    C = np.zeros((1, 3, 3))
+    C[0, 0, 1] = np.sqrt(0.2)
+    p = lindblad.prepare_lindblad_problem(
+        SimpleNamespace(H_symbolic=H, C_array=C),
+        params,
+        hamiltonian_representation="decomposed",
+    )
+    rho = np.diag([1.0, 0.0, 0.0]).astype(complex)
+    batch = np.array([[1j, -1j], [1j, 1j], [-1j, 1j]])
+    for sharing in ["off", "auto", "on"]:
+        a = lindblad.parameter_scan(
+            p,
+            rho,
+            (0, 0.103),
+            parameter_slots=["u", "v"],
+            parameter_batch=batch,
+            solver="fixed_tsit5",
+            evolution_device="cuda",
+            dt=0.001,
+            output="full",
+            collect_stats=True,
+            cuda_options=CudaSolverOptions(
+                rhs="direct",
+                coefficient_sharing="off" if sharing == "off" else "auto",
+                hamiltonian_sharing=sharing,
+            ),
+        )
+        if sharing == "off":
+            reference = a.values.copy()
+        np.testing.assert_allclose(a.values, reference, rtol=1e-12, atol=1e-14)
+        if sharing != "off":
+            assert (
+                a.solver_stats["chunks"][0]["coefficient_sharing"] == "complex_parameter_override"
+            )
+
+
 def test_validation_and_lazy_optional_import(monkeypatch):
     p, _, _, initial = model()
 

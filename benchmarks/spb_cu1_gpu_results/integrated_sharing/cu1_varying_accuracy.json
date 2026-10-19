@@ -1,0 +1,271 @@
+{
+  "fixture": "cu1",
+  "varying": true,
+  "stage": "accuracy",
+  "recipe": {
+    "levels": 26,
+    "initial_count": 12,
+    "main_coupling": 0.10035762728862242,
+    "initial": "uniform over all twelve X J=1 states; no coherences",
+    "E_V_cm": [
+      0,
+      0,
+      150
+    ],
+    "B_G": [
+      0,
+      0,
+      0.001
+    ],
+    "power_W": 0.08,
+    "sigma_z_m": 0.00075,
+    "sigma_y_m": 0.0075,
+    "centers_m": [
+      0.0035,
+      0.007,
+      0.0105,
+      0.014,
+      0.0175,
+      0.021,
+      0.0245,
+      0.028,
+      0.0315,
+      0.035,
+      0.0385,
+      0.042,
+      0.0455
+    ],
+    "relative_pass_powers": [
+      1.0,
+      0.31381059609000006,
+      0.81,
+      0.3874204890000001,
+      0.6561,
+      0.4782969000000001,
+      0.531441,
+      0.5904900000000001,
+      0.4304672100000001,
+      0.7290000000000001,
+      0.3486784401000001,
+      0.9,
+      0.2824295364810001
+    ],
+    "dipole_C_m": 2.6675506e-30,
+    "optical_reference_Hz": 1103000000000000.0,
+    "vz_m_s": 184,
+    "t_end": 0.0002717391304347826,
+    "retain_opposite_parity_levels": true,
+    "phase_EOM": false,
+    "polarization_Hz": 500000,
+    "doppler": "sign changes at spatial midpoints; compiler clips jumps",
+    "construction_seconds": 4.620997899968643
+  },
+  "span": [
+    0.0,
+    0.0002717391304347826
+  ],
+  "dt_ns": 2.0,
+  "modes": {
+    "off": [
+      "off",
+      "off"
+    ],
+    "coefficients": [
+      "auto",
+      "off"
+    ],
+    "combined": [
+      "auto",
+      "auto"
+    ]
+  },
+  "cases": [
+    {
+      "mode": "off",
+      "same_step": {
+        "relative_above_1e6": 0.0,
+        "absolute_below_1e6": 0.0,
+        "max_absolute": 0.0,
+        "trace_error": 3.730349362740526e-14,
+        "min_eigenvalue": -1.8397777336437674e-08,
+        "remaining_population_scaled_error": 0.0,
+        "passed": true
+      },
+      "strict_reference": {
+        "relative_above_1e6": 0.008501416335825476,
+        "absolute_below_1e6": 9.459300033570457e-09,
+        "max_absolute": 3.468965975921304e-07,
+        "trace_error": 3.730349362740526e-14,
+        "min_eigenvalue": -1.8397777336437674e-08,
+        "remaining_population_scaled_error": 2.7939542397201597e-05,
+        "passed": true
+      },
+      "wall_seconds": 38.58367789996555,
+      "cuda_event_seconds": 37.46610013478994,
+      "host_submission_seconds": 37.335241799999494,
+      "cpu_percent_during_call": 92.2,
+      "cpu_percent_before": 100.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 135932,
+        "accepted_steps": 1631184,
+        "rejected_steps": 0,
+        "rhs_calls": 9790560,
+        "function_evaluations": 9790560,
+        "saved_points": 4,
+        "total_seconds": 38.5431671999977,
+        "chunks": [
+          {
+            "trajectories": 12,
+            "steps_per_trajectory": 135932,
+            "rhs_calls": 9790560,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 1.0740006000269204,
+            "coefficient_sharing": "disabled",
+            "static_subexpressions": 0,
+            "shared_subexpressions": 0,
+            "waveform_table_bytes": 60897536,
+            "hamiltonian_bytes": 24576,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "coefficients",
+      "same_step": {
+        "relative_above_1e6": 8.313422149662705e-13,
+        "absolute_below_1e6": 2.894803604412709e-18,
+        "max_absolute": 2.220446049250313e-16,
+        "trace_error": 3.730349362740526e-14,
+        "min_eigenvalue": -1.8397777332117637e-08,
+        "remaining_population_scaled_error": 4.13883682540503e-14,
+        "passed": true
+      },
+      "strict_reference": {
+        "relative_above_1e6": 0.008501416335881492,
+        "absolute_below_1e6": 9.459300033570457e-09,
+        "max_absolute": 3.468965975921304e-07,
+        "trace_error": 3.730349362740526e-14,
+        "min_eigenvalue": -1.8397777332117637e-08,
+        "remaining_population_scaled_error": 2.7939542397201597e-05,
+        "passed": true
+      },
+      "wall_seconds": 16.39984640001785,
+      "cuda_event_seconds": 15.510532587647438,
+      "host_submission_seconds": 15.470774000044912,
+      "cpu_percent_during_call": 95.9,
+      "cpu_percent_before": 100.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 135932,
+        "accepted_steps": 1631184,
+        "rejected_steps": 0,
+        "rhs_calls": 9790560,
+        "function_evaluations": 9790560,
+        "saved_points": 4,
+        "total_seconds": 16.381262100010645,
+        "chunks": [
+          {
+            "trajectories": 12,
+            "steps_per_trajectory": 135932,
+            "rhs_calls": 9790560,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.8680842000176199,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 3,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 76121920,
+            "hamiltonian_bytes": 24576,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "combined",
+      "same_step": {
+        "relative_above_1e6": 2.21357728304353e-12,
+        "absolute_below_1e6": 2.254606515455999e-18,
+        "max_absolute": 1.6653345369377348e-16,
+        "trace_error": 3.7636560534792807e-14,
+        "min_eigenvalue": -1.8397777341428584e-08,
+        "remaining_population_scaled_error": 2.690243936513269e-13,
+        "passed": true
+      },
+      "strict_reference": {
+        "relative_above_1e6": 0.008501416335872264,
+        "absolute_below_1e6": 9.459300033565057e-09,
+        "max_absolute": 3.468965975867485e-07,
+        "trace_error": 3.7636560534792807e-14,
+        "min_eigenvalue": -1.8397777341428584e-08,
+        "remaining_population_scaled_error": 2.7939542409965828e-05,
+        "passed": true
+      },
+      "wall_seconds": 15.531741600017995,
+      "cuda_event_seconds": 13.97680702481419,
+      "host_submission_seconds": 13.934485799982212,
+      "cpu_percent_during_call": 94.8,
+      "cpu_percent_before": 100.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 135932,
+        "accepted_steps": 1631184,
+        "rejected_steps": 0,
+        "rhs_calls": 9790560,
+        "function_evaluations": 9790560,
+        "saved_points": 4,
+        "total_seconds": 15.505515000026207,
+        "chunks": [
+          {
+            "trajectories": 12,
+            "steps_per_trajectory": 135932,
+            "rhs_calls": 9790560,
+            "shared_offdiagonal_hamiltonian": true,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 1.5270433999830857,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 1,
+            "shared_subexpressions": 1,
+            "waveform_table_bytes": 60897536,
+            "hamiltonian_bytes": 2048,
+            "hamiltonian_sharing": "single_component",
+            "shared_hamiltonian_components": 1
+          }
+        ]
+      }
+    }
+  ],
+  "source_sha256": {
+    "centrex_tlf/lindblad/cuda.py": "af9cfc416527eb42e4f002b21c76250a3787861350ad673426bfe5206c3bb6c9",
+    "centrex_tlf/lindblad/_cuda_lowering.py": "3657e37586ac8b69a9bb00913a3dacf59ad189dd2d011a172b98f0567286caaf",
+    "centrex_tlf/lindblad/_cuda_sharing.py": "33ae541e42b1401797e8bd9747e02a52d5ffade1691fb5ebc2c546b608998a0f",
+    "centrex_tlf/lindblad/_cuda_kernels.py": "edcc2f6f3f69375c851f74f07dfc3fe8abf7afb46d1b2689e82ef457066b43fa"
+  },
+  "status": "complete"
+}

@@ -549,6 +549,68 @@ depends on the model, batch size, step and requested output.
 Library validation against saved RC and R(2) benchmarks is recorded in
 `benchmarks/CUDA_LIBRARY_INTEGRATION.md`.
 
+### Automatic CUDA coefficient and Hamiltonian sharing
+
+The fixed-step backend can separate shared time dependence from static
+per-trajectory amplitude factors. For example, a common-height Gaussian
+multipass profile can share its on-axis waveform across a height/power scan.
+Static factors are evaluated once per chunk, rather than at every RK stage.
+This preserves the existing pass order, losses, polarization and Doppler model.
+
+`CudaSolverOptions(coefficient_sharing="auto", hamiltonian_sharing="auto")`
+is the default and enables dependence-based selection. Set either option to `"off"` independently;
+set both to `"off"` to use the previous coefficient/Hamiltonian calculation:
+
+```python
+cuda_options = lindblad.CudaSolverOptions(
+    coefficient_sharing="off",
+    hamiltonian_sharing="off",
+)
+```
+
+Coefficient sharing works with both RHS choices. The additional Hamiltonian
+component path uses the direct RHS: it shares one or several off-diagonal
+matrices with finite real trajectory factors, including independently scaled
+optical and microwave drives. Components may have different waveforms and
+overlapping matrix support. A nonseparable or complex-factor remainder can retain
+per-trajectory storage; the complete existing path is used when sharing is
+unsupported or its estimated overhead/storage is unfavorable. Diagonal terms,
+decay and photon accumulation are not scaled. The existing density-reduction
+option still selects the direct RHS as documented below; sharing itself does
+not change the requested RHS.
+
+Auto examines expressions and the actual chunk parameters, without recognizing
+particular systems or approximating factors from sampled values. It currently
+considers up to four shared components and uses conservative storage estimates;
+it also declines multiple-component scaling when added RHS arithmetic is large
+relative to saved assembly. It does not run a timing autotuner.
+`hamiltonian_sharing="on"` bypasses that arithmetic performance gate for explicit
+benchmarking on other systems/devices; structural, real-factor and storage
+eligibility checks still apply. Multiple components were slower for the tested
+RC fixture on the RTX 5070 Ti, so auto retains normal H storage there.
+Distinct temporal profiles, for example
+different forward velocities, cannot automatically share one waveform. Normal
+expression evaluation remains available for those cases.
+Complex scalar parameter overrides conservatively use the previous coefficient
+and H paths, preserving conjugation and real-helper argument validation.
+
+`precompute_bytes` bounds the complete packed time table, including cached
+subexpressions. `precompute=False` prevents time-table allocation; static-factor
+caching and supported H sharing can still apply. Additional static coefficient
+caches are bounded to 64 MB per chunk. Insufficient time-table budget falls back
+to live evaluation. Sharing does not alter `dt`, step schedules or the need to
+validate complex densities against a stricter reference.
+
+With `collect_stats=True`, chunk statistics include `coefficient_sharing`,
+`static_subexpressions`, `shared_subexpressions`, `waveform_table_bytes`,
+`hamiltonian_sharing`, `shared_hamiltonian_components`,
+`per_trajectory_hamiltonian_edges` and `hamiltonian_bytes`. The component count
+describes the additional component kernel; an already-shared complete H is still
+identified by `shared_offdiagonal_hamiltonian=True` and `already_shared`.
+
+Integration measurements and limitations are recorded in
+`benchmarks/spb_cu1_gpu_results/integrated_sharing/REPORT.md`.
+
 ### Opt-in exact CUDA density-coordinate reduction
 
 Set `CudaSolverOptions(density_reduction=True)` in the usual single, batch,

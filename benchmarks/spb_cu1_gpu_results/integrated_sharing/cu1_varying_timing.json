@@ -1,0 +1,496 @@
+{
+  "fixture": "cu1",
+  "varying": true,
+  "stage": "timing",
+  "recipe": {
+    "levels": 26,
+    "initial_count": 12,
+    "main_coupling": 0.10035762728862242,
+    "initial": "uniform over all twelve X J=1 states; no coherences",
+    "E_V_cm": [
+      0,
+      0,
+      150
+    ],
+    "B_G": [
+      0,
+      0,
+      0.001
+    ],
+    "power_W": 0.08,
+    "sigma_z_m": 0.00075,
+    "sigma_y_m": 0.0075,
+    "centers_m": [
+      0.0035,
+      0.007,
+      0.0105,
+      0.014,
+      0.0175,
+      0.021,
+      0.0245,
+      0.028,
+      0.0315,
+      0.035,
+      0.0385,
+      0.042,
+      0.0455
+    ],
+    "relative_pass_powers": [
+      1.0,
+      0.31381059609000006,
+      0.81,
+      0.3874204890000001,
+      0.6561,
+      0.4782969000000001,
+      0.531441,
+      0.5904900000000001,
+      0.4304672100000001,
+      0.7290000000000001,
+      0.3486784401000001,
+      0.9,
+      0.2824295364810001
+    ],
+    "dipole_C_m": 2.6675506e-30,
+    "optical_reference_Hz": 1103000000000000.0,
+    "vz_m_s": 184,
+    "t_end": 0.0002717391304347826,
+    "retain_opposite_parity_levels": true,
+    "phase_EOM": false,
+    "polarization_Hz": 500000,
+    "doppler": "sign changes at spatial midpoints; compiler clips jumps",
+    "construction_seconds": 4.23592639999697
+  },
+  "span": [
+    1.8e-05,
+    3e-05
+  ],
+  "dt_ns": 2.0,
+  "modes": {
+    "off": [
+      "off",
+      "off"
+    ],
+    "coefficients": [
+      "auto",
+      "off"
+    ],
+    "combined": [
+      "auto",
+      "auto"
+    ]
+  },
+  "cases": [
+    {
+      "mode": "combined",
+      "repeat": 0,
+      "max_trace_error": 5.329070518200751e-15,
+      "wall_seconds": 3.2807305000023916,
+      "cuda_event_seconds": 3.256119015060365,
+      "host_submission_seconds": 3.0195450999890454,
+      "cpu_percent_during_call": 90.3,
+      "cpu_percent_before": 0.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 3.272532700037118,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": true,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.015092599962372333,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 1,
+            "shared_subexpressions": 1,
+            "waveform_table_bytes": 2690240,
+            "hamiltonian_bytes": 2048,
+            "hamiltonian_sharing": "single_component",
+            "shared_hamiltonian_components": 1,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "coefficients",
+      "repeat": 0,
+      "max_trace_error": 5.551115123125783e-15,
+      "wall_seconds": 3.652341399982106,
+      "cuda_event_seconds": 3.624552452482283,
+      "host_submission_seconds": 3.356645399995614,
+      "cpu_percent_during_call": 94.0,
+      "cpu_percent_before": 0.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 3.643693100020755,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.01784010004485026,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 3,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 3362800,
+            "hamiltonian_bytes": 2097152,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "off",
+      "repeat": 0,
+      "max_trace_error": 5.329070518200751e-15,
+      "wall_seconds": 5.546579299960285,
+      "cuda_event_seconds": 5.518730993311852,
+      "host_submission_seconds": 5.1040139000397176,
+      "cpu_percent_during_call": 91.3,
+      "cpu_percent_before": 0.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 5.536212100007106,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.016406400012783706,
+            "coefficient_sharing": "disabled",
+            "static_subexpressions": 0,
+            "shared_subexpressions": 0,
+            "waveform_table_bytes": 2690240,
+            "hamiltonian_bytes": 2097152,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "off",
+      "repeat": 1,
+      "max_trace_error": 5.329070518200751e-15,
+      "wall_seconds": 5.546305300027598,
+      "cuda_event_seconds": 5.522421923346818,
+      "host_submission_seconds": 5.105743499938399,
+      "cpu_percent_during_call": 90.0,
+      "cpu_percent_before": 0.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 5.537027700047474,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.013539400009904057,
+            "coefficient_sharing": "disabled",
+            "static_subexpressions": 0,
+            "shared_subexpressions": 0,
+            "waveform_table_bytes": 2690240,
+            "hamiltonian_bytes": 2097152,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "coefficients",
+      "repeat": 1,
+      "max_trace_error": 5.551115123125783e-15,
+      "wall_seconds": 3.653202900022734,
+      "cuda_event_seconds": 3.624083095110953,
+      "host_submission_seconds": 3.3494076999486424,
+      "cpu_percent_during_call": 91.3,
+      "cpu_percent_before": 100.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 3.6418003999860957,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.01673159998608753,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 3,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 3362800,
+            "hamiltonian_bytes": 2097152,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "combined",
+      "repeat": 1,
+      "max_trace_error": 5.329070518200751e-15,
+      "wall_seconds": 3.2867031000205316,
+      "cuda_event_seconds": 3.2573433778434993,
+      "host_submission_seconds": 3.0205944000626914,
+      "cpu_percent_during_call": 91.0,
+      "cpu_percent_before": 0.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 3.275374499964528,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": true,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.016744400025345385,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 1,
+            "shared_subexpressions": 1,
+            "waveform_table_bytes": 2690240,
+            "hamiltonian_bytes": 2048,
+            "hamiltonian_sharing": "single_component",
+            "shared_hamiltonian_components": 1,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "coefficients",
+      "repeat": 2,
+      "max_trace_error": 5.551115123125783e-15,
+      "wall_seconds": 3.656458500016015,
+      "cuda_event_seconds": 3.6255249055922034,
+      "host_submission_seconds": 3.3510576999979094,
+      "cpu_percent_during_call": 92.3,
+      "cpu_percent_before": 0.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 3.6441656000097282,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.017283699999097735,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 3,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 3362800,
+            "hamiltonian_bytes": 2097152,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "combined",
+      "repeat": 2,
+      "max_trace_error": 5.329070518200751e-15,
+      "wall_seconds": 3.2836474999785423,
+      "cuda_event_seconds": 3.2541358889862897,
+      "host_submission_seconds": 3.0243763999897055,
+      "cpu_percent_during_call": 92.3,
+      "cpu_percent_before": 0.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 3.272893599991221,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": true,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.017403199977707118,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 1,
+            "shared_subexpressions": 1,
+            "waveform_table_bytes": 2690240,
+            "hamiltonian_bytes": 2048,
+            "hamiltonian_sharing": "single_component",
+            "shared_hamiltonian_components": 1,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "off",
+      "repeat": 2,
+      "max_trace_error": 5.329070518200751e-15,
+      "wall_seconds": 5.547659499978181,
+      "cuda_event_seconds": 5.5199504195004705,
+      "host_submission_seconds": 5.112709000008181,
+      "cpu_percent_during_call": 92.7,
+      "cpu_percent_before": 0.0,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 6005,
+        "accepted_steps": 6149120,
+        "rejected_steps": 0,
+        "rhs_calls": 36909056,
+        "function_evaluations": 36909056,
+        "saved_points": 1,
+        "total_seconds": 5.536999400006607,
+        "chunks": [
+          {
+            "trajectories": 1024,
+            "steps_per_trajectory": 6005,
+            "rhs_calls": 36909056,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.015599199978169054,
+            "coefficient_sharing": "disabled",
+            "static_subexpressions": 0,
+            "shared_subexpressions": 0,
+            "waveform_table_bytes": 2690240,
+            "hamiltonian_bytes": 2097152,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    }
+  ],
+  "source_sha256": {
+    "centrex_tlf/lindblad/cuda.py": "359b043795ac81019d7deaccd50ef8a344168f0d6488f21dd0892df33ae349c0",
+    "centrex_tlf/lindblad/_cuda_lowering.py": "3657e37586ac8b69a9bb00913a3dacf59ad189dd2d011a172b98f0567286caaf",
+    "centrex_tlf/lindblad/_cuda_sharing.py": "7d1f66a821686e51ffa089355f2374a987128042f97f003787b3d99fb9deaa77",
+    "centrex_tlf/lindblad/_cuda_kernels.py": "e78fa4dcd0cb40cffa6ccf77156a8bc4eec884433acad9801b8acff7ac2cd1cc"
+  },
+  "status": "complete"
+}

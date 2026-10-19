@@ -83,6 +83,14 @@ class CudaSolverOptions:
     Omitted coordinates reconstruct as zero. The default is False; benchmark
     before enabling it when little support can be removed.
     No RC geometry, modulation frequency, or beam envelope is hard-coded.
+
+    ``coefficient_sharing`` and ``hamiltonian_sharing`` default to ``"auto"``;
+    ``"off"`` disables either independently. Auto caches reusable scalar subexpressions and,
+    with the direct RHS, shares separable off-diagonal H components. Unsupported
+    factors use normal evaluation/storage. Precomputed subexpressions respect
+    ``precompute_bytes``; ``precompute=False`` still permits static caching.
+    ``hamiltonian_sharing="on"`` bypasses the arithmetic performance gate for
+    explicit benchmarks; structural and storage eligibility still apply.
     """
 
     batch_size: int = 512
@@ -97,8 +105,14 @@ class CudaSolverOptions:
     step_schedule: Any = ()
     density_saveat: Any = ()
     density_reduction: bool = False
+    coefficient_sharing: str = "auto"
+    hamiltonian_sharing: str = "auto"
 
     def __post_init__(self) -> None:
+        for name in ("coefficient_sharing", "hamiltonian_sharing"):
+            choices = {"auto", "off", "on"} if name == "hamiltonian_sharing" else {"auto", "off"}
+            if not isinstance(getattr(self, name), str) or getattr(self, name) not in choices:
+                raise ValueError(f"CUDA {name} must be one of {sorted(choices)}")
         if not isinstance(self.density_reduction, bool):
             raise ValueError("CUDA density_reduction must be a bool")
         for name in [
@@ -266,7 +280,7 @@ class _Integrator:
         integral: bool,
         span: tuple,
     ):
-        from ._cuda_kernels import HEADER, KERNELS, tile_kernel
+        from ._cuda_kernels import COMPONENT_KERNELS, HEADER, KERNELS, tile_kernel
         from ._density_support import reachable_upper
 
         self.cp, self.options, self.solver = cp, options, solver
@@ -305,37 +319,25 @@ class _Integrator:
         shared_limit = cp.cuda.runtime.getDeviceProperties(options.device_id)["sharedMemPerBlock"]
         if 16 * self.n * self.tile > shared_limit:
             self.tile = 0
-        common = np.flatnonzero(~varied).tolist()
-        variable = np.flatnonzero(varied).tolist()
-        functions = compiler.function("eval_common", common) + compiler.function(
-            "eval_variable", variable
+        from ._cuda_sharing import CoefficientProgram
+
+        self.program = program = CoefficientProgram(
+            prepared,
+            compiler,
+            parameters,
+            varied,
+            model,
+            grid,
+            options,
+            CK_C if solver == "fixed_ck54" else TS_C,
         )
-        self.precompute = bool(
-            options.precompute
-            and len(grid) * 7 * self.K * 16 <= options.precompute_bytes
-            and len(grid)
-        )
-        fractions = CK_C if solver == "fixed_ck54" else TS_C
-        frac_array = ",".join(f"{v:.17g}" for v in (*fractions, *([0.0] * (7 - len(fractions)))))
-        common_assign = "".join(f"out[{k}*B]=table[(row*7+stage)*K+{k}];" for k in common)
-        coefficients = (
-            r"""
-extern "C" __global__ void coefficients(const C* params,double* clock,C* out,const C* table,long rows,int K,int B,int stage,double fraction,int skip,int* error){
- int b=blockIdx.x*blockDim.x+threadIdx.x;if(b>=B||(skip&&clock[3]!=0.))return;
- double stage_t=clock[0]+fraction*clock[1],switch_t=clock[0]+.5*clock[1];long row=(long)clock[4];
- if(b==0){clock[5]+=1.;if(PRECOMPUTE&&clock[1]>0.&&row<rows){COMMON_ASSIGN}else eval_common(params,B,0,stage_t,switch_t,out,B,error);}
- eval_variable(params,B,b,stage_t,switch_t,out,B,error);
-}
-extern "C" __global__ void precompute(const C* params,const double* grid,C* table,long rows,int K,int B,int* error){
- long x=(long)blockIdx.x*blockDim.x+threadIdx.x;if(x>=rows*7)return;long row=x/7;int stage=x%7;
- const double fractions[7]={FRACTIONS};double h=grid[2*row+1],t=grid[2*row];
- eval_common(params,B,0,t+fractions[stage]*h,t+.5*h,table+x*K,1,error);
-}
-extern "C" __global__ void validate(const double* y,long D,int* error){long x=(long)blockIdx.x*blockDim.x+threadIdx.x;if(x<D&&!isfinite(y[x]))atomicExch(error,1);}
-""".replace("PRECOMPUTE", str(int(self.precompute)))
-            .replace("COMMON_ASSIGN", common_assign)
-            .replace("FRACTIONS", frac_array)
-        )
+        compiler = program.compiler
+        self.components = program.component_model is not None
+        if self.components:
+            offdiag, diagonal, ptr, positions = program.component_model
+            self.E, self.HB = offdiag.shape[1], 1
+        self.precompute = program.precompute
+        functions, coefficients = program.functions, program.kernels
         source = (
             prefix
             + HEADER
@@ -343,6 +345,13 @@ extern "C" __global__ void validate(const double* y,long D,int* error){long x=(l
             + functions
             + coefficients
             + KERNELS
+            + (
+                f"\n#define SINGLE_H_COMPONENT {int(len(program.amplitudes) == 1 and not len(program.remainder_edges))}\n"
+                f"#define HYBRID_H_COMPONENTS {int(bool(len(program.remainder_edges)))}\n"
+                + COMPONENT_KERNELS
+                if self.components
+                else ""
+            )
             + _stage_source()
         )
         if self.tile:
@@ -363,14 +372,25 @@ extern "C" __global__ void validate(const double* y,long D,int* error){long x=(l
             "coefficients",
             "precompute",
             "validate",
+            "initialize_static",
         ] + [f"stage_{i}" for i in range(1, 7)]
         if self.tile:
             names.append("product_tile")
+        if self.components:
+            names.extend(("build_components", "build_remainder", "component_rhs"))
         self.kernels = {name: module.get_function(name) for name in names}
         self.params = cp.asarray(np.ascontiguousarray(parameters.T))
         self.varied = cp.asarray(varied.astype(np.int32))
-        self.coeff = cp.empty((self.K, self.B), cp.complex128)
-        self.table = cp.zeros((self.steps, 7, self.K) if self.precompute else (1,), cp.complex128)
+        self.coeff = cp.zeros((self.K, self.B), cp.complex128)
+        self.table = cp.zeros(
+            (self.steps, 7, program.table_width) if self.precompute else (1,), cp.complex128
+        )
+        self.static_values = cp.empty((max(1, len(program.static)), self.B), cp.complex128)
+        self.unscaled = cp.zeros(self.K, cp.complex128)
+        self.amplitudes = cp.asarray(program.amplitudes)
+        self.edge_groups = cp.asarray(program.edge_groups)
+        self.h_offsets = cp.asarray(program.h_offsets)
+        self.remainder_edges = cp.asarray(program.remainder_edges)
         self.error = cp.zeros(1, np.int32)
         self.bases = cp.asarray(np.ascontiguousarray(offdiag))
         self.diagonal_bases = cp.asarray(np.ascontiguousarray(diagonal))
@@ -378,7 +398,7 @@ extern "C" __global__ void validate(const double* y,long D,int* error){long x=(l
         self.col = cp.asarray(positions[1])
         self.hrows = cp.asarray(positions[0])
         self.hcols = cp.asarray(positions[1])
-        self.hr = cp.empty((self.E, self.HB))
+        self.hr = cp.empty(program.h_storage if self.components else (self.E, self.HB))
         self.hi = cp.empty_like(self.hr)
         self.diag = cp.empty((self.n, self.B))
         self.rates = cp.asarray(prepared.source_decay_rates)
@@ -430,6 +450,12 @@ extern "C" __global__ void validate(const double* y,long D,int* error){long x=(l
         if options.rhs != "direct":
             self.ar = cp.empty((self.n * self.n, self.B))
             self.ai = cp.empty_like(self.ar)
+        if program.static:
+            self.launch(
+                "initialize_static",
+                (self.params, self.static_values, np.int32(self.B), self.error),
+                self.B,
+            )
         if self.precompute:
             self.launch(
                 "precompute",
@@ -464,6 +490,8 @@ extern "C" __global__ void validate(const double* y,long D,int* error){long x=(l
                 self.clock,
                 self.coeff,
                 self.table,
+                self.static_values,
+                self.unscaled,
                 np.int64(self.steps),
                 K,
                 B,
@@ -474,25 +502,67 @@ extern "C" __global__ void validate(const double* y,long D,int* error){long x=(l
             ),
             self.B,
         )
-        self.launch(
-            "build_h",
-            (
-                self.coeff,
-                self.bases,
-                self.varied,
-                self.hrows,
-                self.hcols,
-                self.hr,
-                self.hi,
-                E,
-                K,
-                B,
-                HB,
-                self.clock,
-                s,
-            ),
-            self.E * self.HB,
-        )
+        if self.components:
+            self.launch(
+                "build_components",
+                (
+                    self.unscaled,
+                    self.bases,
+                    self.hrows,
+                    self.hcols,
+                    self.edge_groups,
+                    self.h_offsets,
+                    self.hr,
+                    self.hi,
+                    E,
+                    K,
+                    self.clock,
+                    s,
+                ),
+                self.E,
+            )
+            if len(self.program.remainder_edges):
+                self.launch(
+                    "build_remainder",
+                    (
+                        self.coeff,
+                        self.bases,
+                        self.varied,
+                        self.hrows,
+                        self.hcols,
+                        self.remainder_edges,
+                        self.h_offsets,
+                        self.hr,
+                        self.hi,
+                        np.int32(len(self.program.remainder_edges)),
+                        E,
+                        K,
+                        B,
+                        self.clock,
+                        s,
+                    ),
+                    len(self.program.remainder_edges) * self.B,
+                )
+        else:
+            self.launch(
+                "build_h",
+                (
+                    self.coeff,
+                    self.bases,
+                    self.varied,
+                    self.hrows,
+                    self.hcols,
+                    self.hr,
+                    self.hi,
+                    E,
+                    K,
+                    B,
+                    HB,
+                    self.clock,
+                    s,
+                ),
+                self.E * self.HB,
+            )
         self.launch(
             "build_diag",
             (
@@ -510,7 +580,26 @@ extern "C" __global__ void validate(const double* y,long D,int* error){long x=(l
             self.n * self.B,
         )
         tail = (self.diag, self.rates, self.tp, self.tc, self.tr, self.rows, self.cols, B, n)
-        if self.options.rhs == "direct":
+        if self.components:
+            self.launch(
+                "component_rhs",
+                (
+                    y,
+                    out,
+                    self.ptr,
+                    self.col,
+                    self.hr,
+                    self.hi,
+                    self.edge_groups,
+                    self.h_offsets,
+                    self.amplitudes,
+                    *tail,
+                    self.clock,
+                    s,
+                ),
+                self.P,
+            )
+        elif self.options.rhs == "direct":
             self.launch(
                 "direct_rhs",
                 (y, out, self.ptr, self.col, self.hr, self.hi, *tail, HB, self.clock, s),
@@ -861,13 +950,21 @@ def _solve_cuda_batch(
                     trajectories=g.B,
                     steps_per_trajectory=int(clock[4]),
                     rhs_calls=int(clock[5]) * g.B,
-                    shared_offdiagonal_hamiltonian=g.HB == 1,
+                    shared_offdiagonal_hamiltonian=g.HB == 1 and not len(g.program.remainder_edges),
                     precomputed_waveforms=g.precompute,
                     tile_size=g.tile,
                     density_reduction=options.density_reduction,
                     retained_density_pairs=g.upper_count,
                     full_density_pairs=n * (n + 1) // 2,
                     setup_seconds=setup_s,
+                    coefficient_sharing=g.program.cache_reason,
+                    static_subexpressions=len(g.program.static),
+                    shared_subexpressions=g.program.shared_count,
+                    waveform_table_bytes=g.table.nbytes,
+                    hamiltonian_bytes=g.hr.nbytes + g.hi.nbytes,
+                    hamiltonian_sharing=g.program.h_reason,
+                    shared_hamiltonian_components=len(g.program.amplitudes),
+                    per_trajectory_hamiltonian_edges=len(g.program.remainder_edges),
                 )
             )
             del g

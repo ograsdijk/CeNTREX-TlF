@@ -459,3 +459,11 @@ working tree.
   coordinate reduction is separately opt-in.
 - No terminal events or sampled quadrature. Prescribed `step_schedule` is supported.
   See README_OBE_SOLVER.md and benchmarks/CUDA_LIBRARY_INTEGRATION.md.
+- CUDA coefficient/H sharing is controlled independently with
+  `CudaSolverOptions(coefficient_sharing="auto", hamiltonian_sharing="auto")`;
+  use `"off"` to disable either. Shared waveforms/static factors and eligible
+  direct-RHS H components preserve the existing physical model and timestep.
+  `hamiltonian_sharing="on"` bypasses the arithmetic performance heuristic for
+  explicit benchmarking; unsupported factors still fall back. Auto avoids the
+  measured multiple-component RC slowdown. See README_OBE_SOLVER.md for budgets
+  and chunk diagnostics; independently varied powers do not guarantee a speedup.

@@ -165,12 +165,75 @@ class ScalarCompiler:
             raise ValueError("invalid CUDA scalar expression stack")
         return stack[0]
 
-    def function(self, name: str, indices: list[int]) -> str:
+    def factor_multipass(self) -> None:
+        """Expose exact transverse factors for unrotated, common-height passes."""
+        memo = {}
+
+        def rewrite(node):
+            if isinstance(node, tuple):
+                return tuple(rewrite(n) for n in node)
+            if node in memo:
+                return memo[node]
+            args = tuple(rewrite(a) if isinstance(a, Node | tuple) else a for a in node.args)
+            result = Node(node.op, args, node.symbolic, node.dependencies)
+            if node.op == "helper" and args[0] in {8, 10}:
+                fid, *a = args
+                centers = a[4]
+                # Equality of the expressions, not equality at a sampled point.
+                if (
+                    isinstance(centers, tuple)
+                    and centers
+                    and all(y.symbolic == centers[0].symbolic for y in centers)
+                    and not any(x.symbolic.has(TIME) for x in (a[1], centers[0], a[6]))
+                    and all(x.symbolic.is_real is True for x in (a[1], centers[0], a[6]))
+                ):
+                    y, sy = a[1], a[6]
+                    z = self.binary(Op.DIV, self.binary(Op.SUB, y, centers[0]), sy)
+                    exponent = self.binary(
+                        Op.MUL, constant(-0.5 if fid == 8 else -0.25), self.binary(Op.MUL, z, z)
+                    )
+                    attenuation = self.make(
+                        "builtin", (int(Builtin.EXP), exponent), smp.exp(exponent.symbolic)
+                    )
+                    a[1] = centers[0]
+                    on_axis = self.make(
+                        "helper",
+                        (fid, *a),
+                        smp.Function(f"helper_{fid}")(
+                            *[
+                                smp.Tuple(*(x.symbolic for x in v))
+                                if isinstance(v, tuple)
+                                else v.symbolic
+                                for v in a
+                            ]
+                        ),
+                    )
+                    on_axis.dependencies = frozenset().union(
+                        *(x.dependencies for v in a for x in (v if isinstance(v, tuple) else (v,)))
+                    )
+                    result = self.binary(Op.MUL, on_axis, attenuation)
+            memo[node] = result
+            return result
+
+        self.coefficients = [rewrite(n) for n in self.coefficients]
+
+    def function(
+        self,
+        name: str,
+        indices: list[int],
+        *,
+        roots=None,
+        substitutions=None,
+        extra_arguments="",
+        root_times=None,
+    ) -> str:
         lines, memo = [], {}
 
         def render(node: Any, time_name: str = "stage_t") -> Any:
             if isinstance(node, tuple):
                 return tuple(render(n, time_name) for n in node)
+            if substitutions and (node, time_name) in substitutions:
+                return substitutions[node, time_name]
             key = (node, time_name)
             if key in memo:
                 return memo[key]
@@ -226,10 +289,13 @@ class ScalarCompiler:
             return var
 
         for k in indices:
-            result = render(self.coefficients[k])
+            result = render(
+                (self.coefficients if roots is None else roots)[k],
+                "stage_t" if root_times is None else root_times[k],
+            )
             lines.append(f"out[{k}*S+(S==1?0:b)]={result};")
         return (
-            f"__device__ void {name}(const C* params,int B,int b,double stage_t,double switch_t,C* out,int S,int* error){{\n"
+            f"__device__ void {name}(const C* params,int B,int b,double stage_t,double switch_t,C* out,int S,int* error{extra_arguments}){{\n"
             + "\n".join(lines)
             + "\n}\n"
         )

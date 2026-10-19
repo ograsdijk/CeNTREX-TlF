@@ -122,6 +122,61 @@ __global__ void sample(const double* y,double* output,const int* public_pk,const
 """
 
 
+COMPONENT_KERNELS = r"""
+extern "C" __global__ void build_components(const C* coeff,const C* bases,const int* rows,const int* cols,const int* groups,const long long* offsets,
+ double* hr,double* hi,int E,int K,const double* clock,int skip){
+ int e=blockIdx.x*blockDim.x+threadIdx.x;if(e>=E||(skip&&clock[3]!=0.))return;
+#if HYBRID_H_COMPONENTS
+ if(groups[e]<0)return;
+#endif
+ C z(0.,0.);for(int k=0;k<K;k++)z+=bases[k*E+e]*coeff[k];if(rows[e]>cols[e])z=conj(z);
+ long h=e;
+#if HYBRID_H_COMPONENTS
+ h=offsets[e];
+#endif
+ hr[h]=z.real();hi[h]=z.imag();
+}
+extern "C" __global__ void build_remainder(const C* coeff,const C* bases,const int* varied,const int* rows,const int* cols,
+ const int* remainder,const long long* offsets,double* hr,double* hi,int R,int E,int K,int B,const double* clock,int skip){
+ long x=(long)blockIdx.x*blockDim.x+threadIdx.x;if(x>=(long)R*B||(skip&&clock[3]!=0.))return;
+ int e=remainder[x/B],b=x%B;C z(0.,0.);for(int k=0;k<K;k++)z+=bases[k*E+e]*coeff[k*B+(varied[k]?b:0)];
+ if(rows[e]>cols[e])z=conj(z);long h=offsets[e]+b;hr[h]=z.real();hi[h]=z.imag();
+}
+__device__ __forceinline__ void component_h(int k,int b,int B,const double* hr,const double* hi,const int* groups,const long long* offsets,const double* amplitude,double& r,double& w){
+ long h=k;
+#if HYBRID_H_COMPONENTS
+ h=offsets[k]+(groups[k]<0?b:0);
+#endif
+ r=hr[h];w=hi[h];
+#if !SINGLE_H_COMPONENT
+ double a=groups[k]<0?1.:amplitude[groups[k]*B+b];r*=a;w*=a;
+#endif
+}
+extern "C" __global__ void component_rhs(const double* y,double* out,const int* ptr,const int* col,
+ const double* hr,const double* hi,const int* groups,const long long* offsets,const double* amplitude,
+ const double* diag,const double* rates,const int* tp,const int* tc,const double* tr,const int* rows,const int* cols,
+ int B,int n,const double* clock,int skip){
+ long x=(long)blockIdx.x*blockDim.x+threadIdx.x,P=(long)B*density_pairs(n);
+ if(x>=P||(skip&&clock[3]!=0.))return;
+ int b=x%B,p=x/B,i=rows[p],j=cols[p];double ar=0.,ai=0.,jr=0.,ji=0.;
+ for(int k=ptr[i];k<ptr[i+1];k++){double u,v;readpk(y,col[k],j,b,B,n,P,u,v);
+  double r,w;component_h(k,b,B,hr,hi,groups,offsets,amplitude,r,w);
+  ar+=r*u-w*v;ai+=r*v+w*u;}
+ for(int k=ptr[j];k<ptr[j+1];k++){double u,v;readpk(y,col[k],i,b,B,n,P,u,v);
+  double r,w;component_h(k,b,B,hr,hi,groups,offsets,amplitude,r,w);
+  jr+=r*u-w*v;ji+=r*v+w*u;}
+ double scale=1.;
+#if SINGLE_H_COMPONENT
+ scale=amplitude[b];
+#endif
+ double u=y[x],v=y[P+x],d=diag[i*B+b]-diag[j*B+b],loss=-.5*(rates[i]+rates[j]);
+ double r=scale*(ai+ji)+d*v+loss*u,w=scale*(jr-ar)-d*u+loss*v;
+ if(i==j){for(int k=tp[i];k<tp[i+1];k++)r+=tr[k]*population(y,tc[k],b,B,n);w=0.;}
+ out[x]=r;out[P+x]=w;
+}
+"""
+
+
 def tile_kernel(n: int, tile: int) -> str:
     return r"""
 extern "C" __global__ void product_tile(const double* y,double* ar,double* ai,const int* ptr,const int* col,
