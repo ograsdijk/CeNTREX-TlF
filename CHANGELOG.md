@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- Optional CuPy CUDA fixed-step Lindblad solvers (`fixed_tsit5` and `fixed_ck54`),
+  with batched evolution, CUDA graphs, switching-boundary clipping, and independent
+  full-density snapshots. Install the `cuda` or `cuda13` extra. Fixed-step accuracy
+  is controlled by timestep validation, not ODE tolerances.
+- Opt-in exact density-coordinate reduction and reusable periodic full-density
+  propagators for compatible CUDA problems.
+- Native adjoint observable responses and full-density batch outputs.
+- Automatic CUDA coefficient caching and Hamiltonian component sharing, with
+  independent opt-out controls and conservative fallbacks. A matched 1024-trajectory
+  varying-height cleanup scan improved from 127.6 to 74.7 seconds (1.71 times faster);
+  this additional sharing did not substantially accelerate the tested RC fixture.
+
+### Performance
+
+- Optimize native CPU Hamiltonian assembly, decay updates, output packing, and
+  SIMD/FMA kernels, retaining explicit kernel selection and portable fallbacks.
+- Reuse static dense projections and vectorize full-density reconstruction.
+- Document matched solver benchmarks and density/coherence accuracy checks.
+
+### Fixed
+
+- Use the experimental TlF optical reference, 1103.435082708 THz, for Doppler
+  defaults, while retaining explicit frequency overrides.
+- Preserve mF sectors in exact-zero-field diagonalization to avoid arbitrary
+  mixing within degenerate subspaces.
+
+### Documentation
+
+- Expand CUDA setup, solver controls, performance evidence, and validation guidance.
+- Improve transition-diagram energy axes, overlap stacking, and paired level tables.
+
 ## 0.2.10
 
 ### Added
