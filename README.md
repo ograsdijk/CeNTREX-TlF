@@ -20,19 +20,17 @@ Consists of six modules:
 `states` has code to generate states and the classes that describe the `CoupledBasisState`, `UncoupledBasisState` and `State`; where `State` holds multiple `CoupledBasisStates` or `UncoupledBasisStates` with different amplitudes, i.e. when superpositions arise.
 
 ## Lindblad Solver Performance Options
-Rust-backed Lindblad solves default to `execution_mode="expanded_sparse"`. This mode uses a packed Hermitian density matrix and, by default, groups diagonal-real and complex input terms in the RHS kernel. The grouping can be controlled with `use_split_input_rhs` on `solve_lindblad`, `solve_lindblad_batch`, `parameter_scan`, `initial_condition_scan`, and `grid_scan`.
+CPU Rust Lindblad ODE solves default to the tested D+S+U RHS mode, `structured_sparse_dense_diag_soa_single_unpack`, with `cpu_kernel="auto"`. This combines direct diagonal-Hamiltonian terms (D), split real/imaginary accumulation (S), and one density unpack per RHS call (U); the CPU kernel selects AVX2+FMA when supported and falls back safely otherwise. `expanded_sparse` remains available explicitly and is still the CUDA ODE mode.
 
 ```python
 result = solve_lindblad(
     prepared,
     rho0,
     (0.0, t_end),
-    execution_mode="expanded_sparse",
-    use_split_input_rhs=True,  # default
 )
 ```
 
-Set `use_split_input_rhs=False` to keep the same expanded-sparse coefficient representation while disabling input-term grouping. This is mainly useful for benchmarking or checking full-system performance regressions; compact systems usually benefit from the default grouped path.
+Pass `execution_mode="expanded_sparse"` to select that alternative for CPU solves. The eight sparse-dense D/S/U combinations remain selectable; the default is the full D+S+U combination. `cpu_kernel` is independently selectable as `"auto"`, `"original"`, `"avx2"`, `"avx2_fma"`, `"avx512"`, or `"avx512_fma"` when preparing the Rust problem.
 
 ## Dependencies
 * `numpy`

@@ -15,7 +15,13 @@ from .ir import (
 from .parameters import LindbladParameters, adapt_lindblad_parameters
 from .state_layout import PackedHermitianLayout
 
-__all__ = ["PreparedLindbladProblem", "prepare_lindblad_problem"]
+__all__ = [
+    "DEFAULT_CPU_EXECUTION_MODE",
+    "PreparedLindbladProblem",
+    "prepare_lindblad_problem",
+]
+
+DEFAULT_CPU_EXECUTION_MODE = "structured_sparse_dense_diag_soa_single_unpack"
 
 STRUCTURED_SPARSE_DENSE_MODES = frozenset(
     {
