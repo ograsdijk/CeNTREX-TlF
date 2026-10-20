@@ -15,6 +15,7 @@ from .rabi import intensity_to_rabi
 
 __all__ = [
     "multipass_prism_order",
+    "trace_prism_multipass",
     "gaussian",
     "gaussian_amp",
     "gaussian_2d",
@@ -32,23 +33,27 @@ def multipass_prism_order(passes: int) -> List[int]:
     the passes appear spatially.
 
     Args:
-        passes (int): Total number of passes through the cell (must be odd).
+        passes (int): Total number of passes through the cell (must be positive and odd).
 
     Returns:
         List[int]: Spatial ordering of passes (1-indexed).
 
     Raises:
-        ValueError: If passes is even (two-prism multipass requires odd number).
+        ValueError: If passes is nonpositive or even.
 
     Example:
         >>> multipass_prism_order(5)
         [1, 4, 3, 2, 5]
         >>> multipass_prism_order(7)
-        [1, 6, 5, 4, 3, 2, 7]
+        [1, 6, 3, 4, 5, 2, 7]
         
     Note:
-        The pattern alternates: center pass, outer passes work inward, final center pass.
+        From left to right, odd pass labels increase and even pass labels decrease,
+        interleaved starting with pass 1. Actual ordering depends on entry and prism
+        offset; use trace_prism_multipass for a specified geometry.
     """
+    if passes <= 0:
+        raise ValueError("Number of passes must be positive")
     if passes % 2 == 0:
         raise ValueError("Number of passes must be odd for two-prism multipass")
 
@@ -59,6 +64,111 @@ def multipass_prism_order(passes: int) -> List[int]:
         else:
             npass.append(passes - p)
     return npass
+
+
+PRISM_LEG_LENGTH_M = 0.040
+
+
+def trace_prism_multipass(
+    prism_center_offset_m: float,
+    first_entry_m: float,
+) -> tuple[List[int], npt.NDArray[np.float64]]:
+    """Trace a normal-incidence ray through two parallel multipass prisms.
+
+    The prisms have right-isosceles 40 mm legs and parallel hypotenuse faces.
+    Coordinates run along the front faces, with zero at an endpoint of the
+    first prism's front face. ``first_entry_m`` is the incoming ray coordinate
+    on that face. The second prism center is displaced by
+    ``prism_center_offset_m`` along the face coordinate.
+
+    At each prism, the internal reflections map the incoming face coordinate
+    ``x`` to ``2 * center - x``. The function alternates this reflection
+    between prisms and stops after the outgoing ray misses the opposite front
+    face. Each outgoing gap crossing is one pass. The incoming entry segment
+    before the first internal reflection is not counted as a pass.
+
+    Face endpoints are inclusive. Outgoing coordinates within eight machine
+    epsilons of an endpoint (scaled by the face length and endpoint coordinates)
+    are snapped to it before recording the pass and continuing the trace.
+
+    Returns ``(order, locations_m)``. ``locations_m`` contains the traced pass
+    coordinates sorted along the front face, and ``order[i]`` is the 1-indexed
+    chronological pass label at ``locations_m[i]``. This function returns
+    geometry only; it does not calculate intensity, attenuation, or optical
+    losses.
+
+    Args:
+        prism_center_offset_m: Signed center-to-center offset along the front
+            faces [m].
+        first_entry_m: Incoming ray coordinate measured from an endpoint of
+            the first prism front face [m].
+
+    Returns:
+        A tuple containing spatially sorted chronological pass labels and
+        their matching pass locations along the front faces [m].
+
+    Raises:
+        ValueError: If either input is non-finite, the entry lies outside the
+            first face, zero prism offset would make the ray circulate
+            indefinitely, or the trace exceeds the iteration safety limit.
+    """
+    if not np.isfinite(prism_center_offset_m):
+        raise ValueError("Prism center offset must be finite")
+    if not np.isfinite(first_entry_m):
+        raise ValueError("First entry coordinate must be finite")
+    if prism_center_offset_m == 0:
+        raise ValueError("Prism center offset must be nonzero for a finite multipass trace")
+
+    front_face_length_m = PRISM_LEG_LENGTH_M * np.sqrt(2.0)
+    if not 0 <= first_entry_m <= front_face_length_m:
+        raise ValueError(
+            "First entry coordinate must lie on the first prism front face "
+            f"[0, {front_face_length_m:g}] m"
+        )
+
+    centers_m = (front_face_length_m / 2, front_face_length_m / 2 + prism_center_offset_m)
+    faces_m = (
+        (0.0, front_face_length_m),
+        (prism_center_offset_m, prism_center_offset_m + front_face_length_m),
+    )
+    prism_index = 0
+    incoming_m = first_entry_m
+    seen_states = {(prism_index, incoming_m)}
+    chronological_locations_m: list[float] = []
+
+    for _ in range(100_000):
+        outgoing_m = 2 * centers_m[prism_index] - incoming_m
+        next_prism_index = 1 - prism_index
+        next_face_min_m, next_face_max_m = faces_m[next_prism_index]
+        endpoint_tolerance_m = 8 * np.finfo(np.float64).eps * max(
+            front_face_length_m, abs(next_face_min_m), abs(next_face_max_m)
+        )
+        if abs(outgoing_m - next_face_min_m) <= endpoint_tolerance_m:
+            outgoing_m = next_face_min_m
+        elif abs(outgoing_m - next_face_max_m) <= endpoint_tolerance_m:
+            outgoing_m = next_face_max_m
+        chronological_locations_m.append(outgoing_m)
+        if not next_face_min_m <= outgoing_m <= next_face_max_m:
+            break
+        incoming_m = outgoing_m
+        prism_index = next_prism_index
+        state = (prism_index, incoming_m)
+        if state in seen_states:
+            raise ValueError(
+                "Prism trace stopped progressing at floating-point precision"
+            )
+        seen_states.add(state)
+    else:
+        raise ValueError(
+            "Prism trace exceeded 100,000 passes; the center offset may be "
+            "too small for a finite practical trace"
+        )
+
+    chronological_locations = np.asarray(chronological_locations_m, dtype=np.float64)
+    spatial_indices = np.argsort(chronological_locations, kind="stable")
+    locations_m = chronological_locations[spatial_indices]
+    order = (spatial_indices + 1).tolist()
+    return order, locations_m
 
 
 @overload
@@ -336,7 +446,7 @@ def generate_2d_multipass_gaussian_rabi(
         intensities (Sequence[float]): Peak intensities [W/m²], one per pass.
         sigma_x (float): Gaussian standard deviation in x [m].
         sigma_y (float): Gaussian standard deviation in y [m].
-        coupling (float): Reduced matrix element coupling strength [C·m].
+        coupling (float): Dimensionless transition matrix element coupling strength.
         D (float): Transition dipole moment [C·m]. Defaults to ED_XtB for
             TlF B-X transition.
 
@@ -346,7 +456,7 @@ def generate_2d_multipass_gaussian_rabi(
     Example:
         >>> X, Y = np.meshgrid(np.linspace(-5, 5, 100), np.linspace(-5, 5, 100))
         >>> rabi = generate_2d_multipass_gaussian_rabi(
-        ...     X, Y, [0, 2], [0, 0], [1000, 800], 0.5, 0.5, 1e-30
+        ...     X, Y, [0, 2], [0, 0], [1000, 800], 0.5, 0.5, 1.0
         ... )
     """
     multipass = generate_2d_multipass_gaussian_intensity(
