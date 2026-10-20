@@ -103,15 +103,69 @@ def test_public_dsu_alias_single_batch_and_grid_surfaces_match_experimental():
     np.testing.assert_array_equal(grid_alias.values, grid_experimental.values)
 
 
-def test_public_aliases_leave_solver_defaults_unchanged():
-    assert inspect.signature(solve_lindblad).parameters["execution_mode"].default == "expanded_sparse"
-    assert inspect.signature(solve_lindblad_batch).parameters["execution_mode"].default == "expanded_sparse"
+def test_solver_and_tolerance_defaults():
+    assert inspect.signature(solve_lindblad).parameters["execution_mode"].default is None
+    assert inspect.signature(solve_lindblad_batch).parameters["execution_mode"].default is None
     assert inspect.signature(solve_lindblad).parameters["solver"].default is None
     assert inspect.signature(solve_lindblad_batch).parameters["solver"].default == "dopri5"
     for function in (solve_lindblad, solve_lindblad_batch):
         defaults = inspect.signature(function).parameters
         assert defaults["reltol"].default == 1e-4
         assert defaults["abstol"].default == 1e-7
+
+
+def test_cpu_ode_default_execution_mode_is_dsu():
+    from centrex_tlf.lindblad.plan_static import DEFAULT_CPU_EXECUTION_MODE
+
+    assert DEFAULT_CPU_EXECUTION_MODE == "structured_sparse_dense_diag_soa_single_unpack"
+    prepared, omega, delta = _tiny_prepared("decomposed")
+    rho0 = np.array([[0.7, 0.08 + 0.06j], [0.08 - 0.06j, 0.3]], dtype=np.complex128)
+    common = dict(solver="dopri5", dt=1e-3, reltol=1e-9, abstol=1e-11)
+
+    default_single = solve_lindblad(prepared, rho0, (0.0, 0.02), **common)
+    dsu_single = solve_lindblad(
+        prepared, rho0, (0.0, 0.02),
+        execution_mode=DEFAULT_CPU_EXECUTION_MODE, **common,
+    )
+    np.testing.assert_array_equal(default_single.packed_y, dsu_single.packed_y)
+
+    batch_kwargs = dict(
+        prepared=prepared, rho0_batch=np.stack((rho0, rho0)), t_span=(0.0, 0.02),
+        output="full", output_when="final", parallel=False, **common,
+    )
+    default_batch = solve_lindblad_batch(**batch_kwargs)
+    dsu_batch = solve_lindblad_batch(
+        **batch_kwargs, execution_mode=DEFAULT_CPU_EXECUTION_MODE,
+    )
+    np.testing.assert_array_equal(default_batch.values, dsu_batch.values)
+
+    grid_kwargs = dict(
+        prepared=prepared, rho0=rho0, t_span=(0.0, 0.02),
+        scan={omega: np.array([0.55, 0.7]), delta: np.array([0.12])},
+        output="populations", output_when="final", parallel=False, **common,
+    )
+    default_grid = grid_scan(**grid_kwargs)
+    dsu_grid = grid_scan(**grid_kwargs, execution_mode=DEFAULT_CPU_EXECUTION_MODE)
+    np.testing.assert_array_equal(default_grid.values, dsu_grid.values)
+
+
+def test_cuda_ode_default_remains_expanded_sparse(monkeypatch):
+    from centrex_tlf.lindblad import cuda
+
+    prepared, _omega, _delta = _tiny_prepared("decomposed")
+    monkeypatch.setattr(
+        cuda,
+        "_solve_cuda_single",
+        lambda *args, **kwargs: kwargs["execution_mode"],
+    )
+    mode = solve_lindblad(
+        prepared,
+        np.eye(2, dtype=np.complex128) / 2,
+        (0.0, 0.02),
+        solver="fixed_tsit5",
+        evolution_device="cuda",
+    )
+    assert mode == "expanded_sparse"
 
 
 @pytest.mark.parametrize("mode", sorted(STRUCTURED_SPARSE_DENSE_MODES))

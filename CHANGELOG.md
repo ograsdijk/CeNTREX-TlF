@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+### Performance
+
+- Make the full D+S+U RHS the default for CPU Rust ODE solves and scans. The
+  automatic CPU kernel selection remains enabled; CUDA and `dense_eig` defaults
+  are unchanged.
+
 ## 0.3.0
 
 ### Added

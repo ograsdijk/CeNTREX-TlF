@@ -19,6 +19,7 @@ from .integral_output import (
     normalize_integral_saveat,
 )
 from .plan_static import (
+    DEFAULT_CPU_EXECUTION_MODE,
     STRUCTURED_SPARSE_DENSE_MODES,
     PreparedLindbladProblem,
     prepare_lindblad_problem,
@@ -552,7 +553,7 @@ def solve_lindblad(
     saveat: None | float | Sequence[float] | npt.NDArray[np.floating] = None,
     save_start: bool = True,
     maxiters: int = 100_000,
-    execution_mode: str = "expanded_sparse",
+    execution_mode: str | None = None,
     use_split_input_rhs: bool = True,
     jacobian: str = "exact",
     jacobian_format: str = "auto",
@@ -582,6 +583,12 @@ def solve_lindblad(
     """
     if solver is None:
         solver = "python_rk45" if backend == "python" else "dopri5"
+    if execution_mode is None:
+        execution_mode = (
+            "expanded_sparse"
+            if evolution_device == "cuda" or solver == "dense_eig"
+            else DEFAULT_CPU_EXECUTION_MODE
+        )
     if evolution_device == "cuda" and solver != "dense_eig":
         from .cuda import _solve_cuda_single
 

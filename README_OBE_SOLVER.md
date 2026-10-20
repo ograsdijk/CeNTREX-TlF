@@ -66,7 +66,7 @@ result = solve_lindblad(
     rho0,
     (0.0, 10e-6),
     solver="dopri5",
-    execution_mode="expanded_sparse",
+    execution_mode="structured_sparse_dense_diag_soa_single_unpack",
     saveat=saveat,
     output="populations",
     output_when="saveat",
@@ -95,7 +95,7 @@ scan_result = grid_scan(
     (0.0, 200e-6),
     scan={delta0: detuning_axis, omega0: rabi_axis},
     solver="dopri5",
-    execution_mode="expanded_sparse",
+    execution_mode="structured_sparse_dense_diag_soa_single_unpack",
     output="selected",
     output_indices=target_entries,
     output_when="final",
@@ -115,7 +115,7 @@ solve.
 
 | Path | Use for | Main entrypoints | Notes |
 | --- | --- | --- | --- |
-| Full OBE Rust solvers | Non-stiff full OBE trajectories and scans | `prepare_lindblad_problem`, `solve_lindblad`, `grid_scan` | Recommended default. Use `hamiltonian_representation="decomposed"` and `execution_mode="expanded_sparse"`. |
+| Full OBE Rust solvers | Non-stiff full OBE trajectories and scans | `prepare_lindblad_problem`, `solve_lindblad`, `grid_scan` | Recommended default. CPU ODE solves use D+S+U with `cpu_kernel="auto"`; CUDA ODE solves use `execution_mode="expanded_sparse"`. |
 | Full OBE SciPy stiff fallback | Stiff or difficult problems where native Rust solvers struggle | `solve_lindblad(..., solver="scipy_bdf")`, `solve_lindblad(..., solver="scipy_radau")` | Uses Rust RHS/Jacobian probing where available, but usually has more Python/SciPy overhead. |
 | Python/reference OBE | Correctness checks and debugging | `solve_lindblad(..., backend="python", solver="python_rk45")` | Not intended for production scan throughput. |
 | Effective-Hamiltonian Lindblad | Lower-dimensional effective models | `prepare_effective_lindblad_rust_plan`, `solve_effective_lindblad`, effective scans | Requires an effective model prepared separately. Output/API details differ from full OBE. |
@@ -137,12 +137,14 @@ Current full OBE solver choices:
 Native Rust stiff/BDF solving is not implemented. Use `scipy_bdf` or
 `scipy_radau` when a stiff fallback is needed.
 
-## Opt-in sparse-Hermitian forward kernels
+## Sparse-Hermitian forward kernels
 
 The sparse-Hermitian/dense-density kernels are available explicitly through
 `execution_mode`. They evolve the full density matrix, including coherences;
 they are arithmetic optimizations rather than physical approximations or
-different ODE algorithms. Package defaults remain unchanged.
+different ODE algorithms. CPU Rust ODE solves default to D+S+U; the other
+combinations remain selectable for comparison. CUDA ODE solves continue to use
+`expanded_sparse`.
 
 | Execution mode | Optimization |
 | --- | --- |
@@ -155,7 +157,7 @@ different ODE algorithms. Package defaults remain unchanged.
 | `structured_sparse_dense_soa_single_unpack` | S+U |
 | `structured_sparse_dense_diag_soa_single_unpack` | D+S+U |
 
-For example, select the benchmarked D+S+U route without changing defaults:
+The full D+S+U combination is the default for CPU Rust ODE solves. Select it explicitly when you want the mode stated in code:
 
 ```python
 result = solve_lindblad(
@@ -1154,8 +1156,8 @@ every machine because intrinsics are isolated behind runtime dispatch.
 Inspect `prepared.resolved_cpu_kernel` for the selected D+S+U kernel; Python-only
 preparation reports `None`. The requested setting is serialized into single,
 batch and grid payloads, and resolved on the receiving machine. Reprepare to
-change it. Other execution modes (including the default `expanded_sparse`),
-matrix/split RHS evaluation, Python and CUDA retain their existing computations.
+change it. Other execution modes, including `expanded_sparse`, matrix/split RHS
+evaluation, Python and CUDA retain their existing computations.
 Thus setting `cpu_kernel` does not switch the execution mode automatically.
 
 In RHS profiling, the fused CPU pass is included in `commutator_seconds`;
@@ -1194,8 +1196,8 @@ High-level guidance:
   Setting both to `False` uses the original upper-triangle assembly and
   coefficient evaluation paths. The choices are preserved in prepared payloads
   and apply to batch/grid solves; prepare a new problem to change them.
-- Use `expanded_sparse` as the general full-OBE Rust starting point, then
-  benchmark the prepared model's available execution modes. For the tested
+- Use the CPU default D+S+U mode as the general full-OBE Rust starting point,
+  then benchmark the prepared model's available execution modes. For the tested
   70-state RC model with optical EOM and switched microwaves in short
   1–10 us pilots, `tsit5` with
   `execution_mode="structured"`, `reltol=1e-9`, and `abstol=1e-11` passed the

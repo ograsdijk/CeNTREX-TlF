@@ -18,7 +18,7 @@ from .integral_output import (
     normalize_integral_saveat,
 )
 from .parameters import Parameter
-from .plan_static import PreparedLindbladProblem
+from .plan_static import DEFAULT_CPU_EXECUTION_MODE, PreparedLindbladProblem
 
 __all__ = [
     "LindbladBatchResult",
@@ -152,7 +152,7 @@ def solve_lindblad_batch(
     parameter_batch: npt.NDArray[np.complex128] | None = None,
     parameter_slots: Sequence[ParameterSlot] | None = None,
     solver: str = "dopri5",
-    execution_mode: str = "expanded_sparse",
+    execution_mode: str | None = None,
     use_split_input_rhs: bool = True,
     abstol: float = 1e-7,
     reltol: float = 1e-4,
@@ -205,6 +205,12 @@ def solve_lindblad_batch(
     ``integral_method="sampled"`` and provide ``integral_saveat`` to choose an
     independent trapezoidal integration grid.
     """
+    if execution_mode is None:
+        execution_mode = (
+            "expanded_sparse"
+            if evolution_device == "cuda" or solver == "dense_eig"
+            else DEFAULT_CPU_EXECUTION_MODE
+        )
     if evolution_device == "cuda" and solver != "dense_eig":
         from .cuda import _solve_cuda_batch
 
@@ -513,6 +519,13 @@ def grid_scan(
     """
     if not scan:
         raise ValueError("scan must contain at least one parameter")
+    if kwargs.get("execution_mode") is None:
+        kwargs["execution_mode"] = (
+            "expanded_sparse"
+            if kwargs.get("evolution_device") == "cuda"
+            or kwargs.get("solver") == "dense_eig"
+            else DEFAULT_CPU_EXECUTION_MODE
+        )
     if kwargs.get("evolution_device") == "cuda" and kwargs.get("solver") != "dense_eig":
         from .cuda import _cuda_grid_scan
 
@@ -546,7 +559,7 @@ def grid_scan(
     save_start = bool(kwargs.pop("save_start", True))
     saveat_values = _normalize_saveat(kwargs.pop("saveat", None), t_span_tuple, save_start)
     solver = kwargs.pop("solver", "dopri5")
-    execution_mode = kwargs.pop("execution_mode", "expanded_sparse")
+    execution_mode = kwargs.pop("execution_mode")
     use_split_input_rhs = bool(kwargs.pop("use_split_input_rhs", True))
     abstol = float(kwargs.pop("abstol", 1e-7))
     reltol = float(kwargs.pop("reltol", 1e-4))
