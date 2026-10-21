@@ -1,4 +1,4 @@
-"""FP64 sparse commutator and fixed-step kernels (compiled lazily by CuPy)."""
+"""FP64 FMA sparse commutator and fixed-step kernels (compiled lazily by CuPy)."""
 
 HEADER = r"""
 #include <cupy/complex.cuh>
@@ -70,7 +70,7 @@ __global__ void product(const double* y,double* ar,double* ai,const int* ptr,con
  long x=(long)blockIdx.x*blockDim.x+threadIdx.x,P=(long)B*density_pairs(n);
  if(x>=(long)B*n*n||(skip&&clock[3]!=0.))return;
  int b=x%B,ij=x/B,i=ij/n,j=ij%n;double r=0.,v=0.;
- for(int p=ptr[i];p<ptr[i+1];p++){double u,w;readpk(y,col[p],j,b,B,n,P,u,w);long h=(long)p*HB+(HB==1?0:b);r+=hr[h]*u-hi[h]*w;v+=hr[h]*w+hi[h]*u;}
+ for(int p=ptr[i];p<ptr[i+1];p++){double u,w;readpk(y,col[p],j,b,B,n,P,u,w);long h=(long)p*HB+(HB==1?0:b);r=fma(hr[h],u,r);r=fma(-hi[h],w,r);v=fma(hr[h],w,v);v=fma(hi[h],u,v);}
  ar[x]=r;ai[x]=v;
 }
 __global__ void finish(const double* y,double* out,const double* ar,const double* ai,const double* diag,
@@ -90,8 +90,8 @@ __global__ void direct_rhs(const double* y,double* out,const int* ptr,const int*
  long x=(long)blockIdx.x*blockDim.x+threadIdx.x,P=(long)B*density_pairs(n);
  if(x>=P||(skip&&clock[3]!=0.))return;
  int b=x%B,p=x/B,i=rows[p],j=cols[p];double ar=0.,ai=0.,jr=0.,ji=0.;
- for(int k=ptr[i];k<ptr[i+1];k++){double u,v;readpk(y,col[k],j,b,B,n,P,u,v);long h=(long)k*HB+(HB==1?0:b);ar+=hr[h]*u-hi[h]*v;ai+=hr[h]*v+hi[h]*u;}
- for(int k=ptr[j];k<ptr[j+1];k++){double u,v;readpk(y,col[k],i,b,B,n,P,u,v);long h=(long)k*HB+(HB==1?0:b);jr+=hr[h]*u-hi[h]*v;ji+=hr[h]*v+hi[h]*u;}
+ for(int k=ptr[i];k<ptr[i+1];k++){double u,v;readpk(y,col[k],j,b,B,n,P,u,v);long h=(long)k*HB+(HB==1?0:b);ar=fma(hr[h],u,ar);ar=fma(-hi[h],v,ar);ai=fma(hr[h],v,ai);ai=fma(hi[h],u,ai);}
+ for(int k=ptr[j];k<ptr[j+1];k++){double u,v;readpk(y,col[k],i,b,B,n,P,u,v);long h=(long)k*HB+(HB==1?0:b);jr=fma(hr[h],u,jr);jr=fma(-hi[h],v,jr);ji=fma(hr[h],v,ji);ji=fma(hi[h],u,ji);}
  double u=y[x],v=y[P+x],d=diag[i*B+b]-diag[j*B+b],loss=-.5*(rates[i]+rates[j]);
  double r=ai+ji+d*v+loss*u,w=jr-ar-d*u+loss*v;
  if(i==j){for(int k=tp[i];k<tp[i+1];k++)r+=tr[k]*population(y,tc[k],b,B,n);w=0.;}
@@ -161,10 +161,10 @@ extern "C" __global__ void component_rhs(const double* y,double* out,const int* 
  int b=x%B,p=x/B,i=rows[p],j=cols[p];double ar=0.,ai=0.,jr=0.,ji=0.;
  for(int k=ptr[i];k<ptr[i+1];k++){double u,v;readpk(y,col[k],j,b,B,n,P,u,v);
   double r,w;component_h(k,b,B,hr,hi,groups,offsets,amplitude,r,w);
-  ar+=r*u-w*v;ai+=r*v+w*u;}
+  ar=fma(r,u,ar);ar=fma(-w,v,ar);ai=fma(r,v,ai);ai=fma(w,u,ai);}
  for(int k=ptr[j];k<ptr[j+1];k++){double u,v;readpk(y,col[k],i,b,B,n,P,u,v);
   double r,w;component_h(k,b,B,hr,hi,groups,offsets,amplitude,r,w);
-  jr+=r*u-w*v;ji+=r*v+w*u;}
+  jr=fma(r,u,jr);jr=fma(-w,v,jr);ji=fma(r,v,ji);ji=fma(w,u,ji);}
  double scale=1.;
 #if SINGLE_H_COMPONENT
  scale=amplitude[b];
@@ -189,7 +189,7 @@ extern "C" __global__ void product_tile(const double* y,double* ar,double* ai,co
  __syncthreads();
  for(int z=threadIdx.x;z<n*TILE;z+=blockDim.x){int i=z/TILE,t=z%TILE,b=b0+t;if(b>=B)continue;
   double r=0.,v=0.;for(int p=ptr[i];p<ptr[i+1];p++){int k=col[p]*TILE+t;long h=(long)p*HB+(HB==1?0:b);
-   r+=hr[h]*sr[k]-hi[h]*si[k];v+=hr[h]*si[k]+hi[h]*sr[k];}
+   r=fma(hr[h],sr[k],r);r=fma(-hi[h],si[k],r);v=fma(hr[h],si[k],v);v=fma(hi[h],sr[k],v);}
   long out=((long)i*n+j)*B+b;ar[out]=r;ai[out]=v;
  }
 }
