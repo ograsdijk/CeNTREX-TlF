@@ -1,0 +1,1075 @@
+{
+  "status": "complete",
+  "span": [
+    0.0,
+    0.00040069384267237706
+  ],
+  "times": [
+    0.00010017346066809427,
+    0.00020034692133618853,
+    0.0003005203820042828,
+    0.00040069384267237706
+  ],
+  "rows": [
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      0
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      1
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      2
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      3
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      4
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      5
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      6
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      7
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      8
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      9
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      10
+    ],
+    [
+      0.08,
+      0.0,
+      0.0,
+      0.0,
+      11
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      0
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      1
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      2
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      3
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      4
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      5
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      6
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      7
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      8
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      9
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      10
+    ],
+    [
+      0.08,
+      20.0,
+      -1.5,
+      0.0,
+      11
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      0
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      1
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      2
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      3
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      4
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      5
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      6
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      7
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      8
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      9
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      10
+    ],
+    [
+      0.08,
+      40.0,
+      1.5,
+      0.0,
+      11
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      0
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      1
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      2
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      3
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      4
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      5
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      6
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      7
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      8
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      9
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      10
+    ],
+    [
+      0.08,
+      60.0,
+      0.0,
+      0.0,
+      11
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      0
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      1
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      2
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      3
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      4
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      5
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      6
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      7
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      8
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      9
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      10
+    ],
+    [
+      0.08,
+      100.0,
+      1.5,
+      0.0,
+      11
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      0
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      1
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      2
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      3
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      4
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      5
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      6
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      7
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      8
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      9
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      10
+    ],
+    [
+      0.01,
+      -20.0,
+      -1.5,
+      0.0085,
+      11
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      0
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      1
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      2
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      3
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      4
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      5
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      6
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      7
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      8
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      9
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      10
+    ],
+    [
+      0.01,
+      40.0,
+      0.0,
+      0.0,
+      11
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      0
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      1
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      2
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      3
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      4
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      5
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      6
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      7
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      8
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      9
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      10
+    ],
+    [
+      0.04,
+      60.0,
+      0.0,
+      0.0085,
+      11
+    ]
+  ],
+  "dt": 2e-09,
+  "records": [
+    {
+      "path": "direct",
+      "mode": "baseline",
+      "wall_seconds": 32.117856400087476,
+      "max_density_difference": 0.0,
+      "trace_error": 3.8191672047105385e-14,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 200423,
+        "accepted_steps": 19240608,
+        "rejected_steps": 0,
+        "rhs_calls": 115483872,
+        "function_evaluations": 115483872,
+        "saved_points": 4,
+        "total_seconds": 32.097284400020726,
+        "chunks": [
+          {
+            "trajectories": 96,
+            "steps_per_trajectory": 200423,
+            "rhs_calls": 115483872,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "rhs_specialization": {
+              "kernel": "generic",
+              "reason": "disabled"
+            },
+            "diagonal_stage_reuse": false,
+            "block_size": 256,
+            "density_reduction": false,
+            "retained_density_pairs": 351,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.6744375999551266,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 2,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 112236880,
+            "hamiltonian_bytes": 285696,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "direct",
+      "mode": "fma",
+      "wall_seconds": 27.371447500074282,
+      "max_density_difference": 3.4416913763379853e-15,
+      "trace_error": 3.8191672047105385e-14,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 200423,
+        "accepted_steps": 19240608,
+        "rejected_steps": 0,
+        "rhs_calls": 115483872,
+        "function_evaluations": 115483872,
+        "saved_points": 4,
+        "total_seconds": 27.357721299980767,
+        "chunks": [
+          {
+            "trajectories": 96,
+            "steps_per_trajectory": 200423,
+            "rhs_calls": 115483872,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "rhs_specialization": {
+              "kernel": "generic",
+              "reason": "disabled"
+            },
+            "diagonal_stage_reuse": false,
+            "block_size": 256,
+            "density_reduction": false,
+            "retained_density_pairs": 351,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.578929299954325,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 2,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 112236880,
+            "hamiltonian_bytes": 285696,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "component",
+      "mode": "baseline",
+      "wall_seconds": 30.873801999958232,
+      "max_density_difference": 4.884981308350689e-15,
+      "trace_error": 3.863576125695545e-14,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 200423,
+        "accepted_steps": 19240608,
+        "rejected_steps": 0,
+        "rhs_calls": 115483872,
+        "function_evaluations": 115483872,
+        "saved_points": 4,
+        "total_seconds": 30.860968100023456,
+        "chunks": [
+          {
+            "trajectories": 96,
+            "steps_per_trajectory": 200423,
+            "rhs_calls": 115483872,
+            "shared_offdiagonal_hamiltonian": true,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "rhs_specialization": {
+              "kernel": "generic",
+              "reason": "disabled"
+            },
+            "diagonal_stage_reuse": false,
+            "block_size": 256,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.5887667000060901,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 0,
+            "shared_subexpressions": 1,
+            "waveform_table_bytes": 89789504,
+            "hamiltonian_bytes": 2976,
+            "hamiltonian_sharing": "single_component",
+            "shared_hamiltonian_components": 1,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "component",
+      "mode": "fma",
+      "wall_seconds": 25.85851539997384,
+      "max_density_difference": 3.552713678800501e-15,
+      "trace_error": 3.863576125695545e-14,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 200423,
+        "accepted_steps": 19240608,
+        "rejected_steps": 0,
+        "rhs_calls": 115483872,
+        "function_evaluations": 115483872,
+        "saved_points": 4,
+        "total_seconds": 25.845177399925888,
+        "chunks": [
+          {
+            "trajectories": 96,
+            "steps_per_trajectory": 200423,
+            "rhs_calls": 115483872,
+            "shared_offdiagonal_hamiltonian": true,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "rhs_specialization": {
+              "kernel": "generic",
+              "reason": "disabled"
+            },
+            "diagonal_stage_reuse": false,
+            "block_size": 256,
+            "density_reduction": true,
+            "retained_density_pairs": 257,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.6089795000152662,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 0,
+            "shared_subexpressions": 1,
+            "waveform_table_bytes": 89789504,
+            "hamiltonian_bytes": 2976,
+            "hamiltonian_sharing": "single_component",
+            "shared_hamiltonian_components": 1,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "product",
+      "mode": "baseline",
+      "wall_seconds": 32.15985679998994,
+      "max_density_difference": 0.0,
+      "trace_error": 3.8191672047105385e-14,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 200423,
+        "accepted_steps": 19240608,
+        "rejected_steps": 0,
+        "rhs_calls": 115483872,
+        "function_evaluations": 115483872,
+        "saved_points": 4,
+        "total_seconds": 32.147051099920645,
+        "chunks": [
+          {
+            "trajectories": 96,
+            "steps_per_trajectory": 200423,
+            "rhs_calls": 115483872,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "rhs_specialization": {
+              "kernel": "generic",
+              "reason": "disabled"
+            },
+            "diagonal_stage_reuse": false,
+            "block_size": 256,
+            "density_reduction": false,
+            "retained_density_pairs": 351,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.01604610006324947,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 2,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 112236880,
+            "hamiltonian_bytes": 285696,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "product",
+      "mode": "fma",
+      "wall_seconds": 27.475416000001132,
+      "max_density_difference": 3.4416913763379853e-15,
+      "trace_error": 3.8191672047105385e-14,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 200423,
+        "accepted_steps": 19240608,
+        "rejected_steps": 0,
+        "rhs_calls": 115483872,
+        "function_evaluations": 115483872,
+        "saved_points": 4,
+        "total_seconds": 27.46245039999485,
+        "chunks": [
+          {
+            "trajectories": 96,
+            "steps_per_trajectory": 200423,
+            "rhs_calls": 115483872,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 0,
+            "rhs_specialization": {
+              "kernel": "generic",
+              "reason": "disabled"
+            },
+            "diagonal_stage_reuse": false,
+            "block_size": 256,
+            "density_reduction": false,
+            "retained_density_pairs": 351,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.016794700059108436,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 2,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 112236880,
+            "hamiltonian_bytes": 285696,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "tiled",
+      "mode": "baseline",
+      "wall_seconds": 35.73429469997063,
+      "max_density_difference": 3.4416913763379853e-15,
+      "trace_error": 3.7969627442180354e-14,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 200423,
+        "accepted_steps": 19240608,
+        "rejected_steps": 0,
+        "rhs_calls": 115483872,
+        "function_evaluations": 115483872,
+        "saved_points": 4,
+        "total_seconds": 35.72125800000504,
+        "chunks": [
+          {
+            "trajectories": 96,
+            "steps_per_trajectory": 200423,
+            "rhs_calls": 115483872,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 32,
+            "rhs_specialization": {
+              "kernel": "generic",
+              "reason": "disabled"
+            },
+            "diagonal_stage_reuse": false,
+            "block_size": 256,
+            "density_reduction": false,
+            "retained_density_pairs": 351,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.6067605999996886,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 2,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 112236880,
+            "hamiltonian_bytes": 285696,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "tiled",
+      "mode": "fma",
+      "wall_seconds": 29.025878999964334,
+      "max_density_difference": 3.4416913763379853e-15,
+      "trace_error": 3.8191672047105385e-14,
+      "stats": {
+        "solver": "fixed_tsit5",
+        "evolution_device": "cuda",
+        "fixed_step": true,
+        "error_control": false,
+        "steps_per_trajectory": 200423,
+        "accepted_steps": 19240608,
+        "rejected_steps": 0,
+        "rhs_calls": 115483872,
+        "function_evaluations": 115483872,
+        "saved_points": 4,
+        "total_seconds": 29.012841399991885,
+        "chunks": [
+          {
+            "trajectories": 96,
+            "steps_per_trajectory": 200423,
+            "rhs_calls": 115483872,
+            "shared_offdiagonal_hamiltonian": false,
+            "precomputed_waveforms": true,
+            "tile_size": 32,
+            "rhs_specialization": {
+              "kernel": "generic",
+              "reason": "disabled"
+            },
+            "diagonal_stage_reuse": false,
+            "block_size": 256,
+            "density_reduction": false,
+            "retained_density_pairs": 351,
+            "full_density_pairs": 351,
+            "setup_seconds": 0.6205304999602959,
+            "coefficient_sharing": "active",
+            "static_subexpressions": 2,
+            "shared_subexpressions": 4,
+            "waveform_table_bytes": 112236880,
+            "hamiltonian_bytes": 285696,
+            "hamiltonian_sharing": "disabled",
+            "shared_hamiltonian_components": 0,
+            "per_trajectory_hamiltonian_edges": 0
+          }
+        ]
+      }
+    }
+  ],
+  "note": "Same-grid density agreement; not timestep convergence."
+}

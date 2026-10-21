@@ -526,6 +526,15 @@ across trajectories when only diagonal parameters differ. All density coordinate
 are evolved by default even with photon-only output; reducing saved output saves
 transfer and storage. Exact coordinate reduction is separately opt-in below.
 
+All generic CUDA commutator paths (direct RHS, shared-component RHS, ordinary
+sparse product and tiled product) use explicit FP64 FMA accumulation by default.
+This changes floating-point rounding/association while preserving the equations,
+matrix support and timestep; it does not enable fast math or reduce precision.
+Both Tsit5 and CK54 use these kernels. See the
+[generic FMA benchmark](benchmarks/cuda_generic_fma_results/REPORT.md) for
+workload-specific measurements and the
+[integration checks](benchmarks/CUDA_GENERIC_FMA_INTEGRATION.md) for the package defaults.
+
 `CudaSolverOptions.batch_size` bounds simultaneous trajectories; scans larger
 than this are chunked. Grid ordering is parameter point, then initial state.
 Supported outputs include full packed density, populations, selected complex
@@ -615,6 +624,49 @@ identified by `shared_offdiagonal_hamiltonian=True` and `already_shared`.
 
 Integration measurements and limitations are recorded in
 `benchmarks/spb_cu1_gpu_results/integrated_sharing/REPORT.md`.
+
+### Specialized FP64 CUDA Tsit5 kernels
+
+`CudaSolverOptions(rhs_specialization="auto")` now selects the benchmarked
+prepared-sparsity FMA kernel for eligible direct Tsit5 chunks with one shared off-diagonal H
+component and a real trajectory amplitude, no per-trajectory remainder, no photon-integral
+state, and a provably stage-invariant diagonal. It fuses the next RK-stage
+update and reuses the diagonal after the first fresh stage while retaining
+Tsit5 FSAL/reset handling. States, coefficients, decay and stages remain FP64.
+FMA accumulation changes rounding/association, not the equations or timestep.
+
+Auto conservatively requires at least 512 trajectories and 64 grid steps.
+Generated code is bounded to 32 levels, 528 density pairs, 256 Hamiltonian
+edges, 6,000 complex terms and 1 MB of source. Other configurations retain
+the generic kernel. CuPy caches generated source binaries using its normal
+cache; the first eligible solve can require a substantial JIT compilation.
+`rhs_specialization="off"` selects the generic implementation, which also uses
+FP64 FMA. `"on"` bypasses the batch/step heuristic, raises for unsupported
+structure/code size, and propagates compile errors. Auto falls back on CUDA
+source compilation errors and records the reason in chunk statistics.
+
+The specialized path uses 128 threads for full chunks and 64 for partial
+chunks by default, based on cleanup-1 measurements at 1,024 and 548 rows.
+These are launch heuristics, not universal optimal sizes. Set
+`specialized_block_size=64/128/256/512` to override this choice. The generic
+path continues to use `block_size`.
+
+With `collect_stats=True`, chunk statistics include `rhs_specialization`
+(selected kernel, eligibility/fallback reason, source SHA-256, source bytes,
+complex term count, compilation/setup time and CUDA kernel attributes),
+`diagonal_stage_reuse`, and the actual `block_size`.
+
+The promoted improvements are the specialized FP64 FMA commutator/decay,
+stage fusion, invariant-diagonal reuse and measured launch settings. Density
+packing, Hamiltonian-envelope factoring, polarization-specific sparsity,
+precision and numerical steps are unchanged. CPU kernels are unaffected.
+The prior prototype passed full-flight/dark-tail density checks within
+3.6e-15 and saved about 30% additional runtime against the already specialized
+non-FMA prototype on cleanup-1. These are workload-specific benchmark results,
+not a new measurement of this package integration. See
+[the FMA report](benchmarks/cuda_fma_results/REPORT.md),
+[block tuning and hardware counters](benchmarks/cuda_fma_blocks_results/REPORT.md),
+and [integration notes](benchmarks/CUDA_SPECIALIZED_INTEGRATION.md).
 
 ### Opt-in exact CUDA density-coordinate reduction
 

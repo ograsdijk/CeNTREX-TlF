@@ -216,6 +216,72 @@ def gpu():
         pytest.skip(str(exc))
 
 
+@pytest.mark.parametrize("solver", ["fixed_tsit5", "fixed_ck54"])
+@pytest.mark.parametrize(
+    "path,reduced",
+    [
+        ("direct", False),
+        ("direct", True),
+        ("component", False),
+        ("component", True),
+        ("product", False),
+        ("tiled", False),
+    ],
+)
+def test_generic_fma_paths_against_complex_liouvillian(gpu, solver, path, reduced):
+    p, H, C, initial = model()
+    # Six rows amortize the two shared real/imaginary components' storage.
+    initial = np.repeat(initial, 3, axis=0)
+    drives = [1.2, 0.7, 0.3, 0.0, 0.5, 1.0]
+    matrices = [
+        np.asarray(
+            H.subs({s: dict(omega=drive, delta=0.4, phase=0.3)[str(s)] for s in H.free_symbols}),
+            complex,
+        )
+        for drive in drives
+    ]
+    times = np.array([0.137, 0.407])
+    expected = np.array(
+        [
+            [
+                (la.expm(generator(h, C) * t) @ np.r_[rho.reshape(-1, order="F"), 0.0])[
+                    :-1
+                ].reshape(3, 3, order="F")
+                for t in times
+            ]
+            for rho, h in zip(initial, matrices, strict=True)
+        ]
+    )
+    result = lindblad.solve_lindblad_batch(
+        p,
+        initial,
+        (0.0, times[-1]),
+        solver=solver,
+        evolution_device="cuda",
+        dt=0.003,
+        output="full",
+        output_when="saveat",
+        saveat=times,
+        collect_stats=True,
+        parameter_slots=["omega"],
+        parameter_batch=np.array(drives)[:, None],
+        cuda_options=CudaSolverOptions(
+            rhs_specialization="off",
+            density_reduction=reduced,
+            rhs="direct" if path in {"direct", "component"} else "tiled",
+            tile_size=0 if path == "product" else 32,
+            hamiltonian_sharing="on" if path == "component" else "off",
+        ),
+    )
+    actual = p.layout.unpack_batch(result.values)
+    np.testing.assert_allclose(actual, expected, atol=3e-11, rtol=1e-11)
+    np.testing.assert_allclose(np.trace(actual, axis1=-2, axis2=-1), 1.0, atol=1e-12)
+    chunk = result.solver_stats["chunks"][0]
+    assert chunk["rhs_specialization"]["kernel"] == "generic"
+    assert (chunk["shared_hamiltonian_components"] > 0) == (path == "component")
+    assert chunk["tile_size"] == (32 if path == "tiled" else 0)
+
+
 def sharing_model(nonseparable=False, complex_factor=False):
     """Independent drives with overlapping H support and an exact multipass factor."""
     a, b, d = smp.symbols("a b d")
@@ -986,3 +1052,92 @@ def test_static_cuda_full_persistent_worker_session():
                 p, None, (0.0, 0.4), evolution_device="cuda", dense_session=session, **options
             )
             np.testing.assert_allclose(gpu.values, cpu.values, atol=3e-13)
+
+
+@pytest.mark.parametrize("batch,mode", [(512, "auto"), (6, "auto"), (6, "on")])
+def test_specialized_fma_matches_generic_with_fsal_and_output_boundaries(gpu, batch, mode):
+    a = smp.Symbol("a", real=True)
+    H = smp.Matrix([[0, a * (1 + 0.3j), 0], [a * (1 - 0.3j), 0.4, 0], [0, 0, 0.2]])
+    C = np.zeros((2, 3, 3), complex)
+    C[0, 0, 1], C[1, 2, 1] = np.sqrt(0.3), np.sqrt(0.2)
+    params = lindblad.LindbladParameters()
+    t, scale = params.time(), params.real("scale", 1.0)
+    params.bind(a, scale * (1 + 0.2 * lindblad.sine(t, angular_frequency=2.0)))
+    p = lindblad.prepare_lindblad_problem(
+        SimpleNamespace(H_symbolic=H, C_array=C),
+        params,
+        backend="rust",
+        hamiltonian_representation="decomposed",
+    )
+    v = np.array([1, 0.2j, 0.3], complex)
+    v /= np.linalg.norm(v)
+    initial = np.broadcast_to(np.outer(v, v.conj()), (batch, 3, 3)).copy()
+    options = dict(
+        parameter_slots=["scale"],
+        parameter_batch=np.linspace(0.0, 1.2, batch)[:, None],
+        solver="fixed_tsit5",
+        evolution_device="cuda",
+        dt=0.001,
+        output="full",
+        output_when="saveat",
+        saveat=[0.0, 0.007, 0.023, 0.103],
+        collect_stats=True,
+    )
+
+    def solve(specialization):
+        return lindblad.solve_lindblad_batch(
+            p,
+            initial,
+            (0.0, 0.103),
+            **options,
+            cuda_options=CudaSolverOptions(
+                batch_size=512,
+                rhs="direct",
+                hamiltonian_sharing="on",
+                density_reduction=True,
+                rhs_specialization=specialization,
+            ),
+        )
+
+    reference = solve("off")
+    actual = solve(mode)
+    np.testing.assert_allclose(actual.values, reference.values, rtol=1e-11, atol=1e-13)
+    chunk = actual.solver_stats["chunks"][0]
+    specialized = mode == "on" or batch == 512
+    assert chunk["rhs_specialization"]["kernel"] == (
+        "specialized_fma" if specialized else "generic"
+    )
+    assert chunk["diagonal_stage_reuse"] == specialized
+    if specialized:
+        assert chunk["block_size"] == (128 if batch == 512 else 64)
+
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("rhs_specialization", "invalid"),
+        ("specialized_block_size", 32),
+        ("specialized_block_size", True),
+    ],
+)
+def test_specialized_option_validation(name, value):
+    with pytest.raises(ValueError, match=name):
+        CudaSolverOptions(**{name: value})
+
+
+def test_forced_specialization_rejects_multiple_components(gpu):
+    p, rho, pars, slots = sharing_model()
+    with pytest.raises(ValueError, match="requires_single_shared_component"):
+        lindblad.parameter_scan(
+            p,
+            rho,
+            (0.0, 0.01),
+            parameter_slots=slots,
+            parameter_batch=pars,
+            solver="fixed_tsit5",
+            evolution_device="cuda",
+            dt=0.001,
+            cuda_options=CudaSolverOptions(
+                rhs="direct", hamiltonian_sharing="on", rhs_specialization="on"
+            ),
+        )

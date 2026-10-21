@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.2
+
+### Performance
+
+- Automatically select bounded prepared-sparsity FP64 FMA CUDA kernels for
+  eligible single-component Tsit5 batches, with fused next-stage updates and
+  reuse of provably stage-invariant diagonals.
+- Use explicit FP64 FMA accumulation by default in all four generic CUDA
+  Lindblad commutator paths, preserving precision, matrix support and timesteps.
+  Matched cleanup-1 benchmarks on an RTX 5070 Ti reduced solver wall time by
+  19-23%; full-flight density comparisons agree within 5e-15.
+
 ## 0.3.1
 
 ### Performance
