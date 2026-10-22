@@ -7,6 +7,7 @@ their model, time interval and requested density/observable accuracy.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import dataclass, replace
 from itertools import pairwise
@@ -91,6 +92,15 @@ class CudaSolverOptions:
     ``precompute_bytes``; ``precompute=False`` still permits static caching.
     ``hamiltonian_sharing="on"`` bypasses the arithmetic performance gate for
     explicit benchmarks; structural and storage eligibility still apply.
+
+    ``rhs_specialization="auto"`` enables bounded prepared-sparsity FP64 FMA
+    kernels for eligible large single-component direct Tsit5 chunks. It fuses
+    the next RK stage and reuses provably stage-invariant diagonals. ``"off"``
+    selects the generic kernel; ``"on"`` bypasses the batch/step heuristic but
+    requires structural eligibility. CuPy caches compiled kernels on disk.
+    ``specialized_block_size=None`` uses 128 threads for full chunks and 64 for
+    partial chunks; an explicit value overrides this specialized-path choice.
+    Generic kernels continue to use ``block_size``.
     """
 
     batch_size: int = 512
@@ -107,10 +117,12 @@ class CudaSolverOptions:
     density_reduction: bool = False
     coefficient_sharing: str = "auto"
     hamiltonian_sharing: str = "auto"
+    rhs_specialization: str = "auto"
+    specialized_block_size: int | None = None
 
     def __post_init__(self) -> None:
-        for name in ("coefficient_sharing", "hamiltonian_sharing"):
-            choices = {"auto", "off", "on"} if name == "hamiltonian_sharing" else {"auto", "off"}
+        for name in ("coefficient_sharing", "hamiltonian_sharing", "rhs_specialization"):
+            choices = {"auto", "off"} if name == "coefficient_sharing" else {"auto", "off", "on"}
             if not isinstance(getattr(self, name), str) or getattr(self, name) not in choices:
                 raise ValueError(f"CUDA {name} must be one of {sorted(choices)}")
         if not isinstance(self.density_reduction, bool):
@@ -132,6 +144,12 @@ class CudaSolverOptions:
             )
         if self.block_size not in {64, 128, 256, 512} or self.tile_size not in {0, 16, 32}:
             raise ValueError("CUDA block_size must be 64/128/256/512 and tile_size 0/16/32")
+        if self.specialized_block_size is not None and (
+            isinstance(self.specialized_block_size, bool)
+            or not isinstance(self.specialized_block_size, Integral)
+            or self.specialized_block_size not in {64, 128, 256, 512}
+        ):
+            raise ValueError("CUDA specialized_block_size must be None or 64/128/256/512")
         if self.graph_steps < 2 or self.graph_steps % 2 or self.graph_steps > 64:
             raise ValueError("CUDA graph_steps must be even and between 2 and 64")
         if self.rhs not in {"tiled", "direct"}:
@@ -284,6 +302,11 @@ class _Integrator:
         from ._density_support import reachable_upper
 
         self.cp, self.options, self.solver = cp, options, solver
+        self._specialized_kernel = None
+        self._specialized_pending = None
+        self._rhs_stage = -1
+        self._reuse_diagonal = False
+        self._specialization = {"kernel": "generic", "reason": "not_prepared"}
         self.B, self.n = len(packed), prepared.layout.n
         upper_count = self.n * (self.n + 1) // 2
         active = (
@@ -473,6 +496,21 @@ class _Integrator:
         self._capture(span)
 
     def launch(self, name: str, args: tuple, count: int) -> None:
+        if self._reuse_diagonal and name == "build_diag" and self._rhs_stage > 1:
+            return
+        if self._specialized_kernel is not None and name == "component_rhs":
+            if self._specialized_pending is None:
+                extra = (self.y, self.y, *self.ks, np.int32(-1))
+            else:
+                target, base, ks, next_stage = self._specialized_pending
+                extra = (target, base, *ks, np.int32(next_stage))
+            block = self.options.block_size
+            self._specialized_kernel(
+                ((self.B + block - 1) // block, self.upper_count),
+                (block,),
+                (*args, *extra),
+            )
+            return
         if count:
             self.kernels[name](
                 ((count + self.options.block_size - 1) // self.options.block_size,),
@@ -481,6 +519,7 @@ class _Integrator:
             )
 
     def rhs(self, y: Any, out: Any, stage: int, fraction: float, skip: bool = False) -> None:
+        self._rhs_stage = stage
         B, n, K, HB, E = map(np.int32, (self.B, self.n, self.K, self.HB, self.E))
         s = np.int32(skip)
         self.launch(
@@ -633,6 +672,8 @@ class _Integrator:
             self.launch("integral_rhs", (y, out, self.weights, B, n, self.clock, s), self.B)
 
     def block(self, count: int) -> None:
+        if self._specialized_kernel is not None:
+            return self._block_specialized(count)
         if self.solver == "fixed_ck54":
             for _ in range(count):
                 self.kernels["begin_step"](
@@ -674,7 +715,104 @@ class _Integrator:
             self.kernels["end_step"]((1,), (1,), (self.clock, np.int32(1)))
             y, yn = yn, y
 
+    def _prepare_specialized(self) -> None:
+        """Select the bounded, benchmarked single-component FMA implementation."""
+        from ._cuda_specialized import component_source, step_constant
+
+        mode = self.options.rhs_specialization
+        reason = None
+        if mode == "off":
+            reason = "disabled"
+        elif self.solver != "fixed_tsit5" or self.integral:
+            reason = "requires_tsit5_without_integral"
+        elif (
+            not self.components
+            or len(self.program.amplitudes) != 1
+            or len(self.program.remainder_edges)
+        ):
+            reason = "requires_single_shared_component"
+        elif self.n > 32 or self.upper_count > 528 or self.E > 256:
+            reason = "code_size_limit"
+        elif mode == "auto" and (self.B < 512 or self.steps < 64):
+            reason = "small_chunk_or_short_grid"
+        if reason is None:
+            diagonal = self.diagonal_bases.get()
+            used = np.flatnonzero(np.any(diagonal != 0, axis=1))
+            if not all(step_constant(self.program.compiler.coefficients[k]) for k in used):
+                reason = "stage_dependent_diagonal"
+        if reason is not None:
+            self._specialization = {"kernel": "generic", "reason": reason}
+            if mode == "on":
+                raise ValueError(f"CUDA RHS specialization is unavailable: {reason}")
+            return
+
+        ptr = self.ptr.get()
+        rows, cols = self.rows.get(), self.cols.get()
+        degrees = np.diff(ptr)
+        terms = int(np.sum(degrees[rows] + degrees[cols]))
+        if terms > 6000:
+            self._specialization = {"kernel": "generic", "reason": "code_size_limit"}
+            if mode == "on":
+                raise ValueError("CUDA RHS specialization exceeds the generated-code budget")
+            return
+        start = time.perf_counter()
+        source = component_source(self, TS_A)
+        if len(source.encode()) > 1_000_000:
+            self._specialization = {"kernel": "generic", "reason": "code_size_limit"}
+            if mode == "on":
+                raise ValueError("CUDA RHS specialization exceeds the generated-code budget")
+            return
+        try:
+            module = self.cp.RawModule(code=source, options=("--std=c++17",))
+            kernel = module.get_function("specialized_rhs")
+        except self.cp.cuda.compiler.CompileException as exc:
+            if mode == "on":
+                raise
+            self._specialization = {
+                "kernel": "generic",
+                "reason": "compile_failed",
+                "compile_error": str(exc),
+            }
+            return
+        block = self.options.specialized_block_size
+        if block is None:
+            block = 128 if self.B == self.options.batch_size else 64
+        self.options = replace(self.options, block_size=block)
+        self._specialized_module = module
+        self._specialized_kernel = kernel
+        self._reuse_diagonal = True
+        self._specialization = {
+            "kernel": "specialized_fma",
+            "reason": "single_component_tsit5",
+            "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
+            "source_bytes": len(source.encode()),
+            "complex_terms": terms,
+            "generation_and_compile_seconds": time.perf_counter() - start,
+            "block_size": block,
+            "attributes": kernel.attributes,
+        }
+
+    def _block_specialized(self, count: int) -> None:
+        """Use the validated RHS/next-stage fusion, preserving Tsit5 FSAL rules."""
+        y, yn, ks = self.y, self.yn, list(self.ks)
+        for _ in range(count):
+            self.kernels["begin_step"](
+                (1,), (1,), (self.clock, self.grid, self.resets, np.int64(self.steps))
+            )
+            ks[0], ks[6] = ks[6], ks[0]
+            stage_y = y
+            for stage, fraction in enumerate(TS_C):
+                target = yn if stage == 5 else self.temps[stage % 2]
+                self._specialized_pending = (target, y, ks, stage + 1) if stage < 6 else None
+                self.rhs(stage_y, ks[stage], stage, fraction, skip=stage == 0)
+                if stage < 6:
+                    stage_y = target
+            self._specialized_pending = None
+            self.kernels["end_step"]((1,), (1,), (self.clock, np.int32(1)))
+            y, yn = yn, y
+
     def _capture(self, span: tuple) -> None:
+        self._prepare_specialized()
         cp = self.cp
         self.clock[2] = min(2, self.steps)
         self.block(2)
@@ -953,6 +1091,9 @@ def _solve_cuda_batch(
                     shared_offdiagonal_hamiltonian=g.HB == 1 and not len(g.program.remainder_edges),
                     precomputed_waveforms=g.precompute,
                     tile_size=g.tile,
+                    rhs_specialization=dict(g._specialization),
+                    diagonal_stage_reuse=g._reuse_diagonal,
+                    block_size=g.options.block_size,
                     density_reduction=options.density_reduction,
                     retained_density_pairs=g.upper_count,
                     full_density_pairs=n * (n + 1) // 2,

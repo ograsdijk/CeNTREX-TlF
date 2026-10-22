@@ -216,6 +216,72 @@ def gpu():
         pytest.skip(str(exc))
 
 
+@pytest.mark.parametrize("solver", ["fixed_tsit5", "fixed_ck54"])
+@pytest.mark.parametrize(
+    "path,reduced",
+    [
+        ("direct", False),
+        ("direct", True),
+        ("component", False),
+        ("component", True),
+        ("product", False),
+        ("tiled", False),
+    ],
+)
+def test_generic_fma_paths_against_complex_liouvillian(gpu, solver, path, reduced):
+    p, H, C, initial = model()
+    # Six rows amortize the two shared real/imaginary components' storage.
+    initial = np.repeat(initial, 3, axis=0)
+    drives = [1.2, 0.7, 0.3, 0.0, 0.5, 1.0]
+    matrices = [
+        np.asarray(
+            H.subs({s: dict(omega=drive, delta=0.4, phase=0.3)[str(s)] for s in H.free_symbols}),
+            complex,
+        )
+        for drive in drives
+    ]
+    times = np.array([0.137, 0.407])
+    expected = np.array(
+        [
+            [
+                (la.expm(generator(h, C) * t) @ np.r_[rho.reshape(-1, order="F"), 0.0])[
+                    :-1
+                ].reshape(3, 3, order="F")
+                for t in times
+            ]
+            for rho, h in zip(initial, matrices, strict=True)
+        ]
+    )
+    result = lindblad.solve_lindblad_batch(
+        p,
+        initial,
+        (0.0, times[-1]),
+        solver=solver,
+        evolution_device="cuda",
+        dt=0.003,
+        output="full",
+        output_when="saveat",
+        saveat=times,
+        collect_stats=True,
+        parameter_slots=["omega"],
+        parameter_batch=np.array(drives)[:, None],
+        cuda_options=CudaSolverOptions(
+            rhs_specialization="off",
+            density_reduction=reduced,
+            rhs="direct" if path in {"direct", "component"} else "tiled",
+            tile_size=0 if path == "product" else 32,
+            hamiltonian_sharing="on" if path == "component" else "off",
+        ),
+    )
+    actual = p.layout.unpack_batch(result.values)
+    np.testing.assert_allclose(actual, expected, atol=3e-11, rtol=1e-11)
+    np.testing.assert_allclose(np.trace(actual, axis1=-2, axis2=-1), 1.0, atol=1e-12)
+    chunk = result.solver_stats["chunks"][0]
+    assert chunk["rhs_specialization"]["kernel"] == "generic"
+    assert (chunk["shared_hamiltonian_components"] > 0) == (path == "component")
+    assert chunk["tile_size"] == (32 if path == "tiled" else 0)
+
+
 def sharing_model(nonseparable=False, complex_factor=False):
     """Independent drives with overlapping H support and an exact multipass factor."""
     a, b, d = smp.symbols("a b d")
