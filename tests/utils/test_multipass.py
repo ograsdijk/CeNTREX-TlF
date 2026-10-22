@@ -22,18 +22,18 @@ def test_single_pass():
     assert multipass_prism_order(1) == [1]
 
 
-def test_seven_pass_order_matches_prism_reflections():
+def test_traced_order_includes_incoming_pass():
     face_length = PRISM_LEG_LENGTH_M * np.sqrt(2)
     step = face_length / 7.25
     order, locations = trace_prism_multipass(-step, face_length - 0.5 * step)
 
-    # Odd passes advance by 2*step; even passes travel in the other direction.
+    # The incoming pass is at 6.5 steps, followed by the reflected crossings.
     chronological_locations = locations[np.argsort(order)]
     np.testing.assert_allclose(
-        chronological_locations / step, [0.5, 4.75, 2.5, 2.75, 4.5, 0.75, 6.5]
+        chronological_locations / step,
+        [6.5, 0.5, 4.75, 2.5, 2.75, 4.5, 0.75, 6.5],
     )
-    assert order == [1, 6, 3, 4, 5, 2, 7]
-    assert multipass_prism_order(7) == order
+    assert order == [2, 7, 4, 5, 6, 3, 1, 8]
 
 
 @pytest.mark.parametrize("sign", [-1, 1])
@@ -46,7 +46,7 @@ def test_endpoint_hits_and_clear_misses(sign, ulps):
     order, locations = trace_prism_multipass(offset, entry)
 
     # Positive perturbations miss the next face; one-ULP misses are snapped.
-    assert len(order) == (3 if ulps == 256 else 4)
+    assert len(order) == (4 if ulps == 256 else 5)
     if abs(ulps) <= 1:
         endpoint = offset if sign > 0 else offset + face_length
         assert locations[np.argsort(order)][2] == endpoint
@@ -59,7 +59,7 @@ def test_boundary_traces_against_exact_arithmetic(denominator, sign):
     offset = Fraction(sign, denominator)
     for entry in map(Fraction, [0, 0.25, 0.5, 0.75, 1]):
         point, side = entry, 0
-        expected = []
+        expected = [float(entry) * face_length]
         while True:
             point = 1 + 2 * side * offset - point
             expected.append(float(point) * face_length)
@@ -110,7 +110,7 @@ def test_tracer_against_independent_triangle_intersections():
         offset = rng.choice([-1, 1]) * rng.uniform(0.005, 1.5) * face_length
         entry = rng.uniform(0.001, 0.999) * face_length
         point = entry
-        side, expected = 0, []
+        side, expected = 0, [entry]
         for _ in range(1000):
             shift = side * offset
             point = _triangle_exit(point - shift, face_length) + shift
