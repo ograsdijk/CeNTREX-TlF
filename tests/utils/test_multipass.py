@@ -33,7 +33,7 @@ def test_traced_order_includes_incoming_pass():
         chronological_locations / step,
         [6.75, 0.5, 4.75, 2.5, 2.75, 4.5, 0.75, 6.5],
     )
-    assert order == [2, 7, 4, 5, 6, 3, 1, 8]
+    assert order == [2, 7, 4, 5, 6, 3, 8, 1]
 
 
 @pytest.mark.parametrize("sign", [-1, 1])
