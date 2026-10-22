@@ -27,11 +27,11 @@ def test_traced_order_includes_incoming_pass():
     step = face_length / 7.25
     order, locations = trace_prism_multipass(-step, face_length - 0.5 * step)
 
-    # The incoming pass is at 6.5 steps, followed by the reflected crossings.
+    # The incoming pass is at 6.75 steps, followed by the reflected crossings.
     chronological_locations = locations[np.argsort(order)]
     np.testing.assert_allclose(
         chronological_locations / step,
-        [6.5, 0.5, 4.75, 2.5, 2.75, 4.5, 0.75, 6.5],
+        [6.75, 0.5, 4.75, 2.5, 2.75, 4.5, 0.75, 6.5],
     )
     assert order == [2, 7, 4, 5, 6, 3, 1, 8]
 
@@ -49,7 +49,7 @@ def test_endpoint_hits_and_clear_misses(sign, ulps):
     assert len(order) == (4 if ulps == 256 else 5)
     if abs(ulps) <= 1:
         endpoint = offset if sign > 0 else offset + face_length
-        assert locations[np.argsort(order)][2] == endpoint
+        assert locations[np.argsort(order)][3] == endpoint
 
 
 @pytest.mark.parametrize("denominator", [*range(2, 21), 100, 1000])
