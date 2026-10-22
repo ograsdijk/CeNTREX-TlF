@@ -84,8 +84,8 @@ def trace_prism_multipass(
     At each prism, the internal reflections map the incoming face coordinate
     ``x`` to ``2 * center - x``. The function alternates this reflection
     between prisms and stops after the outgoing ray misses the opposite front
-    face. Each outgoing gap crossing is one pass. The incoming entry segment
-    before the first internal reflection is not counted as a pass.
+    face. The incoming entry segment is pass 1; each subsequent outgoing gap
+    crossing adds another pass.
 
     Face endpoints are inclusive. Outgoing coordinates within eight machine
     epsilons of an endpoint (scaled by the face length and endpoint coordinates)
@@ -134,7 +134,7 @@ def trace_prism_multipass(
     prism_index = 0
     incoming_m = first_entry_m
     seen_states = {(prism_index, incoming_m)}
-    chronological_locations_m: list[float] = []
+    chronological_locations_m: list[float] = [first_entry_m]
 
     for _ in range(100_000):
         outgoing_m = 2 * centers_m[prism_index] - incoming_m
