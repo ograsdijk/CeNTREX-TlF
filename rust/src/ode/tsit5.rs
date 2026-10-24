@@ -195,7 +195,6 @@ pub fn solve_tsit5<R: OdeRhs, O: OdeOutput>(
     let mut y = y0.to_vec();
     let mut yn = vec![0.0; dim];
     let mut yt = vec![0.0; dim];
-    let mut ys = vec![0.0; dim];
     let mut ds = vec![0.0; dim];
     let mut k = vec![0.0; 7 * dim];
     let mut f0 = vec![0.0; dim];
@@ -224,8 +223,6 @@ pub fn solve_tsit5<R: OdeRhs, O: OdeOutput>(
     }
     let mut ns = 0usize;
     let mut last = false;
-    let mut nst = 0usize;
-    let mut ia = 0usize;
     while !last {
         if ns > opt.maxiters {
             return Err(format!("Stopped at x={x}. Need more than {ns} steps."));
@@ -247,38 +244,23 @@ pub fn solve_tsit5<R: OdeRhs, O: OdeOutput>(
         fill_stage4(&y, h, &k, dim, &mut yt);
         rhs.eval(x + h * C5, &yt, &mut k[4 * dim..5 * dim])?;
         fill_stage5(&y, h, &k, dim, &mut yt);
-        ys.copy_from_slice(&yt);
         rhs.eval(x + h * C6, &yt, &mut k[5 * dim..6 * dim])?;
         fill_solution(&y, h, &k, dim, &mut yn);
         rhs.eval(x + h * C7, &yn, &mut k[6 * dim..7 * dim])?;
         st.rhs_calls += 6;
         let err = error_norm(&y, &yn, h, &k, dim, control_dim, opt.abstol, opt.reltol);
+        if !err.is_finite() && k[..dim].iter().any(|value| !value.is_finite()) {
+            // The first stage is f(x, y) itself, so this is not a step that was
+            // too large: shrinking h would only end in "step size underflow".
+            return Err(format!(
+                "RHS returned a non-finite value at x={x}; check the parameters and initial state."
+            ));
+        }
         let (acc, hn) = ctrl.accept(err, h);
         if acc {
             st.accepted_steps += 1;
-            if st.accepted_steps % 1000 == 0 || ia > 0 {
-                let mut n2 = 0.0;
-                let mut d2 = 0.0;
-                for i in 0..control_dim {
-                    let dk = k[6 * dim + i] - k[5 * dim + i];
-                    let dy = yn[i] - ys[i];
-                    n2 += dk * dk;
-                    d2 += dy * dy;
-                }
-                let hl = if d2 > 0.0 { h * (n2 / d2).sqrt() } else { 0.0 };
-                if hl > 3.25 {
-                    ia += 1;
-                    nst = 0;
-                    if ia == 15 {
-                        return Err(format!("Stiff at x={x}."));
-                    }
-                } else {
-                    nst += 1;
-                    if nst == 6 {
-                        ia = 0;
-                    }
-                }
-            }
+            // No stiffness abort here: the DP5 test (h*|lambda| > 3.25) uses the
+            // Dormand-Prince stability boundary and does not carry over to Tsit5.
             let xo = x;
             x += h;
             let event_new = rhs.event_value(x, &yn)?;

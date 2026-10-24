@@ -1089,6 +1089,57 @@ fn fill_expanded_sparse_term_values_split(
     Ok(())
 }
 
+/// Refresh the split per-term values for the `ExpandedSplit` cache. Terms with
+/// time-independent coefficients only change when the cache is invalidated
+/// (new parameter overrides), so once it is valid only the dynamic terms are
+/// rewritten; dissipator and static Hamiltonian terms are kept.
+fn refresh_expanded_split_term_values(
+    plan: &PreparedLindbladPlan,
+    rhs_plan: &ExpandedSparseRhsPlan,
+    t: f64,
+    workspace: &mut RhsWorkspace,
+) -> Result<(), String> {
+    plan.hamiltonian_plan
+        .evaluate_decomposed_coefficients_into(
+            workspace.parameter_values.as_slice(),
+            t,
+            &mut workspace.eval_stack,
+            &mut workspace.scalar_stack,
+            &mut workspace.expanded_coeff_values,
+        )?;
+    if workspace.hamiltonian_valid_for == Some(HamiltonianCache::ExpandedSplit) {
+        let coeff_values = workspace.expanded_coeff_values.as_slice();
+        for &term_index in &workspace.expanded_dynamic_terms {
+            let term = &rhs_plan.terms[term_index];
+            let Some(coeff_index) = term.coeff_index else {
+                continue;
+            };
+            let mut coefficient = *coeff_values.get(coeff_index).ok_or_else(|| {
+                format!(
+                    "expanded RHS coefficient index {coeff_index} out of bounds for {} values",
+                    coeff_values.len()
+                )
+            })?;
+            if term.coeff_conj {
+                coefficient = coefficient.conj();
+            }
+            coefficient *= term.factor;
+            workspace.expanded_term_values_re[term_index] = coefficient.re;
+            workspace.expanded_term_values_im[term_index] = coefficient.im;
+        }
+    } else {
+        fill_expanded_sparse_term_values_split(
+            rhs_plan,
+            workspace.expanded_coeff_values.as_slice(),
+            &mut workspace.expanded_term_values_re,
+            &mut workspace.expanded_term_values_im,
+        )?;
+        workspace.hamiltonian_valid_for = Some(HamiltonianCache::ExpandedSplit);
+    }
+    workspace.h_sparse_valid = false;
+    Ok(())
+}
+
 fn add_expanded_sparse_rhs_packed_partitioned(
     inputs: &PartitionedPackedInputs,
     dynamic_values_re: &[f64],
@@ -1360,7 +1411,9 @@ pub struct RhsWorkspace {
     grouped_expanded_packed_inputs: GroupedPackedInputs,
     precomputed_expanded_packed_inputs: PrecomputedPackedInputs,
     partitioned_expanded_packed_inputs: PartitionedPackedInputs,
-    pchip_hints: Vec<usize>,
+    /// Expanded terms whose coefficient depends on time. With a valid
+    /// `ExpandedSplit` cache only these are refreshed on each call.
+    expanded_dynamic_terms: Vec<usize>,
     hamiltonian_valid_for: Option<HamiltonianCache>,
     h_sparse_valid: bool,
 }
@@ -1373,8 +1426,8 @@ pub struct RhsWorkspace {
 /// RHS flavour ran first set the flag, and the next flavour then skipped filling
 /// *its own* cache and read it empty (or, for the partitioned variant, read
 /// static coefficients that were still zero, which is silently wrong rather than
-/// an error). Only reachable for time-independent plans, since a time-dependent
-/// plan refills unconditionally.
+/// an error). Time-dependent plans also rely on it: `ExpandedSplit` (and the
+/// partitioned variant) keep the static terms and refresh only the dynamic ones.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum HamiltonianCache {
     /// Dense `n x n` matrix in `hamiltonian`.
@@ -1421,6 +1474,28 @@ impl RhsWorkspace {
             .as_ref()
             .map(|rhs_plan| rhs_plan.terms.len())
             .unwrap_or(0);
+        let expanded_dynamic_terms = plan
+            .expanded_rhs_plan
+            .as_ref()
+            .map(|rhs_plan| {
+                rhs_plan
+                    .terms
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, term)| match term.coeff_index {
+                        // A coefficient without a classification is treated as
+                        // dynamic, so a gap can only cost speed, never freeze it.
+                        Some(index) => plan
+                            .dynamic_hamiltonian_coefficients
+                            .get(index)
+                            .copied()
+                            .unwrap_or(true),
+                        None => false,
+                    })
+                    .map(|(index, _)| index)
+                    .collect()
+            })
+            .unwrap_or_default();
         Self {
             upper_layout: upper_layout.clone(),
             rho: vec![Complex64::ZERO; matrix_len],
@@ -1454,7 +1529,7 @@ impl RhsWorkspace {
             grouped_expanded_packed_inputs,
             precomputed_expanded_packed_inputs,
             partitioned_expanded_packed_inputs,
-            pchip_hints: vec![0; plan.parameter_graph.pchip_tables.len()],
+            expanded_dynamic_terms,
             hamiltonian_valid_for: None,
             h_sparse_valid: false,
         }
@@ -1494,7 +1569,6 @@ impl RhsWorkspace {
             &mut self.parameter_values,
             &mut self.eval_stack,
             &mut self.scalar_stack,
-            &mut self.pchip_hints,
         )
     }
 
@@ -1505,14 +1579,12 @@ impl RhsWorkspace {
         t: f64,
     ) -> Result<f64, String> {
         self.evaluate_parameter_graph(plan, t)?;
-        let value = crate::lindblad::eval::eval_expression_into_with_pchip(
+        let value = crate::lindblad::eval::eval_expression_into(
             expression,
             self.parameter_values.as_slice(),
             t,
             &[],
             &mut self.eval_stack,
-            plan.parameter_graph.pchip_tables.as_slice(),
-            &mut self.pchip_hints,
         )?;
         match value {
             RuntimeValue::Scalar(value) => {
@@ -1678,7 +1750,19 @@ fn rhs_from_workspace_rho(
     }
     let commutator_start = profile_timer(&profile);
     match mode {
-        ExecutionMode::ReferenceDense | ExecutionMode::StructuredBlas => {
+        ExecutionMode::ReferenceDense => {
+            // The reference path stays independent of any configured BLAS so it
+            // can be used to check the zher2k path.
+            workspace.drho.fill(Complex64::ZERO);
+            add_commutator_dense(
+                workspace.hamiltonian.as_slice(),
+                workspace.rho.as_slice(),
+                workspace.drho.as_mut_slice(),
+                workspace.scratch.as_mut_slice(),
+                n,
+            );
+        }
+        ExecutionMode::StructuredBlas => {
             workspace.drho.fill(Complex64::ZERO);
             add_commutator(
                 plan,
@@ -1987,8 +2071,6 @@ pub fn rhs_split_into_with_profile(
 ) -> Result<(), String> {
     let mut input = std::mem::take(&mut workspace.split_input);
     let mut output = std::mem::take(&mut workspace.split_output);
-    input.fill(Complex64::ZERO);
-    output.fill(Complex64::ZERO);
     split_real_to_complex(split_state, input.as_mut_slice())?;
     rhs_matrix_into_with_profile(
         plan,
@@ -2020,40 +2102,35 @@ pub fn build_split_jacobian_sparse(
     let mut values = Vec::new();
     let mut basis = vec![Complex64::ZERO; dim_complex];
     let mut output = vec![Complex64::ZERO; dim_complex];
+    // The split RHS is only real-linear: `rhs_matrix_into` keeps the upper
+    // triangle and conjugates it into the lower one, so f(i*e_k) != i*f(e_k).
+    // Probe the real and imaginary unit separately to get each column.
     for col_complex in 0..dim_complex {
-        basis[col_complex] = Complex64::ONE;
-        rhs_matrix_into(
-            plan,
-            basis.as_slice(),
-            t,
-            mode,
-            workspace,
-            output.as_mut_slice(),
-        )?;
-        basis[col_complex] = Complex64::ZERO;
-
-        let col_real = col_complex as i64;
-        let col_imag = (dim_complex + col_complex) as i64;
-        for row_complex in 0..dim_complex {
-            let value = output[row_complex];
-            let row_real = row_complex as i64;
-            let row_imag = (dim_complex + row_complex) as i64;
-
-            if value.re.abs() > tol_abs {
-                rows.push(row_real);
-                cols.push(col_real);
-                values.push(value.re);
-                rows.push(row_imag);
-                cols.push(col_imag);
-                values.push(value.re);
-            }
-            if value.im.abs() > tol_abs {
-                rows.push(row_imag);
-                cols.push(col_real);
-                values.push(value.im);
-                rows.push(row_real);
-                cols.push(col_imag);
-                values.push(-value.im);
+        for (probe, col) in [
+            (Complex64::ONE, col_complex),
+            (Complex64::I, dim_complex + col_complex),
+        ] {
+            basis[col_complex] = probe;
+            rhs_matrix_into(
+                plan,
+                basis.as_slice(),
+                t,
+                mode,
+                workspace,
+                output.as_mut_slice(),
+            )?;
+            basis[col_complex] = Complex64::ZERO;
+            for (row_complex, value) in output.iter().enumerate() {
+                if value.re.abs() > tol_abs {
+                    rows.push(row_complex as i64);
+                    cols.push(col as i64);
+                    values.push(value.re);
+                }
+                if value.im.abs() > tol_abs {
+                    rows.push((dim_complex + row_complex) as i64);
+                    cols.push(col as i64);
+                    values.push(value.im);
+                }
             }
         }
     }
@@ -2355,22 +2432,7 @@ fn rhs_packed_expanded_sparse_current_into_with_profile(
 
     let hamiltonian_start = profile_timer(&profile);
     if !can_skip {
-        plan.hamiltonian_plan
-            .evaluate_decomposed_coefficients_into(
-                workspace.parameter_values.as_slice(),
-                t,
-                &mut workspace.eval_stack,
-                &mut workspace.scalar_stack,
-                &mut workspace.expanded_coeff_values,
-            )?;
-        fill_expanded_sparse_term_values_split(
-            rhs_plan,
-            workspace.expanded_coeff_values.as_slice(),
-            &mut workspace.expanded_term_values_re,
-            &mut workspace.expanded_term_values_im,
-        )?;
-        workspace.hamiltonian_valid_for = Some(HamiltonianCache::ExpandedSplit);
-        workspace.h_sparse_valid = false;
+        refresh_expanded_split_term_values(plan, rhs_plan, t, workspace)?;
     }
     if let Some(stats) = profile.as_mut() {
         add_elapsed(&mut stats.hamiltonian_fill_seconds, hamiltonian_start);
@@ -2456,22 +2518,7 @@ fn rhs_packed_expanded_sparse_experimental_into_with_profile(
 
     let hamiltonian_start = profile_timer(&profile);
     if !can_skip {
-        plan.hamiltonian_plan
-            .evaluate_decomposed_coefficients_into(
-                workspace.parameter_values.as_slice(),
-                t,
-                &mut workspace.eval_stack,
-                &mut workspace.scalar_stack,
-                &mut workspace.expanded_coeff_values,
-            )?;
-        fill_expanded_sparse_term_values_split(
-            rhs_plan,
-            workspace.expanded_coeff_values.as_slice(),
-            &mut workspace.expanded_term_values_re,
-            &mut workspace.expanded_term_values_im,
-        )?;
-        workspace.hamiltonian_valid_for = Some(HamiltonianCache::ExpandedSplit);
-        workspace.h_sparse_valid = false;
+        refresh_expanded_split_term_values(plan, rhs_plan, t, workspace)?;
     }
     if let Some(stats) = profile.as_mut() {
         add_elapsed(&mut stats.hamiltonian_fill_seconds, hamiltonian_start);

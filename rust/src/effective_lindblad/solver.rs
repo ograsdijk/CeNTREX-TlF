@@ -59,9 +59,10 @@ fn split_real_diagonal_indices(n_states: usize) -> Vec<usize> {
 fn split_real_selected_extractions(
     n_states: usize,
     indices: &[(usize, usize)],
-) -> Vec<SelectedExtraction> {
+) -> Result<Vec<SelectedExtraction>, String> {
+    crate::lindblad::ode_batch::validate_output_indices(indices, n_states)?;
     let n2 = n_states * n_states;
-    indices
+    Ok(indices
         .iter()
         .map(|&(i, j)| {
             if i == j {
@@ -72,7 +73,23 @@ fn split_real_selected_extractions(
                 SelectedExtraction::ComplexPair { real_idx, imag_idx }
             }
         })
-        .collect()
+        .collect())
+}
+
+/// Weights index the split-real state vector directly.
+fn checked_integral_weights(
+    integral_weights: Option<&[(usize, f64)]>,
+    output_mode: &str,
+    dim: usize,
+) -> Result<Vec<(usize, f64)>, String> {
+    let weights = integral_weights
+        .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+    if let Some(&(index, _)) = weights.iter().find(|&&(index, _)| index >= dim) {
+        return Err(format!(
+            "integral_weights index {index} out of range for state length {dim}"
+        ));
+    }
+    Ok(weights.to_vec())
 }
 
 pub fn solve_effective_lindblad(
@@ -103,10 +120,11 @@ pub fn solve_effective_lindblad(
             options.saveat.clone()
         },
     };
+    // Start small when every step is saved; the buffers grow as needed.
     let capacity = options
         .saveat
         .as_ref()
-        .map_or(options.maxiters + 1, |s| s.len() + 1);
+        .map_or((options.maxiters + 1).min(1024), |s| s.len() + 1);
 
     match output_mode {
         "populations" => {
@@ -118,15 +136,14 @@ pub fn solve_effective_lindblad(
         "selected" => {
             let idx = output_indices
                 .ok_or_else(|| "output='selected' requires output_indices".to_string())?;
-            let extractions = split_real_selected_extractions(plan.n_states, idx);
+            let extractions = split_real_selected_extractions(plan.n_states, idx)?;
             let mut output = SelectedOutput::new(extractions, capacity);
             solve_single(&mut rhs, y0, t0, t1, &ode_options, &mut output, solver)?;
             Ok(output.finish())
         }
         "weighted_integral" | "photon_integral" | "excited_population" => {
-            let weights = integral_weights
-                .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
-            let mut output = WeightedIntegralOutput::new(weights.to_vec());
+            let weights = checked_integral_weights(integral_weights, output_mode, plan.real_dim)?;
+            let mut output = WeightedIntegralOutput::new(weights);
             solve_single(&mut rhs, y0, t0, t1, &ode_options, &mut output, solver)?;
             Ok(output.finish())
         }
@@ -200,11 +217,19 @@ pub fn solve_effective_lindblad_batch(
     let selected_extractions: Option<Vec<SelectedExtraction>> = if output_mode == "selected" {
         let idx = output_indices
             .ok_or_else(|| "output='selected' requires output_indices".to_string())?;
-        Some(split_real_selected_extractions(n_states, idx))
+        Some(split_real_selected_extractions(n_states, idx)?)
     } else {
         None
     };
-    let integral_weights_vec: Option<Vec<(usize, f64)>> = integral_weights.map(|w| w.to_vec());
+    let integral_weights_vec: Option<Vec<(usize, f64)>> = if integral_output {
+        Some(checked_integral_weights(
+            integral_weights,
+            output_mode,
+            dim,
+        )?)
+    } else {
+        None
+    };
 
     let solve_one = |trajectory: usize| -> Result<(OdeOutputResult, OdeStats), String> {
         let start = trajectory * parameter_width;

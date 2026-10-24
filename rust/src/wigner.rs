@@ -5,25 +5,84 @@
 //! All j, m inputs are given as 2*j, 2*m (to allow half-integers
 //! while staying with integers in the API).
 //!
-//! These implementations are fine for typical atomic/molecular
-//! use (j up to a few tens). For very large j, factorials will
-//! eventually overflow in f64 (~170! limit).
+//! Factorials come from a table up to 170! (the f64 limit), built by the same
+//! sequential product as before, so results there are bit-for-bit unchanged.
+//! The alternating Racah sums lose relative precision to cancellation as j
+//! grows (~1e-13 at j = 20, ~5e-10 at j = 40); TlF use (j <= ~10) is far from
+//! that.
+//!
+//! When a factorial or a product of factorials would overflow f64 (3j: from
+//! roughly j1 + j2 + j3 > 85 depending on the m's; 6j: j sums near 170), the
+//! symbol is summed with log-factorials instead. That avoids the old overflow
+//! to 0, inf or NaN, but cancellation there is usually severe. Those paths estimate their own error
+//! and return NaN when fewer than ~8 digits survive, rather than a plausible
+//! but wrong number. Exact large-j values would need big-integer arithmetic.
 
 use std::cmp::{max, min};
+use std::sync::OnceLock;
+
+const MAX_EXACT_FACTORIAL: i32 = 170;
+/// Largest argument the log-factorial table covers (j of order 1000).
+const MAX_LOG_FACTORIAL: i32 = 8192;
+
+fn factorial_table() -> &'static [f64] {
+    static TABLE: OnceLock<Vec<f64>> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut table = Vec::with_capacity(MAX_EXACT_FACTORIAL as usize + 1);
+        let mut acc = 1.0f64;
+        table.push(1.0);
+        for k in 1..=MAX_EXACT_FACTORIAL {
+            if k >= 2 {
+                acc *= k as f64;
+            }
+            table.push(acc);
+        }
+        table
+    })
+}
+
+fn log_factorial_table() -> &'static [f64] {
+    static TABLE: OnceLock<Vec<f64>> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut table = Vec::with_capacity(MAX_LOG_FACTORIAL as usize + 1);
+        let mut acc = 0.0f64;
+        table.push(0.0);
+        for k in 1..=MAX_LOG_FACTORIAL {
+            acc += (k as f64).ln();
+            table.push(acc);
+        }
+        table
+    })
+}
 
 #[inline]
 fn fact(n: i32) -> f64 {
     if n < 0 {
         return 0.0;
     }
-    if n == 0 || n == 1 {
-        return 1.0;
+    factorial_table()[n as usize]
+}
+
+/// ln(n!) for 0 <= n <= MAX_LOG_FACTORIAL.
+#[inline]
+fn ln_fact(n: i32) -> f64 {
+    log_factorial_table()[n as usize]
+}
+
+/// Accept an alternating sum only if its estimated relative error is small.
+/// Each term carries ~1e-12 relative error from the summed ln(n!) table, which
+/// is amplified by the cancellation ratio sum|t| / |sum t|.
+fn checked_alternating_sum(sum: f64, sum_abs: f64) -> f64 {
+    const TERM_RELATIVE_ERROR: f64 = 1e-12;
+    const MAX_RELATIVE_ERROR: f64 = 1e-8;
+    if sum_abs == 0.0 {
+        return 0.0;
     }
-    let mut acc = 1.0f64;
-    for k in 2..=n {
-        acc *= k as f64;
+    if sum_abs * TERM_RELATIVE_ERROR <= MAX_RELATIVE_ERROR * sum.abs() {
+        sum
+    } else {
+        f64::NAN
     }
-    acc
 }
 
 #[inline]
@@ -73,6 +132,10 @@ pub fn wigner_3j(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32) -> 
     if tm1 + tm2 + tm3 != 0 {
         return 0.0;
     }
+    // j and m must both be integer or both half-integer in every column.
+    if (tj1 - tm1) % 2 != 0 || (tj2 - tm2) % 2 != 0 || (tj3 - tm3) % 2 != 0 {
+        return 0.0;
+    }
     if (tm1.abs() > tj1) || (tm2.abs() > tj2) || (tm3.abs() > tj3) {
         return 0.0;
     }
@@ -84,6 +147,17 @@ pub fn wigner_3j(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32) -> 
     // but also j1 - j2 - m3 exponent needs (tj1 - tj2 - tm3) even:
     if (tj1 - tj2 - tm3) % 2 != 0 {
         return 0.0;
+    }
+    // (j1 j2 j3; 0 0 0) vanishes for odd j1 + j2 + j3. Handled up front because
+    // the large-j path cannot tell an exact zero from total cancellation.
+    if tm1 == 0 && tm2 == 0 && tm3 == 0 && ((tj1 + tj2 + tj3) / 2) % 2 != 0 {
+        return 0.0;
+    }
+
+    // The largest factorial argument is (j1 + j2 + j3) + 1, inside Δ.
+    let largest = (tj1 + tj2 + tj3) / 2 + 1;
+    if largest > MAX_EXACT_FACTORIAL {
+        return wigner_3j_log(tj1, tj2, tj3, tm1, tm2, tm3, largest);
     }
 
     // Prefactor Δ * sqrt of factorials
@@ -105,6 +179,10 @@ pub fn wigner_3j(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32) -> 
 
     let pref_sqrt =
         delta * (fact(a1) * fact(a2) * fact(a3) * fact(a4) * fact(a5) * fact(a6)).sqrt();
+    // Products of several factorials overflow long before any single one does.
+    if !pref_sqrt.is_finite() {
+        return wigner_3j_log(tj1, tj2, tj3, tm1, tm2, tm3, largest);
+    }
 
     // z-sum bounds in integer form (see standard 3j formula)
     let z_a1 = (tj1 + tj2 - tj3) / 2; // = a1' in some notations
@@ -132,6 +210,10 @@ pub fn wigner_3j(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32) -> 
         if denom == 0.0 {
             continue;
         }
+        // An overflowed denominator would silently drop this term.
+        if !denom.is_finite() {
+            return wigner_3j_log(tj1, tj2, tj3, tm1, tm2, tm3, largest);
+        }
 
         let term = if z % 2 == 0 { 1.0 } else { -1.0 } * (1.0 / denom);
         sum += term;
@@ -142,6 +224,54 @@ pub fn wigner_3j(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32) -> 
     let phase = if phase_exp % 2 == 0 { 1.0 } else { -1.0 };
 
     phase * pref_sqrt * sum
+}
+
+/// `wigner_3j` for symbols whose factorials exceed f64, using ln(n!).
+/// Selection rules have already been applied by the caller.
+#[cold]
+fn wigner_3j_log(tj1: i32, tj2: i32, tj3: i32, tm1: i32, tm2: i32, tm3: i32, largest: i32) -> f64 {
+    if largest > MAX_LOG_FACTORIAL {
+        return f64::NAN;
+    }
+    let a = (tj1 + tj2 - tj3) / 2;
+    let b = (tj1 - tj2 + tj3) / 2;
+    let c = (-tj1 + tj2 + tj3) / 2;
+    let ln_delta = 0.5 * (ln_fact(a) + ln_fact(b) + ln_fact(c) - ln_fact(largest));
+    let ln_pref = ln_delta
+        + 0.5
+            * (ln_fact((tj1 + tm1) / 2)
+                + ln_fact((tj1 - tm1) / 2)
+                + ln_fact((tj2 + tm2) / 2)
+                + ln_fact((tj2 - tm2) / 2)
+                + ln_fact((tj3 + tm3) / 2)
+                + ln_fact((tj3 - tm3) / 2));
+    let z_a1 = (tj1 + tj2 - tj3) / 2;
+    let z_a2 = (tj1 - tm1) / 2;
+    let z_a3 = (tj2 + tm2) / 2;
+    let z_a4 = (tj3 - tj2 + tm1) / 2;
+    let z_a5 = (tj3 - tj1 - tm2) / 2;
+    let z_min = max(0, max(-z_a4, -z_a5));
+    let z_max = min(z_a1, min(z_a2, z_a3));
+    let mut sum = 0.0f64;
+    let mut sum_abs = 0.0f64;
+    for z in z_min..=z_max {
+        let ln_den = ln_fact(z)
+            + ln_fact(z_a1 - z)
+            + ln_fact(z_a2 - z)
+            + ln_fact(z_a3 - z)
+            + ln_fact(z_a4 + z)
+            + ln_fact(z_a5 + z);
+        let term = (ln_pref - ln_den).exp();
+        sum += if z % 2 == 0 { term } else { -term };
+        sum_abs += term;
+    }
+    let sum = checked_alternating_sum(sum, sum_abs);
+    let phase_exp = (tj1 - tj2 - tm3) / 2;
+    if phase_exp % 2 == 0 {
+        sum
+    } else {
+        -sum
+    }
 }
 
 /// Wigner 6j symbol in 2j notation.
@@ -158,21 +288,8 @@ pub fn wigner_6j(tj1: i32, tj2: i32, tj3: i32, tj4: i32, tj5: i32, tj6: i32) -> 
         return 0.0;
     }
 
-    let delta123 = delta_coeff(tj1, tj2, tj3);
-    let delta156 = delta_coeff(tj1, tj5, tj6);
-    let delta426 = delta_coeff(tj4, tj2, tj6);
-    let delta453 = delta_coeff(tj4, tj5, tj3);
-
-    if [delta123, delta156, delta426, delta453]
-        .iter()
-        .any(|&d| d == 0.0)
-    {
-        return 0.0;
-    }
-
-    let pref = delta123 * delta156 * delta426 * delta453;
-
-    // Racah sum over z
+    // Racah sum bounds first: the largest factorial argument is z_max + 1,
+    // which also bounds every Δ.
     let x1 = (tj1 + tj2 + tj3) / 2;
     let x2 = (tj1 + tj5 + tj6) / 2;
     let x3 = (tj4 + tj2 + tj6) / 2;
@@ -188,6 +305,49 @@ pub fn wigner_6j(tj1: i32, tj2: i32, tj3: i32, tj4: i32, tj5: i32, tj6: i32) -> 
     if z_min > z_max {
         return 0.0;
     }
+    if z_max + 1 > MAX_EXACT_FACTORIAL {
+        if z_max + 1 > MAX_LOG_FACTORIAL {
+            return f64::NAN;
+        }
+        let ln_delta = |a: i32, b: i32, c: i32| {
+            0.5 * (ln_fact((a + b - c) / 2) + ln_fact((a - b + c) / 2) + ln_fact((-a + b + c) / 2)
+                - ln_fact((a + b + c) / 2 + 1))
+        };
+        let ln_pref = ln_delta(tj1, tj2, tj3)
+            + ln_delta(tj1, tj5, tj6)
+            + ln_delta(tj4, tj2, tj6)
+            + ln_delta(tj4, tj5, tj3);
+        let mut sum = 0.0f64;
+        let mut sum_abs = 0.0f64;
+        for z in z_min..=z_max {
+            let ln_term = ln_pref + ln_fact(z + 1)
+                - ln_fact(z - x1)
+                - ln_fact(z - x2)
+                - ln_fact(z - x3)
+                - ln_fact(z - x4)
+                - ln_fact(y1 - z)
+                - ln_fact(y2 - z)
+                - ln_fact(y3 - z);
+            let term = ln_term.exp();
+            sum += if z % 2 == 0 { term } else { -term };
+            sum_abs += term;
+        }
+        return checked_alternating_sum(sum, sum_abs);
+    }
+
+    let delta123 = delta_coeff(tj1, tj2, tj3);
+    let delta156 = delta_coeff(tj1, tj5, tj6);
+    let delta426 = delta_coeff(tj4, tj2, tj6);
+    let delta453 = delta_coeff(tj4, tj5, tj3);
+
+    if [delta123, delta156, delta426, delta453]
+        .iter()
+        .any(|&d| d == 0.0)
+    {
+        return 0.0;
+    }
+
+    let pref = delta123 * delta156 * delta426 * delta453;
 
     let mut sum = 0.0f64;
     for z in z_min..=z_max {
@@ -211,36 +371,38 @@ pub fn wigner_6j(tj1: i32, tj2: i32, tj3: i32, tj4: i32, tj5: i32, tj6: i32) -> 
     pref * sum
 }
 
-fn to_two_j(x: f64) -> i32 {
+/// 2x for a half-integer x, or None when x is not a multiple of 1/2.
+pub fn to_two_j(x: f64) -> Option<i32> {
     let t = (2.0 * x).round();
-    debug_assert!((t - 2.0 * x).abs() < 1e-6, "non half-integer j or m: {}", x);
-    t as i32
+    if (t - 2.0 * x).abs() < 1e-6 && t.abs() <= i32::MAX as f64 {
+        Some(t as i32)
+    } else {
+        None
+    }
 }
 
 /// Wigner 3j symbol for float inputs (wraps integer implementation).
+/// Returns NaN if any argument is not a multiple of 1/2.
 #[inline]
 pub fn wigner_3j_f(j1: f64, j2: f64, j3: f64, m1: f64, m2: f64, m3: f64) -> f64 {
-    let tj1 = to_two_j(j1);
-    let tj2 = to_two_j(j2);
-    let tj3 = to_two_j(j3);
-    let tm1 = to_two_j(m1);
-    let tm2 = to_two_j(m2);
-    let tm3 = to_two_j(m3);
-
-    wigner_3j(tj1, tj2, tj3, tm1, tm2, tm3)
+    match [j1, j2, j3, m1, m2, m3].map(to_two_j) {
+        [Some(tj1), Some(tj2), Some(tj3), Some(tm1), Some(tm2), Some(tm3)] => {
+            wigner_3j(tj1, tj2, tj3, tm1, tm2, tm3)
+        }
+        _ => f64::NAN,
+    }
 }
 
 /// Wigner 6j symbol for float inputs (wraps integer implementation).
+/// Returns NaN if any argument is not a multiple of 1/2.
 #[inline]
 pub fn wigner_6j_f(j1: f64, j2: f64, j3: f64, j4: f64, j5: f64, j6: f64) -> f64 {
-    let tj1 = to_two_j(j1);
-    let tj2 = to_two_j(j2);
-    let tj3 = to_two_j(j3);
-    let tj4 = to_two_j(j4);
-    let tj5 = to_two_j(j5);
-    let tj6 = to_two_j(j6);
-
-    wigner_6j(tj1, tj2, tj3, tj4, tj5, tj6)
+    match [j1, j2, j3, j4, j5, j6].map(to_two_j) {
+        [Some(tj1), Some(tj2), Some(tj3), Some(tj4), Some(tj5), Some(tj6)] => {
+            wigner_6j(tj1, tj2, tj3, tj4, tj5, tj6)
+        }
+        _ => f64::NAN,
+    }
 }
 
 /// Clebsch-Gordan coefficient <j1 m1 j2 m2 | j3 m3>
@@ -363,5 +525,64 @@ mod tests {
         let a = wigner_3j(2, 4, 2, 0, 0, 0);
         let b = wigner_3j(4, 2, 2, 0, 0, 0);
         approx_eq(a, b, 1e-14);
+    }
+}
+
+#[cfg(test)]
+mod large_j_tests {
+    use super::*;
+
+    fn rel(a: f64, b: f64) -> f64 {
+        ((a - b) / b).abs()
+    }
+
+    /// Below the overflow region results are unchanged; reference: sympy.
+    #[test]
+    fn moderate_j_matches_sympy() {
+        let v = wigner_3j(40, 40, 40, 2, -2, 0);
+        assert!(rel(v, -0.014783442067309836) < 1e-12, "{v}");
+        let v = wigner_6j(60, 60, 60, 60, 60, 60);
+        assert!(rel(v, 0.0004102353215741345) < 1e-10, "{v}");
+    }
+
+    /// Products of factorials overflow f64 here; the old code returned inf.
+    #[test]
+    fn overflow_region_uses_log_factorials() {
+        // (161/2 161/2 1; 1/2 -1/2 0), sympy 0.00048499331505583935
+        let v = wigner_3j(161, 161, 2, 1, -1, 0);
+        assert!(rel(v, 0.00048499331505583935) < 1e-10, "{v}");
+        // exact parity zero is still exactly zero
+        assert_eq!(wigner_3j(200, 200, 2, 0, 0, 0), 0.0);
+    }
+
+    /// Where cancellation leaves no reliable digits the result is NaN, never
+    /// the old 0.0 (j = 60) or a plausible wrong value.
+    #[test]
+    fn total_cancellation_returns_nan_not_a_wrong_value() {
+        for j in [60, 80, 300] {
+            assert!(
+                wigner_3j(2 * j, 2 * j, 2 * j, 2, -2, 0).is_nan(),
+                "3j j = {j}"
+            );
+        }
+        for j in [50, 100] {
+            assert!(
+                wigner_6j(2 * j, 2 * j, 2 * j, 2 * j, 2 * j, 2 * j).is_nan(),
+                "6j j = {j}"
+            );
+        }
+    }
+
+    #[test]
+    fn mismatched_j_m_parity_is_zero() {
+        // (1 1 1; 1/2 -1/2 0): m1 half-integer with integer j1
+        assert_eq!(wigner_3j(2, 2, 2, 1, -1, 0), 0.0);
+        assert_eq!(wigner_3j_f(1.0, 1.0, 1.0, 0.5, -0.5, 0.0), 0.0);
+    }
+
+    #[test]
+    fn non_half_integer_input_is_nan() {
+        assert!(wigner_3j_f(1.0, 1.0, 1.3, 0.0, 0.0, 0.0).is_nan());
+        assert!(wigner_6j_f(1.0, 1.0, 1.0, 1.0, 1.0, 0.7).is_nan());
     }
 }

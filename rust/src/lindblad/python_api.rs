@@ -1,3 +1,6 @@
+use crate::lindblad::ode_batch::{
+    build_extractions, validate_integral_weights, validate_output_indices,
+};
 use crate::lindblad::ode_impl::{LindbladRhs, LindbladStopEvent};
 use crate::lindblad::plan::{parse_expression, parse_plan_payload, PreparedLindbladPlan};
 use crate::lindblad::rhs::{
@@ -8,7 +11,7 @@ use crate::lindblad::rhs::{
 use crate::ode::batch::{solve_single, OdeSolver};
 use crate::ode::output::{
     FullAndIntegralOutput, FullOutput, IntegralMethod, OdeOutputValues, PopulationsOutput,
-    SelectedExtraction, SelectedOutput, WeightedIntegralOutput, WeightedRateOutput,
+    SelectedOutput, WeightedIntegralOutput, WeightedRateOutput,
 };
 use num_complex::Complex64;
 use numpy::{
@@ -383,38 +386,11 @@ pub fn evaluate_lindblad_hamiltonian_py<'py>(
     let array = PyArray1::from_vec(py, matrix);
     array.reshape((plan.n_states(), plan.n_states()))
 }
-fn packed_upper_idx(n: usize, i: usize, j: usize) -> usize {
-    let mut off = 0usize;
-    for row in 0..i {
-        off += n - row - 1;
-    }
-    n + 2 * (off + (j - i - 1))
-}
 
-fn build_extractions(n: usize, indices: &[(usize, usize)]) -> Vec<SelectedExtraction> {
-    indices
-        .iter()
-        .map(|&(i, j)| {
-            if i == j {
-                SelectedExtraction::Real(i)
-            } else if i < j {
-                let r = packed_upper_idx(n, i, j);
-                SelectedExtraction::ComplexPair {
-                    real_idx: r,
-                    imag_idx: r + 1,
-                }
-            } else {
-                let r = packed_upper_idx(n, j, i);
-                SelectedExtraction::ComplexPairConj {
-                    real_idx: r,
-                    imag_idx: r + 1,
-                }
-            }
-        })
-        .collect()
-}
-
-fn parse_stop_event(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<LindbladStopEvent>> {
+fn parse_stop_event(
+    obj: Option<&Bound<'_, PyAny>>,
+    plan: &PreparedLindbladPlan,
+) -> PyResult<Option<LindbladStopEvent>> {
     let Some(obj) = obj else {
         return Ok(None);
     };
@@ -442,15 +418,20 @@ fn parse_stop_event(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<LindbladS
             let expression_obj = dict
                 .get_item("expression")?
                 .ok_or_else(|| PyValueError::new_err("runtime stop_event missing expression"))?;
-            Ok(Some(LindbladStopEvent::RuntimeExpression {
-                expression: parse_expression(&expression_obj)?,
-            }))
+            let expression = parse_expression(&expression_obj)?;
+            expression
+                .validate(plan.parameter_graph.slot_names.len(), 0)
+                .map_err(PyValueError::new_err)?;
+            Ok(Some(LindbladStopEvent::RuntimeExpression { expression }))
         }
         other => Err(PyValueError::new_err(format!(
             "unknown stop_event kind {other:?}"
         ))),
     }
 }
+
+/// Initial save-buffer length (in time points) when every step is saved.
+const INITIAL_SAVE_CAPACITY: usize = 1024;
 
 #[pyfunction(signature = (plan, packed_rho0, t0, t1, abstol, reltol, dt, saveat = None, save_start = true, maxiters = 100000, mode = "expanded_sparse", solver = "dopri5", output = "full", output_indices = None, output_when = "saveat", integral_weights = None, stop_event = None, use_split_input_rhs = true, integral_method = "solver"))]
 pub fn solve_lindblad_ode_py<'py>(
@@ -513,8 +494,17 @@ pub fn solve_lindblad_ode_py<'py>(
     } else {
         saveat_vec
     };
-    let capacity = saveat_vec.as_ref().map_or(maxiters + 1, |s| s.len() + 1);
-    let y0 = packed_rho0.as_slice().map_err(PyValueError::new_err)?;
+    // Without saveat every accepted step is saved, but reserving room for all
+    // `maxiters` up front costs (maxiters + 1) * width floats -- ~670 MB of full
+    // output at n = 29 -- before integrating, and aborts the process if the
+    // allocation fails. Start small and let the buffers grow.
+    let capacity = saveat_vec
+        .as_ref()
+        .map_or(INITIAL_SAVE_CAPACITY.min(maxiters + 1), |s| s.len() + 1);
+    let y0 = packed_rho0
+        .as_slice()
+        .map_err(PyValueError::new_err)?
+        .to_vec();
     let options = crate::ode::OdeOptions {
         abstol,
         reltol,
@@ -523,72 +513,88 @@ pub fn solve_lindblad_ode_py<'py>(
         save_start,
         saveat: saveat_vec,
     };
-    let event = parse_stop_event(stop_event)?;
+    let event = parse_stop_event(stop_event, &plan)?;
     let rhs_options = RhsOptions {
         use_split_input_rhs,
     };
-    let mut rhs = LindbladRhs::new_with_rhs_options(&plan, execution_mode, rhs_options)
-        .with_stop_event(event);
-    let result = match output {
-        "populations" => {
-            let mut out = PopulationsOutput::new((0..n).collect(), capacity);
-            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
-                .map_err(PyValueError::new_err)?;
-            (out.finish(), s)
+    let integral_weights = match output {
+        "weighted_integral"
+        | "photon_integral"
+        | "excited_population"
+        | "full_and_integral"
+        | "weighted_rate"
+        | "photon_rate"
+        | "excited_population_rate" => {
+            let weights = integral_weights.ok_or_else(|| {
+                PyValueError::new_err(format!("output='{output}' requires integral_weights"))
+            })?;
+            validate_integral_weights(&weights, n).map_err(PyValueError::new_err)?;
+            weights
         }
+        _ => Vec::new(),
+    };
+    let extractions = match output {
         "selected" => {
             let idx = output_indices.as_deref().ok_or_else(|| {
                 PyValueError::new_err("output='selected' requires output_indices")
             })?;
-            let mut out = SelectedOutput::new(build_extractions(n, idx), capacity);
-            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
-                .map_err(PyValueError::new_err)?;
-            (out.finish(), s)
+            validate_output_indices(idx, n).map_err(PyValueError::new_err)?;
+            build_extractions(n, idx)
         }
-        "weighted_integral" | "photon_integral" | "excited_population" => {
-            let weights = integral_weights.ok_or_else(|| {
-                PyValueError::new_err(format!("output='{output}' requires integral_weights"))
-            })?;
-            let mut out = WeightedIntegralOutput::new_with_trace(
-                weights,
-                output_when == "saveat",
-                capacity,
-                integral_method,
-            );
-            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
-                .map_err(PyValueError::new_err)?;
-            (out.finish(), s)
-        }
-        "full_and_integral" => {
-            if integral_method != IntegralMethod::Solver {
-                return Err(PyValueError::new_err(
-                    "output='full_and_integral' requires integral_method='solver'",
-                ));
-            }
-            let weights = integral_weights.ok_or_else(|| {
-                PyValueError::new_err("output='full_and_integral' requires integral_weights")
-            })?;
-            let mut out = FullAndIntegralOutput::new(dim, weights, capacity);
-            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
-                .map_err(PyValueError::new_err)?;
-            (out.finish(), s)
-        }
-        "weighted_rate" | "photon_rate" | "excited_population_rate" => {
-            let weights = integral_weights.ok_or_else(|| {
-                PyValueError::new_err(format!("output='{output}' requires integral_weights"))
-            })?;
-            let mut out = WeightedRateOutput::new(weights, capacity);
-            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
-                .map_err(PyValueError::new_err)?;
-            (out.finish(), s)
-        }
-        _ => {
-            let mut out = FullOutput::new(dim, capacity);
-            let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)
-                .map_err(PyValueError::new_err)?;
-            (out.finish(), s)
-        }
+        _ => Vec::new(),
     };
+    if output == "full_and_integral" && integral_method != IntegralMethod::Solver {
+        return Err(PyValueError::new_err(
+            "output='full_and_integral' requires integral_method='solver'",
+        ));
+    }
+    let plan_ref: &PreparedLindbladPlan = &plan;
+    let save_trace = output_when == "saveat";
+    // Release the GIL for the integration, as the batch and grid paths do.
+    let result = py
+        .detach(move || -> Result<_, String> {
+            let mut rhs = LindbladRhs::new_with_rhs_options(plan_ref, execution_mode, rhs_options)
+                .with_stop_event(event);
+            let y0 = y0.as_slice();
+            Ok(match output {
+                "populations" => {
+                    let mut out = PopulationsOutput::new((0..n).collect(), capacity);
+                    let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)?;
+                    (out.finish(), s)
+                }
+                "selected" => {
+                    let mut out = SelectedOutput::new(extractions, capacity);
+                    let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)?;
+                    (out.finish(), s)
+                }
+                "weighted_integral" | "photon_integral" | "excited_population" => {
+                    let mut out = WeightedIntegralOutput::new_with_trace(
+                        integral_weights,
+                        save_trace,
+                        capacity,
+                        integral_method,
+                    );
+                    let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)?;
+                    (out.finish(), s)
+                }
+                "full_and_integral" => {
+                    let mut out = FullAndIntegralOutput::new(dim, integral_weights, capacity);
+                    let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)?;
+                    (out.finish(), s)
+                }
+                "weighted_rate" | "photon_rate" | "excited_population_rate" => {
+                    let mut out = WeightedRateOutput::new(integral_weights, capacity);
+                    let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)?;
+                    (out.finish(), s)
+                }
+                _ => {
+                    let mut out = FullOutput::new(dim, capacity);
+                    let s = solve_single(&mut rhs, y0, t0, t1, &options, &mut out, ode_solver)?;
+                    (out.finish(), s)
+                }
+            })
+        })
+        .map_err(PyValueError::new_err)?;
     let (r, stats) = result;
     let times_array = PyArray1::from_vec(py, r.times);
     let values: Py<PyAny> = match r.values {
@@ -699,8 +705,10 @@ pub fn solve_lindblad_batch_ode_py<'py>(
         }
         None => None,
     };
-    let plan_owned = plan.clone();
-    let event = parse_stop_event(stop_event)?;
+    // The plan is immutable once prepared; borrow it across the detached solve
+    // instead of deep-cloning it on every call.
+    let plan_ref: &PreparedLindbladPlan = &plan;
+    let event = parse_stop_event(stop_event, &plan)?;
     let options = crate::ode::OdeOptions {
         abstol,
         reltol,
@@ -714,7 +722,7 @@ pub fn solve_lindblad_batch_ode_py<'py>(
     let result = py
         .detach(move || {
             solve_batch_ode(
-                &plan_owned,
+                plan_ref,
                 ode_solver,
                 &y0_batch,
                 trajectory_count,
@@ -842,8 +850,10 @@ pub fn solve_lindblad_grid_ode_py<'py>(
         axis_offsets.push(off);
         off += len;
     }
-    let plan_owned = plan.clone();
-    let event = parse_stop_event(stop_event)?;
+    // The plan is immutable once prepared; borrow it across the detached solve
+    // instead of deep-cloning it on every call.
+    let plan_ref: &PreparedLindbladPlan = &plan;
+    let event = parse_stop_event(stop_event, &plan)?;
     let options = crate::ode::OdeOptions {
         abstol,
         reltol,
@@ -857,7 +867,7 @@ pub fn solve_lindblad_grid_ode_py<'py>(
     let result = py
         .detach(move || {
             solve_grid_ode(
-                &plan_owned,
+                plan_ref,
                 ode_solver,
                 &y0,
                 t0,

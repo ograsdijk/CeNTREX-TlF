@@ -146,9 +146,11 @@ pub(super) fn packed_rhs(
     if p.n != n || h_sparse.len() != p.nnz {
         return Err("invalid Hamiltonian sparsity dimensions for CPU kernel".into());
     }
-    scratch_re.fill(0.0);
-    scratch_im.fill(0.0);
     for i in 0..n {
+        // Zero each row just before accumulating into it, while it is cache-hot,
+        // instead of a separate full pass over both n*n scratch buffers.
+        scratch_re[i * n..(i + 1) * n].fill(0.0);
+        scratch_im[i * n..(i + 1) * n].fill(0.0);
         for ptr in p.row_ptrs[i]..p.row_ptrs[i + 1] {
             let k = p.col_indices[ptr];
             let h = h_sparse[ptr];

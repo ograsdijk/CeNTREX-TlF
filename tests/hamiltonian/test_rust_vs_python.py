@@ -367,3 +367,14 @@ class TestWignerSymbols:
                 rust_val, python_val, atol=1e-14,
                 err_msg=f"6j mismatch for ({j1},{j2},{j3},{j4},{j5},{j6})"
             )
+
+
+def test_wigner_bindings_reject_invalid_and_unrepresentable_symbols():
+    # not a multiple of 1/2
+    with pytest.raises(ValueError, match="multiples of 1/2"):
+        rust.wigner_3j_py(1, 1, 1.3, 0, 0, 0)
+    # j and m of different parity in a column: an exact zero, not a rounding artefact
+    assert rust.wigner_3j_py(1, 1, 1, 0.5, -0.5, 0) == 0.0
+    # total cancellation at large j raises instead of returning 0.0 or a wrong value
+    with pytest.raises(ValueError, match="double precision"):
+        rust.wigner_3j_py(60, 60, 60, 1, -1, 0)

@@ -11,6 +11,49 @@ use crate::ode::output::{
 use crate::ode::{OdeOptions, OdeRhs, OdeStats};
 use num_complex::Complex64;
 use rayon::prelude::*;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+
+/// Rayon pools keyed by thread count. Building a pool spawns OS threads, which
+/// is noticeable when many small scans are driven from a Python loop.
+pub(crate) fn cached_thread_pool(n_threads: usize) -> Result<Arc<rayon::ThreadPool>, String> {
+    static POOLS: OnceLock<Mutex<HashMap<usize, Arc<rayon::ThreadPool>>>> = OnceLock::new();
+    let mut pools = POOLS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(pool) = pools.get(&n_threads) {
+        return Ok(Arc::clone(pool));
+    }
+    let pool = Arc::new(
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(n_threads)
+            .build()
+            .map_err(|e| format!("failed to create thread pool: {e}"))?,
+    );
+    pools.insert(n_threads, Arc::clone(&pool));
+    Ok(pool)
+}
+
+/// Integral weights index populations; anything else would silently integrate
+/// a coherence or the integral itself.
+pub(crate) fn validate_integral_weights(weights: &[(usize, f64)], n: usize) -> Result<(), String> {
+    if let Some(&(index, _)) = weights.iter().find(|&&(index, _)| index >= n) {
+        return Err(format!(
+            "integral_weights index {index} out of range for {n} states"
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_output_indices(indices: &[(usize, usize)], n: usize) -> Result<(), String> {
+    if let Some(&(i, j)) = indices.iter().find(|&&(i, j)| i >= n || j >= n) {
+        return Err(format!(
+            "output_indices entry ({i}, {j}) out of range for {n} states"
+        ));
+    }
+    Ok(())
+}
 
 fn packed_upper_real_index(n: usize, i: usize, j: usize) -> usize {
     let mut offset = 0usize;
@@ -20,7 +63,7 @@ fn packed_upper_real_index(n: usize, i: usize, j: usize) -> usize {
     n + 2 * (offset + (j - i - 1))
 }
 
-fn build_extractions(n: usize, indices: &[(usize, usize)]) -> Vec<SelectedExtraction> {
+pub(crate) fn build_extractions(n: usize, indices: &[(usize, usize)]) -> Vec<SelectedExtraction> {
     indices
         .iter()
         .map(|&(i, j)| {
@@ -80,17 +123,6 @@ impl ConcreteOutput {
             Self::FullAndIntegral(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
             Self::WeightedIntegral(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
             Self::WeightedRate(o) => solve_single(rhs, y0, t0, t1, options, o, solver),
-        }
-    }
-
-    fn snapshot(&self) -> OdeOutputResult {
-        match self {
-            Self::Populations(o) => o.snapshot(),
-            Self::Selected(o) => o.snapshot(),
-            Self::Full(o) => o.snapshot(),
-            Self::FullAndIntegral(o) => o.snapshot(),
-            Self::WeightedIntegral(o) => o.snapshot(),
-            Self::WeightedRate(o) => o.snapshot(),
         }
     }
 
@@ -173,10 +205,6 @@ impl OutputSpec {
     fn is_complex(&self) -> bool {
         matches!(self, Self::Selected { .. })
     }
-
-    fn is_full(&self) -> bool {
-        matches!(self, Self::Full { .. })
-    }
 }
 
 pub struct BatchOdeResult {
@@ -241,6 +269,7 @@ pub fn solve_batch_ode(
         "selected" => {
             let idx = output_indices
                 .ok_or_else(|| "output='selected' requires output_indices".to_string())?;
+            validate_output_indices(idx, n)?;
             OutputSpec::Selected {
                 extractions: build_extractions(n, idx),
             }
@@ -253,6 +282,7 @@ pub fn solve_batch_ode(
             let weights = integral_weights.ok_or_else(|| {
                 "output='full_and_integral' requires integral_weights".to_string()
             })?;
+            validate_integral_weights(weights, n)?;
             OutputSpec::FullAndIntegral {
                 dim,
                 weights: weights.to_vec(),
@@ -261,6 +291,7 @@ pub fn solve_batch_ode(
         "weighted_integral" | "photon_integral" | "excited_population" => {
             let weights = integral_weights
                 .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+            validate_integral_weights(weights, n)?;
             OutputSpec::WeightedIntegral {
                 weights: weights.to_vec(),
                 store_trace: output_when == "saveat",
@@ -270,6 +301,7 @@ pub fn solve_batch_ode(
         "weighted_rate" | "photon_rate" | "excited_population_rate" => {
             let weights = integral_weights
                 .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+            validate_integral_weights(weights, n)?;
             OutputSpec::WeightedRate {
                 weights: weights.to_vec(),
             }
@@ -322,10 +354,7 @@ pub fn solve_batch_ode(
                 .map(|trajectory| solve_with_worker(&mut worker, trajectory))
                 .collect()
         } else if let Some(n_threads) = threads {
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(n_threads)
-                .build()
-                .map_err(|e| format!("failed to create thread pool: {e}"))?;
+            let pool = cached_thread_pool(n_threads)?;
             pool.install(|| {
                 (0..trajectory_count)
                     .into_par_iter()
@@ -367,6 +396,15 @@ pub fn solve_batch_ode(
         } else {
             *r.times.last().unwrap_or(&t1)
         });
+        if idx > 0 && (r.width != width || (stop_event.is_none() && r.times.len() != time_count)) {
+            return Err(format!(
+                "trajectory {idx}: produced {} times x {} values, expected {} x {}",
+                r.times.len(),
+                r.width,
+                time_count,
+                width
+            ));
+        }
         width = r.width;
         time_count = r.times.len();
         if ref_times.is_none() && stop_event.is_none() {
@@ -520,6 +558,8 @@ fn copy_complex_output(
 struct GridWorker<'a> {
     rhs: LindbladRhs<'a>,
     output: ConcreteOutput,
+    output_spec: &'a OutputSpec,
+    capacity: usize,
     param_values: Vec<Complex64>,
 }
 
@@ -528,15 +568,19 @@ impl<'a> GridWorker<'a> {
         plan: &'a PreparedLindbladPlan,
         execution_mode: ExecutionMode,
         rhs_options: RhsOptions,
-        output_spec: &OutputSpec,
+        output_spec: &'a OutputSpec,
         capacity: usize,
         parameter_width: usize,
     ) -> Self {
-        Self {
-            rhs: LindbladRhs::new_with_rhs_options(plan, execution_mode, rhs_options),
-            output: output_spec.create(capacity),
-            param_values: vec![Complex64::ZERO; parameter_width],
-        }
+        Self::new_with_event(
+            plan,
+            execution_mode,
+            rhs_options,
+            output_spec,
+            capacity,
+            parameter_width,
+            None,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -544,7 +588,7 @@ impl<'a> GridWorker<'a> {
         plan: &'a PreparedLindbladPlan,
         execution_mode: ExecutionMode,
         rhs_options: RhsOptions,
-        output_spec: &OutputSpec,
+        output_spec: &'a OutputSpec,
         capacity: usize,
         parameter_width: usize,
         stop_event: Option<LindbladStopEvent>,
@@ -553,8 +597,16 @@ impl<'a> GridWorker<'a> {
             rhs: LindbladRhs::new_with_rhs_options(plan, execution_mode, rhs_options)
                 .with_stop_event(stop_event),
             output: output_spec.create(capacity),
+            output_spec,
+            capacity,
             param_values: vec![Complex64::ZERO; parameter_width],
         }
+    }
+
+    /// Move the finished trajectory out, leaving fresh buffers behind, instead
+    /// of cloning every saved value.
+    fn take_result(&mut self) -> OdeOutputResult {
+        std::mem::replace(&mut self.output, self.output_spec.create(self.capacity)).finish()
     }
 
     /// Solve one batch trajectory, reusing this worker's RHS workspace and
@@ -579,7 +631,7 @@ impl<'a> GridWorker<'a> {
         let stats = self
             .output
             .solve(&mut self.rhs, y0, t0, t1, options, solver)?;
-        Ok((self.output.snapshot(), stats))
+        Ok((self.take_result(), stats))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -611,7 +663,7 @@ impl<'a> GridWorker<'a> {
         let stats = self
             .output
             .solve(&mut self.rhs, y0, t0, t1, options, solver)?;
-        Ok((self.output.snapshot(), stats))
+        Ok((self.take_result(), stats))
     }
 }
 
@@ -634,12 +686,9 @@ fn solve_grid_ode_direct(
     parallel: bool,
     threads: Option<usize>,
 ) -> Result<Option<BatchOdeResult>, String> {
-    if output_spec.is_full() {
-        return Ok(None);
-    }
-    if output_when == "saveat" {
-        return Ok(None);
-    }
+    // Without an event every trajectory saves at the same fixed times, so the
+    // results are written straight into one preallocated array. Each
+    // trajectory's length is still checked as it is copied in.
     let Some(times) = fixed_output_times(output_when, t0, t1, options)? else {
         return Ok(None);
     };
@@ -727,10 +776,7 @@ fn solve_grid_ode_direct(
         let stats = if !parallel || threads == Some(1) {
             solve_complex_serial(&mut values)?
         } else if let Some(n_threads) = threads {
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(n_threads)
-                .build()
-                .map_err(|e| format!("failed to create thread pool: {e}"))?;
+            let pool = cached_thread_pool(n_threads)?;
             pool.install(|| {
                 values
                     .par_chunks_mut(expected_per_trajectory)
@@ -821,10 +867,7 @@ fn solve_grid_ode_direct(
     let stats = if !parallel || threads == Some(1) {
         solve_real_serial(&mut values)?
     } else if let Some(n_threads) = threads {
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(n_threads)
-            .build()
-            .map_err(|e| format!("failed to create thread pool: {e}"))?;
+        let pool = cached_thread_pool(n_threads)?;
         pool.install(|| {
             values
                 .par_chunks_mut(expected_per_trajectory)
@@ -952,6 +995,7 @@ pub fn solve_grid_ode(
         "selected" => {
             let idx = output_indices
                 .ok_or_else(|| "output='selected' requires output_indices".to_string())?;
+            validate_output_indices(idx, n)?;
             OutputSpec::Selected {
                 extractions: build_extractions(n, idx),
             }
@@ -964,6 +1008,7 @@ pub fn solve_grid_ode(
             let weights = integral_weights.ok_or_else(|| {
                 "output='full_and_integral' requires integral_weights".to_string()
             })?;
+            validate_integral_weights(weights, n)?;
             OutputSpec::FullAndIntegral {
                 dim,
                 weights: weights.to_vec(),
@@ -972,6 +1017,7 @@ pub fn solve_grid_ode(
         "weighted_integral" | "photon_integral" | "excited_population" => {
             let weights = integral_weights
                 .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+            validate_integral_weights(weights, n)?;
             OutputSpec::WeightedIntegral {
                 weights: weights.to_vec(),
                 store_trace: output_when == "saveat",
@@ -981,6 +1027,7 @@ pub fn solve_grid_ode(
         "weighted_rate" | "photon_rate" | "excited_population_rate" => {
             let weights = integral_weights
                 .ok_or_else(|| format!("output='{output_mode}' requires integral_weights"))?;
+            validate_integral_weights(weights, n)?;
             OutputSpec::WeightedRate {
                 weights: weights.to_vec(),
             }
@@ -1011,47 +1058,51 @@ pub fn solve_grid_ode(
         }
     }
 
-    let solve_one = |trajectory: usize| -> Result<(OdeOutputResult, OdeStats), String> {
-        let mut param_values = vec![Complex64::ZERO; parameter_slot_indices.len()];
-        fill_grid_parameter_values(
+    let make_worker = || {
+        GridWorker::new_with_event(
+            plan,
+            execution_mode,
+            rhs_options,
+            &output_spec,
+            capacity,
+            parameter_slot_indices.len(),
+            stop_event.clone(),
+        )
+    };
+    let solve_one = |worker: &mut GridWorker, trajectory: usize| {
+        worker.solve(
             trajectory,
+            y0,
+            t0,
+            t1,
+            options,
+            solver,
+            parameter_slot_indices,
             axes,
             axis_offsets,
             axis_lengths,
             &strides,
-            &mut param_values,
-        );
-        let mut rhs = LindbladRhs::new_with_options_and_overrides(
-            plan,
-            execution_mode,
-            rhs_options,
-            parameter_slot_indices,
-            &param_values,
-        )?
-        .with_stop_event(stop_event.clone());
-        let mut output = output_spec.create(capacity);
-        let stats = output.solve(&mut rhs, y0, t0, t1, options, solver)?;
-        Ok((output.finish(), stats))
+        )
     };
 
     let results: Vec<Result<(OdeOutputResult, OdeStats), String>> =
         if !parallel || threads == Some(1) {
-            (0..trajectory_count).map(solve_one).collect()
+            let mut worker = make_worker();
+            (0..trajectory_count)
+                .map(|trajectory| solve_one(&mut worker, trajectory))
+                .collect()
         } else if let Some(n_threads) = threads {
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(n_threads)
-                .build()
-                .map_err(|e| format!("failed to create thread pool: {e}"))?;
+            let pool = cached_thread_pool(n_threads)?;
             pool.install(|| {
                 (0..trajectory_count)
                     .into_par_iter()
-                    .map(solve_one)
+                    .map_init(&make_worker, solve_one)
                     .collect()
             })
         } else {
             (0..trajectory_count)
                 .into_par_iter()
-                .map(solve_one)
+                .map_init(&make_worker, solve_one)
                 .collect()
         };
 
@@ -1079,6 +1130,15 @@ pub fn solve_grid_ode(
         } else {
             *r.times.last().unwrap_or(&t1)
         });
+        if idx > 0 && (r.width != width || (stop_event.is_none() && r.times.len() != time_count)) {
+            return Err(format!(
+                "trajectory {idx}: produced {} times x {} values, expected {} x {}",
+                r.times.len(),
+                r.width,
+                time_count,
+                width
+            ));
+        }
         width = r.width;
         time_count = r.times.len();
         if ref_times.is_none() && stop_event.is_none() {

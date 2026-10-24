@@ -239,7 +239,9 @@ pub fn solve_fixed_step<R: OdeRhs, O: OdeOutput>(
         }
 
         if event_hit {
-            output.push(st.event_time, &yn);
+            // A root exactly at the start of the step belongs to `y`, not `yn`.
+            let event_state = if st.event_time == xo { &y } else { &yn };
+            output.push(st.event_time, event_state);
             break;
         }
 

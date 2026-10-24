@@ -70,6 +70,40 @@ where
     let n = qn.len();
     debug_assert_eq!(n, h_applied.len());
     let mut result = vec![Complex64::ZERO; n * n];
+    // One index over the basis, then scatter each applied state's few terms:
+    // O(n * terms) instead of n^2 / 2 hashed lookups. Amplitudes accumulate in
+    // the same term order as before, so the upper triangle is bit-identical;
+    // the lower triangle is still its conjugate.
+    let index: HashMap<B, usize> = qn.iter().enumerate().map(|(i, &b)| (b, i)).collect();
+    if index.len() != n {
+        return h_mat_elems_from_applied_per_column(qn, h_applied);
+    }
+    for (j, psi) in h_applied.iter().enumerate() {
+        for &(amp, basis) in psi.terms() {
+            if let Some(&i) = index.get(&basis) {
+                if i <= j {
+                    result[i * n + j] += amp;
+                }
+            }
+        }
+    }
+    for i in 0..n {
+        for j in (i + 1)..n {
+            result[j * n + i] = result[i * n + j].conj();
+        }
+    }
+    result
+}
+
+/// Per-column lookup maps; only used when `qn` repeats a basis state, where a
+/// single basis -> index map cannot represent every row.
+fn h_mat_elems_from_applied_per_column<B, S>(qn: &[B], h_applied: &[S]) -> Vec<Complex64>
+where
+    B: Copy + Eq + Hash,
+    S: OperatorState<BasisState = B>,
+{
+    let n = qn.len();
+    let mut result = vec![Complex64::ZERO; n * n];
     let lookups: Vec<HashMap<B, Complex64>> = h_applied
         .iter()
         .map(|psi| {
@@ -95,9 +129,8 @@ where
 
 /// Linear-scan reference for `h_mat_elems_from_applied`, kept for benchmarking.
 ///
-/// This is what the map-based version replaced: instead of hashing each applied
-/// state's terms into a `HashMap` once, it rescans the term list for every
-/// matrix element. Retained under `cfg(test)` so the equivalence test and the
+/// Instead of indexing the basis once and scattering each applied state's
+/// terms, it rescans the term list for every matrix element. Retained under `cfg(test)` so the equivalence test and the
 /// `bench_h_mat_elems_lookup_vs_linear_scan` measurement have something to
 /// compare against; it is not part of the shipped path.
 #[cfg(test)]
@@ -370,6 +403,28 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_index_scatter_is_bit_identical_to_per_column_maps() {
+        let constants = XConstants::default();
+        let ops: [fn(UncoupledBasisState, &XConstants) -> UncoupledState; 4] = [
+            x_uncoupled::h_ff,
+            x_uncoupled::h_sx,
+            x_uncoupled::h_sy,
+            x_uncoupled::h_zz,
+        ];
+        for jmax in [0, 1, 2, 3, 4] {
+            let qn = make_full_x_basis(jmax);
+            for op in ops {
+                let applied: Vec<UncoupledState> = qn.iter().map(|b| op(*b, &constants)).collect();
+                assert_eq!(
+                    h_mat_elems_from_applied(&qn, &applied),
+                    h_mat_elems_from_applied_per_column(&qn, &applied),
+                    "jmax={jmax}"
+                );
+            }
+        }
+    }
+
     /// Per-trial timings for both implementations, interleaved.
     ///
     /// Map and scan alternate *within* each trial rather than running as two
@@ -571,13 +626,11 @@ mod tests {
             "worst per-cell relative spread across trials: {:.1}%",
             100.0 * worst_spread
         );
-        // The conclusion is "scan is faster everywhere", so the meaningful
-        // check is that no individual trial ever went the other way -- not
-        // that the medians happen to be separated.
-        assert!(
-            worst_ratio < 1.0,
-            "a trial had the map at least as fast (ratio {worst_ratio:.3});              the report's conclusion needs revisiting"
-        );
+        // The per-column HashMaps this benchmark was written against lost to
+        // the scan everywhere. The shipped path is now a single basis index
+        // plus a scatter; it is within noise of the scan below n ~ 100 and up
+        // to ~2x faster for X at n = 144-196. Every case is well under a
+        // millisecond, so this is a report, not a pass/fail gate.
     }
 
     #[test]

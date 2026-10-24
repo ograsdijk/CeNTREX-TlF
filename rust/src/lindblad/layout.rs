@@ -68,7 +68,7 @@ impl PackedHermitianLayout {
                 matrix.len()
             ));
         }
-        matrix.fill(Complex64::ZERO);
+        // Every element is written below (diagonal, then each upper/lower pair).
         for i in 0..self.n {
             matrix[i * self.n + i] = Complex64::new(packed[i], 0.0);
         }
@@ -247,7 +247,6 @@ impl UpperTriLayout {
                 dense.len()
             ));
         }
-        dense.fill(Complex64::ZERO);
         for i in 0..self.n {
             for j in i..self.n {
                 let value = upper[self.index(i, j)?];

@@ -52,31 +52,14 @@ t_span = (0.0, 50e-6)
 t_eval = np.linspace(t_span[0], t_span[1], 201)
 n_runs = 5
 
-# With precomputed PCHIP tables (default)
-plan_with = prepare_effective_lindblad_rust_plan(model, params)
-times_with = []
+# PCHIP is evaluated per interval from neighbouring secants (no precomputed
+# tables; the table fast path was removed after it measured a 1.01x speedup
+# and could pick the wrong values array for a shared grid).
+plan = prepare_effective_lindblad_rust_plan(model, params)
+times = []
 for _ in range(n_runs):
     t0 = time.perf_counter()
-    result = solve_effective_lindblad(plan_with, rho0, t_span, saveat=t_eval, reltol=1e-6, abstol=1e-8, dt=1e-10)
-    times_with.append(time.perf_counter() - t0)
+    result = solve_effective_lindblad(plan, rho0, t_span, saveat=t_eval, reltol=1e-6, abstol=1e-8, dt=1e-10)
+    times.append(time.perf_counter() - t0)
 
-# Without precomputed tables: monkey-patch lower_parameter_graph to skip tables
-import centrex_tlf.lindblad.ir as ir_mod
-original_extract = ir_mod._extract_pchip_tables
-ir_mod._extract_pchip_tables = lambda params: []
-plan_without = prepare_effective_lindblad_rust_plan(model, params)
-ir_mod._extract_pchip_tables = original_extract
-
-times_without = []
-for _ in range(n_runs):
-    t0 = time.perf_counter()
-    result2 = solve_effective_lindblad(plan_without, rho0, t_span, saveat=t_eval, reltol=1e-6, abstol=1e-8, dt=1e-10)
-    times_without.append(time.perf_counter() - t0)
-
-med_with = sorted(times_with)[n_runs // 2] * 1000
-med_without = sorted(times_without)[n_runs // 2] * 1000
-
-print(f"With precomputed PCHIP:    {med_with:.1f} ms (median of {n_runs})")
-print(f"Without precomputed PCHIP: {med_without:.1f} ms (median of {n_runs})")
-print(f"Speedup: {med_without / med_with:.2f}x")
-print(f"Population agreement: {np.max(np.abs(result.populations() - result2.populations())):.2e}")
+print(f"PCHIP solve: {sorted(times)[n_runs // 2] * 1000:.1f} ms (median of {n_runs})")
