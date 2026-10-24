@@ -55,7 +55,6 @@ struct AdjointRhs<'a> {
     temps: Vec<RuntimeValue>,
     eval_stack: Vec<RuntimeValue>,
     scalar_stack: Vec<Complex64>,
-    pchip_hints: Vec<usize>,
     h: Vec<Complex64>,
     lambda: Vec<Complex64>,
     h_lambda: Vec<Complex64>,
@@ -113,7 +112,6 @@ impl<'a> AdjointRhs<'a> {
             temps: Vec::new(),
             eval_stack: Vec::new(),
             scalar_stack: Vec::new(),
-            pchip_hints: vec![0; plan.parameter_graph.pchip_tables.len()],
             h: vec![Complex64::ZERO; n * n],
             lambda: vec![Complex64::ZERO; n * n],
             h_lambda: vec![Complex64::ZERO; n * n],
@@ -141,7 +139,6 @@ impl OdeRhs for AdjointRhs<'_> {
             &mut self.slots,
             &mut self.eval_stack,
             &mut self.scalar_stack,
-            &mut self.pchip_hints,
         )?;
         self.plan.hamiltonian_plan.fill_into(
             &self.slots,

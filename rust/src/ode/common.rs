@@ -146,6 +146,16 @@ pub fn build_save_plan(
         if time < t0 - time_tol(t0) || time > t1 + time_tol(t1) {
             return Err(format!("saveat value {time} is outside [{t0}, {t1}]"));
         }
+        // The solvers walk saveat forward once; an earlier point after a later
+        // one would be silently dropped (adaptive) or saved with the wrong
+        // state (fixed-step).
+        if let Some(&previous) = times.last() {
+            if time < previous {
+                return Err(format!(
+                    "saveat must be sorted in increasing order ({time} follows {previous})"
+                ));
+            }
+        }
         times.push(time);
     }
     Ok(Some(SavePlan { times }))

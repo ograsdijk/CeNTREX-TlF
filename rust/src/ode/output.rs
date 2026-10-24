@@ -340,6 +340,10 @@ impl FullAndIntegralOutput {
     }
 }
 
+// Fixed-step solvers call `push_solver_integral_interpolated` for interior save
+// times. That is only right for the integral component: the full state stored
+// here would be the end-of-step `y1`. Both solve entry points therefore reject
+// `full_and_integral` with fixed-step solvers; keep that guard if this changes.
 impl OdeOutput for FullAndIntegralOutput {
     fn push(&mut self, t: f64, y: &[f64]) {
         self.push_state_and_integral(t, y, y[self.dim]);

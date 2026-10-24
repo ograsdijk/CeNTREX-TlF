@@ -7,7 +7,6 @@ pub struct EffectiveLindbladWorkspace {
     pub eval_stack: Vec<RuntimeValue>,
     pub scalar_stack: Vec<Complex64>,
     pub last_interval: usize,
-    pub pchip_hints: Vec<usize>,
     pub parameter_overrides: Vec<(usize, RuntimeValue)>,
 }
 
@@ -18,7 +17,6 @@ impl EffectiveLindbladWorkspace {
             eval_stack: Vec::new(),
             scalar_stack: Vec::new(),
             last_interval: 0,
-            pchip_hints: vec![0; plan.parameter_graph.pchip_tables.len()],
             parameter_overrides: Vec::new(),
         }
     }
@@ -98,25 +96,17 @@ pub fn rhs_effective_lindblad(
         &mut workspace.parameter_values,
         &mut workspace.eval_stack,
         &mut workspace.scalar_stack,
-        &mut workspace.pchip_hints,
     )?;
 
-    let field_val = match &workspace.parameter_values[plan.field_coordinate_slot] {
-        RuntimeValue::Scalar(c) => c.re,
-        _ => return Err("field_coordinate must be scalar".to_string()),
+    // Read every drive parameter from the slots just evaluated, so batch
+    // overrides and time dependence through compound parameters both apply.
+    let scalar_slot = |slot: usize, name: &str| match &workspace.parameter_values[slot] {
+        RuntimeValue::Scalar(c) => Ok(c.re),
+        RuntimeValue::Tuple(_) => Err(format!("{name} must be scalar")),
     };
-    let rabi_val = plan.constant_rabi.unwrap_or_else(|| {
-        match &workspace.parameter_values[plan.rabi_rate_slot] {
-            RuntimeValue::Scalar(c) => c.re,
-            _ => 0.0,
-        }
-    });
-    let detuning_val = plan.constant_detuning.unwrap_or_else(|| {
-        match &workspace.parameter_values[plan.detuning_slot] {
-            RuntimeValue::Scalar(c) => c.re,
-            _ => 0.0,
-        }
-    });
+    let field_val = scalar_slot(plan.field_coordinate_slot, "field_coordinate")?;
+    let rabi_val = scalar_slot(plan.rabi_rate_slot, "rabi_rate")?;
+    let detuning_val = scalar_slot(plan.detuning_slot, "detuning")?;
 
     let (idx, _w) =
         find_interval_cached(field_val, &plan.field_grid, &mut workspace.last_interval)?;

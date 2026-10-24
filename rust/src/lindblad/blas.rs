@@ -5,7 +5,7 @@ use std::ffi::{c_char, CString};
 #[cfg(windows)]
 use std::iter;
 #[cfg(windows)]
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 const CBLAS_ROW_MAJOR: i32 = 101;
 const CBLAS_UPPER: i32 = 121;
@@ -46,39 +46,60 @@ struct LoadedHer2k {
     function: Zher2kFn,
 }
 
+// Only a successful load is cached. A failed load (wrong path, missing symbol)
+// is reported and retried on the next call, so a later call with a corrected
+// path is not stuck with the first error.
 #[cfg(windows)]
-static ZHER2K: OnceLock<Result<LoadedHer2k, String>> = OnceLock::new();
+static ZHER2K: OnceLock<LoadedHer2k> = OnceLock::new();
+#[cfg(windows)]
+static ZHER2K_LOAD_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(windows)]
+unsafe fn try_load_zher2k(config: &BlasConfig) -> Result<LoadedHer2k, String> {
+    let wide_path: Vec<u16> = config
+        .library_path
+        .encode_utf16()
+        .chain(iter::once(0))
+        .collect();
+    let module = LoadLibraryW(wide_path.as_ptr());
+    if module.is_null() {
+        return Err(format!(
+            "failed to load BLAS library {}",
+            config.library_path
+        ));
+    }
+    let symbol_name = CString::new(config.zher2k_symbol.as_str())
+        .map_err(|err| format!("invalid symbol name: {err}"))?;
+    let function = GetProcAddress(module, symbol_name.as_ptr());
+    if function.is_null() {
+        return Err(format!(
+            "failed to resolve symbol {} from {}",
+            config.zher2k_symbol, config.library_path
+        ));
+    }
+    Ok(LoadedHer2k {
+        library_path: config.library_path.clone(),
+        function: std::mem::transmute::<*mut c_void, Zher2kFn>(function),
+    })
+}
 
 #[cfg(windows)]
 fn load_zher2k(config: &BlasConfig) -> Result<&'static LoadedHer2k, String> {
-    let loaded = ZHER2K.get_or_init(|| unsafe {
-        let wide_path: Vec<u16> = config
-            .library_path
-            .encode_utf16()
-            .chain(iter::once(0))
-            .collect();
-        let module = LoadLibraryW(wide_path.as_ptr());
-        if module.is_null() {
-            return Err(format!(
-                "failed to load BLAS library {}",
-                config.library_path
-            ));
+    let loaded = match ZHER2K.get() {
+        Some(loaded) => loaded,
+        None => {
+            let _guard = ZHER2K_LOAD_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            match ZHER2K.get() {
+                Some(loaded) => loaded,
+                None => {
+                    let loaded = unsafe { try_load_zher2k(config) }?;
+                    ZHER2K.get_or_init(|| loaded)
+                }
+            }
         }
-        let symbol_name = CString::new(config.zher2k_symbol.as_str())
-            .map_err(|err| format!("invalid symbol name: {err}"))?;
-        let function = GetProcAddress(module, symbol_name.as_ptr());
-        if function.is_null() {
-            return Err(format!(
-                "failed to resolve symbol {} from {}",
-                config.zher2k_symbol, config.library_path
-            ));
-        }
-        Ok(LoadedHer2k {
-            library_path: config.library_path.clone(),
-            function: std::mem::transmute::<*mut c_void, Zher2kFn>(function),
-        })
-    });
-    let loaded = loaded.as_ref().map_err(Clone::clone)?;
+    };
     if loaded.library_path != config.library_path {
         return Err(format!(
             "BLAS library already initialized with {}, cannot switch to {}",

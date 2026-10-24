@@ -22,97 +22,12 @@ pub struct ParameterGraph {
     pub slot_names: Vec<String>,
     pub base_values: Vec<RuntimeValue>,
     pub compounds: Vec<CompoundExpression>,
-    pub pchip_tables: Vec<PchipTable>,
 }
 
-#[derive(Clone, Debug)]
-pub struct PchipTable {
-    pub grid: Vec<f64>,
-    pub coefficients: Vec<[f64; 4]>,
-}
-
-impl PchipTable {
-    pub fn from_grid_values(grid: &[f64], values: &[f64]) -> Result<Self, String> {
-        let n = grid.len();
-        if n != values.len() {
-            return Err("pchip grid and values must have the same length".to_string());
-        }
-        if n < 2 {
-            return Ok(Self {
-                grid: grid.to_vec(),
-                coefficients: Vec::new(),
-            });
-        }
-        let mut h = vec![0.0; n - 1];
-        let mut delta = vec![0.0; n - 1];
-        for i in 0..n - 1 {
-            h[i] = grid[i + 1] - grid[i];
-            if h[i] <= 0.0 {
-                return Err("pchip grid must be strictly increasing".to_string());
-            }
-            delta[i] = (values[i + 1] - values[i]) / h[i];
-        }
-        let mut d = vec![0.0; n];
-        d[0] = delta[0];
-        d[n - 1] = delta[n - 2];
-        for i in 1..n - 1 {
-            if delta[i - 1].signum() != delta[i].signum() || delta[i - 1] == 0.0 || delta[i] == 0.0
-            {
-                d[i] = 0.0;
-            } else {
-                let w1 = 2.0 * h[i] + h[i - 1];
-                let w2 = h[i] + 2.0 * h[i - 1];
-                d[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i]);
-            }
-        }
-        let mut coefficients = Vec::with_capacity(n - 1);
-        for i in 0..n - 1 {
-            let c0 = values[i];
-            let c1 = d[i];
-            let c2 = (3.0 * delta[i] - 2.0 * d[i] - d[i + 1]) / h[i];
-            let c3 = (d[i] + d[i + 1] - 2.0 * delta[i]) / (h[i] * h[i]);
-            coefficients.push([c0, c1, c2, c3]);
-        }
-        Ok(Self {
-            grid: grid.to_vec(),
-            coefficients,
-        })
-    }
-
-    pub fn evaluate(&self, x: f64, hint: &mut usize) -> f64 {
-        let n = self.grid.len();
-        if n < 2 {
-            return if n == 1 {
-                self.coefficients.first().map_or(0.0, |c| c[0])
-            } else {
-                0.0
-            };
-        }
-        if x <= self.grid[0] {
-            *hint = 0;
-            return self.coefficients[0][0];
-        }
-        if x >= self.grid[n - 1] {
-            let last = n - 2;
-            *hint = last;
-            let dx = self.grid[n - 1] - self.grid[last];
-            let c = &self.coefficients[last];
-            return c[0] + dx * (c[1] + dx * (c[2] + dx * c[3]));
-        }
-        let i = if *hint < n - 1 && self.grid[*hint] <= x && x <= self.grid[*hint + 1] {
-            *hint
-        } else {
-            let idx = self
-                .grid
-                .partition_point(|&g| g <= x)
-                .saturating_sub(1)
-                .min(n - 2);
-            *hint = idx;
-            idx
-        };
-        let dx = x - self.grid[i];
-        let c = &self.coefficients[i];
-        c[0] + dx * (c[1] + dx * (c[2] + dx * c[3]))
+fn assign_runtime_value(dst: &mut RuntimeValue, src: &RuntimeValue) {
+    match (dst, src) {
+        (RuntimeValue::Tuple(dst), RuntimeValue::Tuple(src)) => dst.clone_from(src),
+        (dst, src) => *dst = src.clone(),
     }
 }
 
@@ -124,8 +39,7 @@ impl ParameterGraph {
         eval_stack: &mut Vec<RuntimeValue>,
         scalar_stack: &mut Vec<Complex64>,
     ) -> Result<(), String> {
-        let mut pchip_hints = vec![0usize; self.pchip_tables.len()];
-        self.evaluate_with_overrides_into(t, &[], slots, eval_stack, scalar_stack, &mut pchip_hints)
+        self.evaluate_with_overrides_into(t, &[], slots, eval_stack, scalar_stack)
     }
 
     pub fn evaluate_with_overrides_into(
@@ -135,10 +49,13 @@ impl ParameterGraph {
         slots: &mut Vec<RuntimeValue>,
         eval_stack: &mut Vec<RuntimeValue>,
         scalar_stack: &mut Vec<Complex64>,
-        pchip_hints: &mut [usize],
     ) -> Result<(), String> {
-        slots.clear();
-        slots.extend(self.base_values.iter().cloned());
+        // Called on every RHS evaluation: refresh the base slots in place so
+        // tuple-valued parameters reuse their buffers instead of reallocating.
+        slots.resize(self.slot_names.len(), RuntimeValue::Scalar(Complex64::ZERO));
+        for (slot, value) in slots.iter_mut().zip(self.base_values.iter()) {
+            assign_runtime_value(slot, value);
+        }
         for (slot, value) in overrides {
             if *slot >= self.base_values.len() {
                 return Err(format!(
@@ -146,9 +63,8 @@ impl ParameterGraph {
                     slot
                 ));
             }
-            slots[*slot] = value.clone();
+            assign_runtime_value(&mut slots[*slot], value);
         }
-        slots.resize(self.slot_names.len(), RuntimeValue::Scalar(Complex64::ZERO));
         for compound in &self.compounds {
             slots[compound.slot] = if compound.expression.scalar_only {
                 RuntimeValue::Scalar(eval_scalar_expression_into(
@@ -159,15 +75,7 @@ impl ParameterGraph {
                     scalar_stack,
                 )?)
             } else {
-                crate::lindblad::eval::eval_expression_into_with_pchip(
-                    &compound.expression,
-                    slots.as_slice(),
-                    t,
-                    &[],
-                    eval_stack,
-                    &self.pchip_tables,
-                    pchip_hints,
-                )?
+                eval_expression_into(&compound.expression, slots.as_slice(), t, &[], eval_stack)?
             };
         }
         Ok(())
@@ -244,6 +152,66 @@ pub struct HamiltonianPlan {
 }
 
 impl HamiltonianPlan {
+    /// Bounds-check every index the fill/RHS paths use without checks.
+    pub fn validate(&self, n_slots: usize) -> Result<(), String> {
+        let n = self.n;
+        let check_span = |row: usize, start_col: usize, len: usize, what: &str| {
+            if row >= n || start_col.checked_add(len).map_or(true, |end| end > n) {
+                Err(format!(
+                    "{what} row {row}, columns {start_col}..{} out of range for n = {n}",
+                    start_col.saturating_add(len)
+                ))
+            } else {
+                Ok(())
+            }
+        };
+        for (index, temp) in self.temps.iter().enumerate() {
+            temp.validate(n_slots, index)?;
+        }
+        for entry in &self.entries {
+            check_span(entry.i, entry.j, 1, "Hamiltonian entry")?;
+            entry.expression.validate(n_slots, self.temps.len())?;
+        }
+        for coefficient in &self.coefficients {
+            coefficient.expression.validate(n_slots, 0)?;
+            for term in &coefficient.basis_terms {
+                check_span(term.i, term.j, 1, "basis term")?;
+            }
+            for segment in &coefficient.basis_row_segments {
+                check_span(
+                    segment.row,
+                    segment.start_col,
+                    segment.values.len(),
+                    "basis row segment",
+                )?;
+            }
+        }
+        for row_plan in &self.row_plans {
+            for segment in &row_plan.segments {
+                let width = segment
+                    .values
+                    .first()
+                    .map(Vec::len)
+                    .ok_or_else(|| "row plan segment has no coefficients".to_string())?;
+                if segment.values.iter().any(|values| values.len() != width) {
+                    return Err("row plan segment value rows have different lengths".to_string());
+                }
+                if let Some(&bad) = segment
+                    .coeff_indices
+                    .iter()
+                    .find(|&&index| index >= self.coefficients.len())
+                {
+                    return Err(format!(
+                        "row plan references coefficient {bad} of {}",
+                        self.coefficients.len()
+                    ));
+                }
+                check_span(row_plan.row, segment.start_col, width, "row plan segment")?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn evaluate_decomposed_coefficients_into(
         &self,
         parameter_values: &[RuntimeValue],
@@ -887,26 +855,29 @@ pub fn parse_parameter_graph(obj: &Bound<'_, PyAny>) -> PyResult<ParameterGraph>
         });
     }
 
-    let pchip_tables = if let Some(tables_any) = dict.get_item("pchip_tables")? {
-        let tables_list: &Bound<'_, PyList> = tables_any.cast()?;
-        let mut tables = Vec::with_capacity(tables_list.len());
-        for table_obj in tables_list.iter() {
-            let table_dict: &Bound<'_, PyDict> = table_obj.cast()?;
-            let grid: Vec<f64> = required_item(table_dict, "grid")?.extract()?;
-            let values: Vec<f64> = required_item(table_dict, "values")?.extract()?;
-            tables
-                .push(PchipTable::from_grid_values(&grid, &values).map_err(PyValueError::new_err)?);
+    let n_slots = slot_names.len();
+    if base_values.len() > n_slots {
+        return Err(PyValueError::new_err(
+            "parameter graph has more base values than slots",
+        ));
+    }
+    for compound in &compounds {
+        if compound.slot >= n_slots || compound.slot < base_values.len() {
+            return Err(PyValueError::new_err(format!(
+                "compound parameter slot {} is not a compound slot",
+                compound.slot
+            )));
         }
-        tables
-    } else {
-        Vec::new()
-    };
+        compound
+            .expression
+            .validate(n_slots, 0)
+            .map_err(PyValueError::new_err)?;
+    }
 
     Ok(ParameterGraph {
         slot_names,
         base_values,
         compounds,
-        pchip_tables,
     })
 }
 
@@ -1293,6 +1264,9 @@ pub fn parse_plan_payload(payload: &Bound<'_, PyAny>) -> PyResult<PreparedLindbl
             "Hamiltonian dimension does not match n_states",
         ));
     }
+    hamiltonian_plan
+        .validate(parameter_graph.slot_names.len())
+        .map_err(PyValueError::new_err)?;
 
     let source_decay_array: PyReadonlyArray1<'_, f64> =
         required_item(dict, "source_decay_rates")?.extract()?;

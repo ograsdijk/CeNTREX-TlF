@@ -259,6 +259,13 @@ pub fn solve_dopri5<R: OdeRhs, O: OdeOutput>(
         rhs.eval(x + h * C7, &yn, &mut k[6 * dim..7 * dim])?;
         st.rhs_calls += 6;
         let err = error_norm(&y, &yn, h, &k, dim, control_dim, opt.abstol, opt.reltol);
+        if !err.is_finite() && k[..dim].iter().any(|value| !value.is_finite()) {
+            // The first stage is f(x, y) itself, so this is not a step that was
+            // too large: shrinking h would only end in "step size underflow".
+            return Err(format!(
+                "RHS returned a non-finite value at x={x}; check the parameters and initial state."
+            ));
+        }
         let (acc, hn) = ctrl.accept(err, h);
         if acc {
             st.accepted_steps += 1;

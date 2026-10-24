@@ -76,7 +76,10 @@ original static-only scope:
 - Precomputed dense `C dagger C` for reference dissipator mode.
 - IR helper extensions including `gaussian_1d`, `pchip_interp`, and
   `square_wave`.
-- Precomputed PCHIP tables and RHS-side PCHIP interval hints.
+- PCHIP evaluated per interval from neighbouring secants, matching SciPy's
+  `PchipInterpolator(extrapolate=True)` (end slopes and extrapolation). The
+  earlier precomputed tables were removed: they were matched by grid only,
+  so envelopes sharing a grid read the wrong values, and gave a 1.01x speedup.
 - RuntimeExpression `.evaluate()` and `.evaluate_array()` support.
 - RWA manifold rotation propagation via `_build_manifold_indices()`.
 - Instruction opcode discriminant safety with `#[repr(u8)]` and tests.

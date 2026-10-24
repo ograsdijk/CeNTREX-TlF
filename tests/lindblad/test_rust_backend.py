@@ -2632,12 +2632,13 @@ def test_hamiltonian_cache_is_not_shared_between_rhs_flavours() -> None:
     assert len(values) > 0
 
 
-def test_rust_split_rhs_and_jacobian_match_matrix_rhs() -> None:
+@pytest.mark.parametrize("mode", ["reference", "structured", "structured_upper"])
+def test_rust_split_rhs_and_jacobian_match_matrix_rhs(mode: str) -> None:
     system = _make_two_level_system()
     parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}
     prepared = prepare_lindblad_problem(system, parameters, backend="python")
     rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
-    evaluator = rust.create_lindblad_rhs_evaluator_py(rust_plan, "structured")
+    evaluator = rust.create_lindblad_rhs_evaluator_py(rust_plan, mode)
     rho = np.array([[0.7, 0.1 + 0.05j], [0.1 - 0.05j, 0.3]], dtype=np.complex128)
     flat = rho.reshape(-1)
     split = np.concatenate((flat.real, flat.imag))
@@ -2658,11 +2659,14 @@ def test_rust_split_rhs_and_jacobian_match_matrix_rhs() -> None:
         ),
         shape=(2 * flat.size, 2 * flat.size),
     )
-    basis = np.zeros(2 * flat.size, dtype=np.float64)
-    basis[1] = 1.0
-    jv = np.asarray(jac @ basis).reshape(-1)
-    expected = np.asarray(evaluator.rhs_split_py(basis, 0.2), dtype=np.float64)
-    np.testing.assert_allclose(jv, expected, atol=1e-11, rtol=1e-11)
+    # The split RHS is real-linear but not complex-linear, so the imaginary
+    # columns must be checked as well as the real ones.
+    for column in range(2 * flat.size):
+        basis = np.zeros(2 * flat.size, dtype=np.float64)
+        basis[column] = 1.0
+        jv = np.asarray(jac @ basis).reshape(-1)
+        expected = np.asarray(evaluator.rhs_split_py(basis, 0.2), dtype=np.float64)
+        np.testing.assert_allclose(jv, expected, atol=1e-11, rtol=1e-11, err_msg=f"column {column}")
 
 
 @pytest.mark.parametrize(
@@ -2873,3 +2877,144 @@ def test_tuple_helper_expression_matches_python_reference() -> None:
     )
 
     np.testing.assert_allclose(h_rust, h_python)
+
+
+def test_failed_blas_load_is_retried_with_corrected_path(tmp_path) -> None:
+    """A bad BLAS path must not poison every later call in the process."""
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}
+    prepared = prepare_lindblad_problem(system, parameters, backend="rust")
+    payload = prepared.to_payload()
+    good_config = payload.get("blas_config")
+    if good_config is None:
+        pytest.skip("no scipy-openblas zher2k available")
+    bad_payload = {
+        **payload,
+        "blas_config": {**good_config, "library_path": str(tmp_path / "missing_blas.dll")},
+    }
+    rho = np.array([[0.7, 0.1 + 0.05j], [0.1 - 0.05j, 0.3]], dtype=np.complex128).reshape(-1)
+
+    bad = rust.create_lindblad_rhs_evaluator_py(
+        rust.prepare_lindblad_problem_py(bad_payload), "structured"
+    )
+    with pytest.raises(Exception):
+        bad.rhs_matrix_py(rho, 0.0)
+
+    plan = rust.prepare_lindblad_problem_py(payload)
+    blas = rust.create_lindblad_rhs_evaluator_py(plan, "structured")
+    reference = rust.create_lindblad_rhs_evaluator_py(plan, "reference")
+    np.testing.assert_allclose(
+        np.asarray(blas.rhs_matrix_py(rho, 0.0)),
+        np.asarray(reference.rhs_matrix_py(rho, 0.0)),
+        atol=1e-12,
+    )
+
+
+def test_expanded_sparse_large_time_dependent_reuses_static_terms_correctly() -> None:
+    # Above PARTITIONED_PACKED_MAX_STATES (40) the expanded path caches the
+    # static term values and refreshes only the time-dependent ones. A reused
+    # evaluator must still match a reference at every time, and must pick up a
+    # changed static parameter after an override.
+    n_states = 45
+    system = _make_chain_system(n_states)
+    omega_symbol, delta_symbol = system.coupling_symbols
+    parameters = {
+        "omega0": 1.0,
+        "modulation_depth": 0.5,
+        "modulation_frequency": 1.9,
+        str(delta_symbol): 0.2,
+        str(omega_symbol): "omega0*phase_modulation(t, modulation_depth, modulation_frequency)",
+    }
+    prepared = prepare_lindblad_problem(
+        system, parameters, backend="python", hamiltonian_representation="decomposed"
+    )
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    expanded = rust.create_lindblad_rhs_evaluator_py(rust_plan, "expanded_sparse")
+    reference = rust.create_lindblad_rhs_evaluator_py(rust_plan, "reference")
+    packed = prepared.layout.pack(_chain_packed_rho(n_states))
+
+    for time in (0.0, 0.41, 1.3, 0.41):
+        np.testing.assert_allclose(
+            np.asarray(expanded.rhs_packed_py(packed, time)),
+            np.asarray(reference.rhs_packed_py(packed, time)),
+            atol=1e-12,
+            rtol=1e-9,
+        )
+
+    delta_slot = prepared.parameter_graph["slot_names"].index(str(delta_symbol))
+    for evaluator in (expanded, reference):
+        evaluator.set_scalar_parameter_overrides_py([delta_slot], np.array([-0.7 + 0j]))
+    np.testing.assert_allclose(
+        np.asarray(expanded.rhs_packed_py(packed, 0.9)),
+        np.asarray(reference.rhs_packed_py(packed, 0.9)),
+        atol=1e-12,
+        rtol=1e-9,
+    )
+
+
+def test_unsorted_saveat_is_rejected() -> None:
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}
+    with pytest.raises(ValueError, match="sorted"):
+        solve_lindblad(
+            system,
+            _ground_state_density(),
+            (0.0, 0.5),
+            parameters=parameters,
+            backend="rust",
+            saveat=[0.0, 0.3, 0.1, 0.5],
+        )
+    # The Rust entry point checks on its own too.
+    prepared = prepare_lindblad_problem(system, parameters, backend="python")
+    plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    packed = prepared.layout.pack(_ground_state_density())
+    for solver in ("dopri5", "fixed_rk4"):
+        with pytest.raises(ValueError, match="sorted"):
+            rust.solve_lindblad_ode_py(
+                plan, packed, 0.0, 0.5, 1e-9, 1e-7, 1e-3,
+                saveat=np.array([0.0, 0.3, 0.1, 0.5]), solver=solver,
+            )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"output": "photon_integral", "integral_weights": [(2, 1.0)]}, "integral_weights"),
+        ({"output": "photon_integral", "integral_weights": [(5, 1.0)]}, "integral_weights"),
+        ({"output": "selected", "output_indices": [(0, 2)]}, "output_indices"),
+    ],
+)
+def test_out_of_range_output_indices_raise(kwargs: dict, message: str) -> None:
+    # Index 2 equals n (the packed integral slot / a coherence in the packed
+    # layout) and used to be read silently instead of raising.
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 0.8, str(system.coupling_symbols[1]): 0.05}
+    prepared = prepare_lindblad_problem(system, parameters, backend="python")
+    plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    packed = prepared.layout.pack(_ground_state_density())
+    with pytest.raises(ValueError, match=message):
+        rust.solve_lindblad_ode_py(plan, packed, 0.0, 0.5, 1e-9, 1e-7, 1e-3, **kwargs)
+    with pytest.raises(ValueError, match=message):
+        rust.solve_lindblad_batch_ode_py(
+            plan, packed.reshape(1, -1), 0.0, 0.5, 1e-9, 1e-7, 1e-3, **kwargs
+        )
+
+
+def test_single_solve_without_saveat_matches_dense_saveat() -> None:
+    # saveat=None saves every accepted step into buffers that now start small
+    # and grow; the result must be unchanged.
+    system = _make_two_level_system()
+    parameters = {str(system.coupling_symbols[0]): 5.0, str(system.coupling_symbols[1]): 0.05}
+    prepared = prepare_lindblad_problem(system, parameters, backend="python")
+    plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    packed = prepared.layout.pack(_ground_state_density())
+    times, values, width, stats = rust.solve_lindblad_ode_py(
+        plan, packed, 0.0, 50.0, 1e-12, 1e-10, 1e-3, output="full"
+    )
+    times = np.asarray(times)
+    assert times.size > 1100  # more points than the initial buffer capacity
+    values = np.asarray(values).reshape(times.size, width)
+    _, again, _, _ = rust.solve_lindblad_ode_py(
+        plan, packed, 0.0, 50.0, 1e-12, 1e-10, 1e-3, saveat=times, output="full"
+    )
+    np.testing.assert_allclose(values, np.asarray(again).reshape(times.size, width), atol=1e-12)

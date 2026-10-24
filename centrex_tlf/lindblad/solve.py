@@ -96,6 +96,8 @@ def _normalize_saveat(
         values = np.arange(t_span[0], t_span[1] + 0.5 * step, step, dtype=np.float64)
     else:
         values = np.asarray(saveat, dtype=np.float64)
+        if np.any(np.diff(values) < 0):
+            raise ValueError("saveat must be sorted in increasing order")
     if not save_start and values.size > 0 and np.isclose(values[0], t_span[0]):
         values = values[1:]
     return values

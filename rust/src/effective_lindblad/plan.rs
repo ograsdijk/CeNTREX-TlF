@@ -62,9 +62,6 @@ pub struct EffectiveLindbladPlan {
     pub field_coordinate_slot: usize,
     pub rabi_rate_slot: usize,
     pub detuning_slot: usize,
-    pub is_time_dependent: bool,
-    pub constant_rabi: Option<f64>,
-    pub constant_detuning: Option<f64>,
     pub operator_interpolation: OperatorInterpolation,
 }
 
@@ -90,17 +87,21 @@ fn required_f64_array(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<Vec<f64>>
     Ok(arr.as_slice().map_err(PyValueError::new_err)?.to_vec())
 }
 
+fn to_index(value: i64, key: &str) -> PyResult<usize> {
+    usize::try_from(value)
+        .map_err(|_| PyValueError::new_err(format!("{key} contains negative value {value}")))
+}
+
 fn required_usize_array(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<Vec<usize>> {
     let arr: PyReadonlyArray1<i64> = dict
         .get_item(key)?
         .ok_or_else(|| PyValueError::new_err(format!("missing key: {key}")))?
         .extract()?;
-    Ok(arr
-        .as_slice()
+    arr.as_slice()
         .map_err(PyValueError::new_err)?
         .iter()
-        .map(|&v| v as usize)
-        .collect())
+        .map(|&v| to_index(v, key))
+        .collect()
 }
 
 fn required_usize(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<usize> {
@@ -108,15 +109,16 @@ fn required_usize(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<usize> {
         .get_item(key)?
         .ok_or_else(|| PyValueError::new_err(format!("missing key: {key}")))?
         .extract()?;
-    Ok(val as usize)
+    to_index(val, key)
 }
 
-fn required_bool(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<bool> {
-    let val: bool = dict
-        .get_item(key)?
-        .ok_or_else(|| PyValueError::new_err(format!("missing key: {key}")))?
-        .extract()?;
-    Ok(val)
+fn check_indices(indices: &[usize], bound: usize, what: &str) -> PyResult<()> {
+    match indices.iter().find(|&&index| index >= bound) {
+        Some(index) => Err(PyValueError::new_err(format!(
+            "{what} index {index} out of range for {bound}"
+        ))),
+        None => Ok(()),
+    }
 }
 
 pub fn parse_effective_lindblad_plan(
@@ -133,11 +135,23 @@ pub fn parse_effective_lindblad_plan(
     let field_coordinate_slot = required_usize(dict, "field_coordinate_slot")?;
     let rabi_rate_slot = required_usize(dict, "rabi_rate_slot")?;
     let detuning_slot = required_usize(dict, "detuning_slot")?;
-    let is_time_dependent = required_bool(dict, "is_time_dependent")?;
 
     if field_grid.len() != n_grid {
         return Err(PyValueError::new_err("field_grid length mismatch"));
     }
+    if n_grid < 2 || field_grid.windows(2).any(|pair| !(pair[1] > pair[0])) {
+        return Err(PyValueError::new_err(
+            "field_grid must have at least two strictly increasing points",
+        ));
+    }
+    check_indices(&excited_indices, n_states, "excited_indices")?;
+    check_indices(&ground_indices, n_states, "ground_indices")?;
+    check_indices(&sink_indices, n_states, "sink_indices")?;
+    check_indices(
+        &[field_coordinate_slot, rabi_rate_slot, detuning_slot],
+        parameter_graph.slot_names.len(),
+        "parameter slot",
+    )?;
 
     fn parse_sparse_operator(
         dict: &Bound<'_, PyDict>,
@@ -154,6 +168,31 @@ pub fn parse_effective_lindblad_plan(
         let pchip_coeffs = required_f64_array(sparse_dict, "pchip_coeffs")?;
         let grid = required_f64_array(sparse_dict, "grid")?;
         let nnz: usize = required_usize(sparse_dict, "nnz")?;
+        // The matvec indexes all of these without checks.
+        if row_ptrs.len() != dim + 1
+            || row_ptrs.first() != Some(&0)
+            || row_ptrs.last() != Some(&nnz)
+            || row_ptrs.windows(2).any(|pair| pair[1] < pair[0])
+        {
+            return Err(PyValueError::new_err(format!(
+                "{key}: row_ptrs must be {} non-decreasing offsets from 0 to nnz",
+                dim + 1
+            )));
+        }
+        if col_indices.len() != nnz {
+            return Err(PyValueError::new_err(format!(
+                "{key}: expected {nnz} col_indices, got {}",
+                col_indices.len()
+            )));
+        }
+        check_indices(&col_indices, dim, &format!("{key} column"))?;
+        let expected_coeffs = (n_grid - 1) * nnz * 4;
+        if pchip_coeffs.len() != expected_coeffs {
+            return Err(PyValueError::new_err(format!(
+                "{key}: expected {expected_coeffs} pchip_coeffs, got {}",
+                pchip_coeffs.len()
+            )));
+        }
         Ok(SparseOperator {
             row_ptrs,
             col_indices,
@@ -169,8 +208,6 @@ pub fn parse_effective_lindblad_plan(
     let sparse_opt = parse_sparse_operator(dict, "sparse_opt", real_dim, n_grid)?;
     let sparse_det = parse_sparse_operator(dict, "sparse_det", real_dim, n_grid)?;
 
-    let constant_rabi = detect_constant_slot(&parameter_graph, rabi_rate_slot);
-    let constant_detuning = detect_constant_slot(&parameter_graph, detuning_slot);
     let operator_interpolation = match dict
         .get_item("operator_interpolation")?
         .map(|v| v.extract::<String>())
@@ -196,82 +233,6 @@ pub fn parse_effective_lindblad_plan(
         field_coordinate_slot,
         rabi_rate_slot,
         detuning_slot,
-        is_time_dependent,
-        constant_rabi,
-        constant_detuning,
         operator_interpolation,
     })
-}
-
-fn detect_constant_slot(graph: &ParameterGraph, slot: usize) -> Option<f64> {
-    use crate::lindblad::eval::InstructionOp;
-    use num_complex::Complex64;
-    if slot < graph.base_values.len() {
-        if let crate::lindblad::eval::RuntimeValue::Scalar(c) = &graph.base_values[slot] {
-            return Some(c.re);
-        }
-    }
-    for compound in &graph.compounds {
-        if compound.slot == slot {
-            let uses_time = compound
-                .expression
-                .instructions
-                .iter()
-                .any(|instr| instr.op == InstructionOp::Time);
-            if uses_time {
-                return None;
-            }
-            let refs_time_dep_slot = compound.expression.instructions.iter().any(|instr| {
-                if instr.op == InstructionOp::Slot {
-                    for other in &graph.compounds {
-                        if other.slot == instr.index {
-                            return other
-                                .expression
-                                .instructions
-                                .iter()
-                                .any(|i| i.op == InstructionOp::Time);
-                        }
-                    }
-                }
-                false
-            });
-            if refs_time_dep_slot {
-                return None;
-            }
-            let mut eval_stack: Vec<crate::lindblad::eval::RuntimeValue> = Vec::new();
-            let mut scalar_stack: Vec<Complex64> = Vec::new();
-            let mut slots = graph.base_values.clone();
-            slots.resize(
-                graph.slot_names.len(),
-                crate::lindblad::eval::RuntimeValue::Scalar(Complex64::ZERO),
-            );
-            for c in &graph.compounds {
-                if c.slot == slot {
-                    break;
-                }
-                if let Ok(val) = crate::lindblad::eval::eval_expression_into(
-                    &c.expression,
-                    &slots,
-                    0.0,
-                    &[],
-                    &mut eval_stack,
-                ) {
-                    slots[c.slot] = val;
-                }
-            }
-            if let Ok(val) = crate::lindblad::eval::eval_expression_into(
-                &compound.expression,
-                &slots,
-                0.0,
-                &[],
-                &mut eval_stack,
-            ) {
-                if let Ok(scalar) = crate::lindblad::eval::scalar_value(val) {
-                    return Some(scalar.re);
-                }
-            }
-            return None;
-        }
-    }
-    None
 }

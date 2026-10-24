@@ -466,3 +466,63 @@ def test_representative_polymorphic_helpers_lower_to_rust(expression: Any) -> No
         dtype=np.complex128,
     )
     np.testing.assert_allclose(h_rust, h_python)
+
+
+def test_pchip_envelopes_sharing_a_grid_each_use_their_own_values() -> None:
+    """Two tabulated envelopes on one grid, plus a decoy tuple of the same length.
+
+    Rust used to pick a precomputed PCHIP table by matching the grid only, so
+    every envelope on a shared grid evaluated the first same-length tuple.
+    Both must match SciPy, including the edge intervals and extrapolation.
+    """
+    from scipy.interpolate import PchipInterpolator
+
+    system = _two_level_system()
+    omega_symbol, delta_symbol = system.coupling_symbols
+    grid_values = (0.0, 0.5, 1.7, 2.0, 3.5, 4.0)
+    decoy_values = (10.0, 11.0, 12.0, 13.0, 14.0, 15.0)
+    omega_values = (0.0, 1.0, 0.2, 0.25, 2.0, -1.0)
+    delta_values = (3.0, -1.0, 0.5, 0.4, -2.0, 1.0)
+
+    params = LindbladParameters()
+    grid = params.real("grid", grid_values)
+    params.real("decoy", decoy_values)
+    omega_env = params.real("omega_env", omega_values)
+    delta_env = params.real("delta_env", delta_values)
+    params.bind(
+        omega_symbol, parameters.pchip_tabulated(params.time(), grid, omega_env), finalize=False
+    )
+    params.bind(delta_symbol, parameters.pchip_tabulated(params.time(), grid, delta_env))
+
+    prepared = prepare_lindblad_problem(system, params, backend="python")
+    rust_plan = rust.prepare_lindblad_problem_py(prepared.to_payload())
+    omega_ref = PchipInterpolator(grid_values, omega_values, extrapolate=True)
+    delta_ref = PchipInterpolator(grid_values, delta_values, extrapolate=True)
+    for time in (-0.4, 0.1, 0.9, 1.85, 3.0, 3.9, 4.6):
+        h_rust = np.asarray(
+            rust.evaluate_lindblad_hamiltonian_py(rust_plan, time), dtype=np.complex128
+        )
+        assert h_rust[0, 1].real == pytest.approx(float(omega_ref(time)) / 2, rel=1e-12, abs=1e-14)
+        assert h_rust[1, 1].real == pytest.approx(-float(delta_ref(time)), rel=1e-12, abs=1e-14)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda e: e["instructions"].append({"op": 4}), "stack"),
+        (lambda e: e["instructions"].__setitem__(0, {"op": 2, "index": 999}), "slot"),
+    ],
+)
+def test_malformed_expression_payload_raises_value_error(mutate: Any, message: str) -> None:
+    system = _two_level_system()
+    omega_symbol, delta_symbol = system.coupling_symbols
+    params = LindbladParameters()
+    params.bind(omega_symbol, params.real("omega", 1.0) * params.time(), finalize=False)
+    params.bind(delta_symbol, 0.0)
+    prepared = prepare_lindblad_problem(system, params, backend="python")
+    payload = prepared.to_payload()
+    graph = payload["parameter_graph"]
+    expression = graph["compounds"][0]["expression"]
+    mutate(expression)
+    with pytest.raises(ValueError, match=message):
+        rust.prepare_lindblad_problem_py(payload)

@@ -287,6 +287,57 @@ fn gaussian_1d(x: f64, center: f64, sigma: f64) -> f64 {
     (-dx * dx / (2.0 * sigma * sigma)).exp()
 }
 
+fn pchip_sign(value: f64) -> f64 {
+    if value > 0.0 {
+        1.0
+    } else if value < 0.0 {
+        -1.0
+    } else {
+        0.0
+    }
+}
+
+/// Node derivative of SciPy's `PchipInterpolator` at grid point `k`, computed
+/// from the neighbouring secants only, so evaluating one interval needs no
+/// allocation. Mirrors `scipy.interpolate._cubic.PchipInterpolator._find_derivatives`,
+/// including the three-point shape-preserving end slopes (`_edge_case`) and the
+/// linear two-point case. Must stay in lockstep with the Python helper, which
+/// calls SciPy directly.
+fn pchip_node_slope(g: &[Complex64], v: &[Complex64], k: usize) -> f64 {
+    let n = g.len();
+    let h = |i: usize| g[i + 1].re - g[i].re;
+    let m = |i: usize| (v[i + 1].re - v[i].re) / h(i);
+    if n == 2 {
+        return m(0);
+    }
+    let edge = |h0: f64, h1: f64, m0: f64, m1: f64| {
+        let d = ((2.0 * h0 + h1) * m0 - h0 * m1) / (h0 + h1);
+        if pchip_sign(d) != pchip_sign(m0) {
+            0.0
+        } else if pchip_sign(m0) != pchip_sign(m1) && d.abs() > 3.0 * m0.abs() {
+            3.0 * m0
+        } else {
+            d
+        }
+    };
+    if k == 0 {
+        return edge(h(0), h(1), m(0), m(1));
+    }
+    if k == n - 1 {
+        return edge(h(n - 2), h(n - 3), m(n - 2), m(n - 3));
+    }
+    let (m_left, m_right) = (m(k - 1), m(k));
+    if pchip_sign(m_left) != pchip_sign(m_right) || m_left == 0.0 || m_right == 0.0 {
+        return 0.0;
+    }
+    let (h_left, h_right) = (h(k - 1), h(k));
+    let w1 = 2.0 * h_right + h_left;
+    let w2 = h_right + 2.0 * h_left;
+    (w1 + w2) / (w1 / m_left + w2 / m_right)
+}
+
+/// PCHIP interpolation matching `scipy.interpolate.PchipInterpolator(...,
+/// extrapolate=True)`: outside the grid the end cubic is extended.
 fn pchip_interp(x: f64, grid: &[Complex64], values: &[Complex64]) -> Result<f64, String> {
     if grid.len() != values.len() {
         return Err("pchip_interp grid and values must have the same length".to_string());
@@ -298,56 +349,24 @@ fn pchip_interp(x: f64, grid: &[Complex64], values: &[Complex64]) -> Result<f64,
         }
         return Err("pchip_interp grid must contain at least one point".to_string());
     }
-
-    let g: Vec<f64> = grid.iter().map(|c| c.re).collect();
-    let v: Vec<f64> = values.iter().map(|c| c.re).collect();
-
-    if x <= g[0] {
-        return Ok(v[0]);
+    if grid.windows(2).any(|pair| !(pair[1].re > pair[0].re)) {
+        return Err("pchip_interp grid must be strictly increasing".to_string());
     }
-    if x >= g[n - 1] {
-        return Ok(v[n - 1]);
-    }
-
-    let mut h = vec![0.0; n - 1];
-    let mut delta = vec![0.0; n - 1];
-    for i in 0..n - 1 {
-        h[i] = g[i + 1] - g[i];
-        if h[i] <= 0.0 {
-            return Err("pchip_interp grid must be strictly increasing".to_string());
-        }
-        delta[i] = (v[i + 1] - v[i]) / h[i];
-    }
-
-    let mut d = vec![0.0; n];
-    d[0] = delta[0];
-    d[n - 1] = delta[n - 2];
-    for i in 1..n - 1 {
-        if delta[i - 1].signum() != delta[i].signum() || delta[i - 1] == 0.0 || delta[i] == 0.0 {
-            d[i] = 0.0;
-        } else {
-            let w1 = 2.0 * h[i] + h[i - 1];
-            let w2 = h[i] + 2.0 * h[i - 1];
-            d[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i]);
-        }
-    }
-
-    let mut idx = 0;
-    for i in 0..n - 1 {
-        if x < g[i + 1] || i == n - 2 {
-            idx = i;
-            break;
-        }
-    }
-
-    let t = (x - g[idx]) / h[idx];
+    let idx = grid
+        .partition_point(|g| g.re <= x)
+        .saturating_sub(1)
+        .min(n - 2);
+    let h = grid[idx + 1].re - grid[idx].re;
+    let d_left = pchip_node_slope(grid, values, idx);
+    let d_right = pchip_node_slope(grid, values, idx + 1);
+    let t = (x - grid[idx].re) / h;
     let t2 = t * t;
     let t3 = t2 * t;
     let h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
     let h10 = t3 - 2.0 * t2 + t;
     let h01 = -2.0 * t3 + 3.0 * t2;
     let h11 = t3 - t2;
-    Ok(h00 * v[idx] + h10 * h[idx] * d[idx] + h01 * v[idx + 1] + h11 * h[idx] * d[idx + 1])
+    Ok(h00 * values[idx].re + h10 * h * d_left + h01 * values[idx + 1].re + h11 * h * d_right)
 }
 
 fn helper_args_to_tuple(arg: &RuntimeValue) -> Result<&[Complex64], String> {
@@ -486,6 +505,83 @@ pub struct CompiledExpression {
     pub instructions: Vec<Instruction>,
     pub scalar_only: bool,
     pub output_is_tuple: bool,
+}
+
+/// Accepted argument counts per helper id; must match `HelperFunctionId` and
+/// the Python helper signatures in `centrex_tlf/lindblad/helper_functions.py`.
+fn helper_arity_ok(function: i64, argc: usize) -> bool {
+    match function {
+        1 | 8 => argc == 7,
+        2 => argc == 8,
+        3 | 4 | 5 | 6 | 13 | 14 | 15 | 16 => argc == 3,
+        7 | 12 => argc == 4,
+        9 => argc == 2 || argc == 3,
+        10 | 11 => argc == 8 || argc == 9,
+        _ => false,
+    }
+}
+
+impl CompiledExpression {
+    /// Check stack discipline, builtin/helper arity and slot/temp indices so a
+    /// malformed payload raises when the plan is parsed instead of panicking
+    /// inside the RHS.
+    pub fn validate(&self, n_slots: usize, n_temps: usize) -> Result<(), String> {
+        let mut depth = 0usize;
+        for (position, ins) in self.instructions.iter().enumerate() {
+            let (pops, label) = match ins.op {
+                InstructionOp::Const | InstructionOp::Time => (0, "operand"),
+                InstructionOp::Slot => {
+                    if ins.index >= n_slots {
+                        return Err(format!(
+                            "instruction {position} reads slot {} but only {n_slots} slots exist",
+                            ins.index
+                        ));
+                    }
+                    (0, "SLOT")
+                }
+                InstructionOp::Temp => {
+                    if ins.index >= n_temps {
+                        return Err(format!(
+                            "instruction {position} reads temp {} but only {n_temps} temps are available",
+                            ins.index
+                        ));
+                    }
+                    (0, "TEMP")
+                }
+                InstructionOp::Neg | InstructionOp::Conj => (1, "unary op"),
+                InstructionOp::BuiltinFunc => {
+                    BuiltinFunctionId::from_i64(ins.function)?;
+                    if ins.argc != 1 {
+                        return Err(format!(
+                            "builtin function {} takes 1 argument, got {}",
+                            ins.function, ins.argc
+                        ));
+                    }
+                    (1, "BUILTIN_FUNC")
+                }
+                InstructionOp::HelperFunc => {
+                    if !helper_arity_ok(ins.function, ins.argc) {
+                        return Err(format!(
+                            "helper function {} does not accept {} arguments",
+                            ins.function, ins.argc
+                        ));
+                    }
+                    (ins.argc, "HELPER_FUNC")
+                }
+                _ => (2, "binary op"),
+            };
+            depth = depth
+                .checked_sub(pops)
+                .ok_or_else(|| format!("stack underflow on {label} at instruction {position}"))?;
+            depth += 1;
+        }
+        if depth != 1 {
+            return Err(format!(
+                "expression leaves {depth} values on the stack instead of 1"
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -733,18 +829,6 @@ pub fn eval_expression_into(
     temps: &[RuntimeValue],
     stack: &mut Vec<RuntimeValue>,
 ) -> Result<RuntimeValue, String> {
-    eval_expression_into_with_pchip(expression, slots, t, temps, stack, &[], &mut [])
-}
-
-pub fn eval_expression_into_with_pchip(
-    expression: &CompiledExpression,
-    slots: &[RuntimeValue],
-    t: f64,
-    temps: &[RuntimeValue],
-    stack: &mut Vec<RuntimeValue>,
-    pchip_tables: &[crate::lindblad::plan::PchipTable],
-    pchip_hints: &mut [usize],
-) -> Result<RuntimeValue, String> {
     stack.clear();
     for instruction in &expression.instructions {
         match instruction.op {
@@ -831,41 +915,7 @@ pub fn eval_expression_into_with_pchip(
                     .len()
                     .checked_sub(argc)
                     .ok_or_else(|| "stack underflow on HELPER_FUNC".to_string())?;
-                let result = if instruction.function == 16 && !pchip_tables.is_empty() {
-                    let x = as_real(&stack[start])?;
-                    let grid = helper_args_to_tuple(&stack[start + 1])?;
-                    let _values = helper_args_to_tuple(&stack[start + 2])?;
-                    let mut found = None;
-                    for (ti, table) in pchip_tables.iter().enumerate() {
-                        if table.grid.len() == grid.len() {
-                            let matches = table
-                                .grid
-                                .iter()
-                                .zip(grid.iter())
-                                .all(|(a, b)| (*a - b.re).abs() < 1e-15);
-                            if matches {
-                                found = Some(ti);
-                                break;
-                            }
-                        }
-                    }
-                    if let Some(ti) = found {
-                        let mut fallback_hint = 0usize;
-                        let hint = if ti < pchip_hints.len() {
-                            &mut pchip_hints[ti]
-                        } else {
-                            &mut fallback_hint
-                        };
-                        RuntimeValue::Scalar(Complex64::new(
-                            pchip_tables[ti].evaluate(x, hint),
-                            0.0,
-                        ))
-                    } else {
-                        apply_helper(instruction.function, &stack[start..])?
-                    }
-                } else {
-                    apply_helper(instruction.function, &stack[start..])?
-                };
+                let result = apply_helper(instruction.function, &stack[start..])?;
                 stack.truncate(start);
                 stack.push(result);
             }
@@ -1185,6 +1235,199 @@ mod tests {
             let op = InstructionOp::from_i64(i).unwrap();
             assert_eq!(op as u8, i as u8);
         }
+    }
+
+    fn complex_vec(values: &[f64]) -> Vec<Complex64> {
+        values.iter().map(|&v| Complex64::new(v, 0.0)).collect()
+    }
+
+    /// Reference values from `scipy.interpolate.PchipInterpolator(grid, values,
+    /// extrapolate=True)`, covering both extrapolated ends, the edge intervals
+    /// (three-point end slopes), sign changes and the two-point linear case.
+    #[test]
+    fn pchip_matches_scipy_including_edges_and_extrapolation() {
+        let cases: [(&[f64], &[f64], &[f64], &[f64]); 4] = [
+            (
+                &[0.0, 0.5, 1.7, 2.0, 3.5, 4.0],
+                &[0.0, 1.0, 0.2, 0.25, 2.0, -1.0],
+                &[-0.7, 0.0, 0.1, 0.5, 1.2, 1.9, 2.6, 3.9, 4.0, 4.6],
+                &[
+                    0.14164705882352768,
+                    0.0,
+                    0.2821960784313726,
+                    1.0,
+                    0.500925925925926,
+                    0.22592592592592592,
+                    0.92,
+                    -0.18933333333333224,
+                    -0.9999999999999996,
+                    -0.29900000000000304,
+                ],
+            ),
+            (
+                &[0.0, 1.0, 3.0],
+                &[1.0, 4.0, 2.0],
+                &[
+                    -0.5249999999999999,
+                    0.0,
+                    0.07500000000000001,
+                    0.375,
+                    0.8999999999999999,
+                    1.4249999999999998,
+                    1.9500000000000002,
+                    2.925,
+                    3.0,
+                    3.4499999999999997,
+                ],
+                &[
+                    -0.9419531249999994,
+                    1.0,
+                    1.326171875,
+                    2.583984375,
+                    3.955,
+                    3.98080859375,
+                    3.7856562499999997,
+                    2.2166679687500004,
+                    2.0,
+                    0.3234687500000013,
+                ],
+            ),
+            (
+                &[0.0, 1.0, 3.0],
+                &[0.0, 3.0, 3.5],
+                &[
+                    -0.5249999999999999,
+                    0.0,
+                    0.07500000000000001,
+                    0.375,
+                    0.8999999999999999,
+                    1.4249999999999998,
+                    1.9500000000000002,
+                    2.925,
+                    3.0,
+                    3.4499999999999997,
+                ],
+                &[
+                    -1.6473520784198108,
+                    0.0,
+                    0.29678294516509435,
+                    1.4781747494103774,
+                    2.9099858490566035,
+                    3.1924083505306604,
+                    3.364657724056604,
+                    3.49932241303066,
+                    3.5,
+                    3.4758576061320756,
+                ],
+            ),
+            (
+                &[-1.0, 2.0],
+                &[3.0, -1.0],
+                &[
+                    -1.525,
+                    -1.0,
+                    -0.925,
+                    -0.625,
+                    -0.10000000000000009,
+                    0.4249999999999998,
+                    0.9500000000000002,
+                    1.9249999999999998,
+                    2.0,
+                    2.4499999999999997,
+                ],
+                &[
+                    3.6999999999999997,
+                    3.0,
+                    2.9,
+                    2.5,
+                    1.8000000000000003,
+                    1.1000000000000003,
+                    0.3999999999999999,
+                    -0.8999999999999995,
+                    -1.0,
+                    -1.5999999999999996,
+                ],
+            ),
+        ];
+        for (grid, values, xs, expected) in cases {
+            let grid = complex_vec(grid);
+            let values = complex_vec(values);
+            for (&x, &want) in xs.iter().zip(expected) {
+                let got = pchip_interp(x, &grid, &values).unwrap();
+                assert!(
+                    (got - want).abs() <= 1e-12 * want.abs().max(1.0),
+                    "x = {x}: got {got}, scipy {want}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pchip_rejects_unsorted_grid() {
+        let grid = complex_vec(&[0.0, 2.0, 1.0]);
+        let values = complex_vec(&[0.0, 1.0, 2.0]);
+        assert!(pchip_interp(0.5, &grid, &values).is_err());
+    }
+
+    fn ins(op: InstructionOp, index: usize, argc: usize, function: i64) -> Instruction {
+        Instruction {
+            op,
+            index,
+            argc,
+            function,
+            value: Complex64::ZERO,
+        }
+    }
+
+    fn expr(instructions: Vec<Instruction>) -> CompiledExpression {
+        CompiledExpression {
+            instructions,
+            scalar_only: true,
+            output_is_tuple: false,
+        }
+    }
+
+    #[test]
+    fn validate_accepts_well_formed_expression() {
+        let e = expr(vec![
+            ins(InstructionOp::Time, 0, 0, 0),
+            ins(InstructionOp::Slot, 1, 0, 0),
+            ins(InstructionOp::Const, 0, 0, 0),
+            ins(InstructionOp::HelperFunc, 0, 3, 4),
+            ins(InstructionOp::BuiltinFunc, 0, 1, 1),
+        ]);
+        assert!(e.validate(2, 0).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_malformed_expressions() {
+        // slot out of range
+        assert!(expr(vec![ins(InstructionOp::Slot, 3, 0, 0)])
+            .validate(2, 0)
+            .is_err());
+        // temp out of range
+        assert!(expr(vec![ins(InstructionOp::Temp, 0, 0, 0)])
+            .validate(2, 0)
+            .is_err());
+        // builtin with no argument
+        assert!(expr(vec![ins(InstructionOp::BuiltinFunc, 0, 0, 1)])
+            .validate(2, 0)
+            .is_err());
+        // helper with the wrong arity (multipass_2d_rabi needs 8 or 9)
+        let mut short = vec![ins(InstructionOp::Const, 0, 0, 0); 7];
+        short.push(ins(InstructionOp::HelperFunc, 0, 7, 10));
+        assert!(expr(short).validate(2, 0).is_err());
+        // comparison on an empty stack
+        assert!(expr(vec![ins(InstructionOp::Gt, 0, 0, 0)])
+            .validate(2, 0)
+            .is_err());
+        // two values left on the stack
+        assert!(expr(vec![
+            ins(InstructionOp::Time, 0, 0, 0),
+            ins(InstructionOp::Time, 0, 0, 0)
+        ])
+        .validate(2, 0)
+        .is_err());
     }
 
     #[test]

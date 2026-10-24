@@ -156,14 +156,34 @@ fn parse_pol_vec(pol_vec: &Bound<'_, PyAny>) -> PyResult<[Complex64; 3]> {
     Ok([pol_list[0], pol_list[1], pol_list[2]])
 }
 
+fn checked_wigner(value: f64, args: &[f64]) -> PyResult<f64> {
+    if let Some(bad) = args.iter().find(|&&x| wigner::to_two_j(x).is_none()) {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "Wigner symbol arguments must be multiples of 1/2, got {bad}"
+        )));
+    }
+    if value.is_nan() {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "Wigner symbol {args:?} cannot be evaluated accurately in double precision"
+        )));
+    }
+    Ok(value)
+}
+
 #[pyfunction(signature = (j1, j2, j3, m1, m2, m3))]
-fn wigner_3j_py(j1: f64, j2: f64, j3: f64, m1: f64, m2: f64, m3: f64) -> f64 {
-    wigner_3j_f(j1, j2, j3, m1, m2, m3)
+fn wigner_3j_py(j1: f64, j2: f64, j3: f64, m1: f64, m2: f64, m3: f64) -> PyResult<f64> {
+    checked_wigner(
+        wigner_3j_f(j1, j2, j3, m1, m2, m3),
+        &[j1, j2, j3, m1, m2, m3],
+    )
 }
 
 #[pyfunction(signature = (j1, j2, j3, j4, j5, j6))]
-fn wigner_6j_py(j1: f64, j2: f64, j3: f64, j4: f64, j5: f64, j6: f64) -> f64 {
-    wigner_6j_f(j1, j2, j3, j4, j5, j6)
+fn wigner_6j_py(j1: f64, j2: f64, j3: f64, j4: f64, j5: f64, j6: f64) -> PyResult<f64> {
+    checked_wigner(
+        wigner_6j_f(j1, j2, j3, j4, j5, j6),
+        &[j1, j2, j3, j4, j5, j6],
+    )
 }
 
 #[pyfunction(signature = (states, constants))]
@@ -178,7 +198,7 @@ fn generate_uncoupled_hamiltonian_X_py<'py>(
         .collect::<PyResult<Vec<_>>>()?;
     let rust_constants = parse_x_constants(constants)?;
 
-    let result = generate_uncoupled_hamiltonian_x(&rust_states, &rust_constants);
+    let result = py.detach(|| generate_uncoupled_hamiltonian_x(&rust_states, &rust_constants));
     let n = rust_states.len();
 
     let to_numpy = |vec: Vec<Complex64>| -> PyResult<Bound<'py, PyArray2<Complex64>>> {
@@ -212,7 +232,7 @@ fn generate_coupled_hamiltonian_B_py<'py>(
         .collect::<PyResult<Vec<_>>>()?;
     let constants = parse_b_constants(constants)?;
 
-    let hamiltonian = generate_coupled_hamiltonian_b(&qn, &constants);
+    let hamiltonian = py.detach(|| generate_coupled_hamiltonian_b(&qn, &constants));
 
     let n = qn.len();
     let to_pyarray = |vec: Vec<Complex64>| -> PyResult<Bound<'py, PyArray2<Complex64>>> {
@@ -299,13 +319,15 @@ fn generate_transform_matrix_py<'py>(
     let n2 = b2.len();
     let b1_expansions: Vec<CachedBasisExpansion> = b1.iter().map(cached_basis_expansion).collect();
     let b2_expansions: Vec<CachedBasisExpansion> = b2.iter().map(cached_basis_expansion).collect();
-    let mut matrix = Vec::with_capacity(n1 * n2);
-
-    for s1 in &b1_expansions {
-        for s2 in &b2_expansions {
-            matrix.push(cached_inner_product(s1, s2));
+    let matrix = py.detach(|| {
+        let mut matrix = Vec::with_capacity(n1 * n2);
+        for s1 in &b1_expansions {
+            for s2 in &b2_expansions {
+                matrix.push(cached_inner_product(s1, s2));
+            }
         }
-    }
+        matrix
+    });
 
     let array = PyArray1::from_vec(py, matrix);
     array.reshape((n1, n2))
@@ -327,7 +349,19 @@ fn generate_coupling_matrix_py<'py>(
         .map(|s| parse_coupled_state(s))
         .collect::<PyResult<_>>()?;
 
-    let h = generate_coupling_matrix(&rust_qn, &ground_indices, &excited_indices, pol, reduced);
+    let n = rust_qn.len();
+    if let Some(&bad) = ground_indices
+        .iter()
+        .chain(excited_indices.iter())
+        .find(|&&index| index >= n)
+    {
+        return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
+            "state index {bad} out of range for {n} states"
+        )));
+    }
+    let h = py.detach(|| {
+        generate_coupling_matrix(&rust_qn, &ground_indices, &excited_indices, pol, reduced)
+    });
 
     let n = rust_qn.len();
     let array = PyArray1::from_vec(py, h);

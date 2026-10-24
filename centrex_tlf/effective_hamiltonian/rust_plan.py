@@ -339,6 +339,8 @@ def _normalize_saveat_effective(
         values = np.arange(t_span[0], t_span[1] + 0.5 * step, step, dtype=np.float64)
     else:
         values = np.asarray(saveat, dtype=np.float64)
+        if np.any(np.diff(values) < 0):
+            raise ValueError("saveat must be sorted in increasing order")
     if not save_start and values.size > 0 and np.isclose(values[0], t_span[0]):
         values = values[1:]
     return values
@@ -372,6 +374,9 @@ def _call_batch_rust(
         effective_saveat = np.array([t_span[1]], dtype=np.float64)
         effective_save_start = False
 
+    # Keyword arguments: the Rust signature also takes output_indices and
+    # integral_weights between `output` and `parameter_slot_indices`, so passing
+    # these positionally shifted every later argument.
     times, flat_values, width, time_count, solver_stats = solve_effective_lindblad_batch_py(
         plan,
         y0,
@@ -380,16 +385,16 @@ def _call_batch_rust(
         float(abstol),
         float(reltol),
         float(dt),
-        None if effective_saveat is None else np.asarray(effective_saveat, dtype=np.float64),
-        bool(effective_save_start),
-        int(maxiters),
-        solver,
-        output,
-        slot_indices if slot_indices else None,
-        parameter_batch,
-        trajectory_count,
-        bool(parallel),
-        threads,
+        saveat=None if effective_saveat is None else np.asarray(effective_saveat, dtype=np.float64),
+        save_start=bool(effective_save_start),
+        maxiters=int(maxiters),
+        solver=solver,
+        output=output,
+        parameter_slot_indices=slot_indices if slot_indices else None,
+        parameter_batch=parameter_batch,
+        trajectory_count=trajectory_count,
+        parallel=bool(parallel),
+        threads=threads,
     )
 
     times_array = np.asarray(times, dtype=np.float64)
