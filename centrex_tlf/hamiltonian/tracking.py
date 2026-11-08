@@ -423,6 +423,12 @@ class _ManifoldTracker:
         for tr in self.trackers:
             tr.ramp(E, self.B_z, n)
 
+    def energies_zero_field(self) -> np.ndarray:
+        out = np.empty(self.n_levels)
+        for tr, lv in zip(self.trackers, self.block_levels, strict=True):
+            out[lv] = tr.w0
+        return out
+
     def energies(self) -> np.ndarray:
         out = np.empty(self.n_levels)
         for tr, lv in zip(self.trackers, self.block_levels, strict=False):
