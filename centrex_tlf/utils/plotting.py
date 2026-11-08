@@ -11,21 +11,18 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.font_manager import FontProperties
 from matplotlib.ticker import FormatStrFormatter, MaxNLocator
-from scipy.linalg import eigh
-from scipy.optimize import linear_sum_assignment
 
-from centrex_tlf.hamiltonian import (
-    generate_coupled_hamiltonian_B,
-    generate_transform_matrix,
-    generate_uncoupled_hamiltonian_X,
+from centrex_tlf.hamiltonian.tracking import (
+    TrackedLevels,
+    _n_tracking_steps,  # noqa: F401  (re-exported for tests and callers)
+    field_matrices_B,
+    field_matrices_X,
+    track_levels,
 )
 from centrex_tlf.states import (
     ElectronicState,
     QuantumSelector,
-    generate_coupled_states_B,
-    generate_coupled_states_ground,
     generate_coupled_states_X,
-    generate_uncoupled_states_ground,
 )
 from centrex_tlf.transitions import OpticalTransition, OpticalTransitionType
 
@@ -1161,139 +1158,7 @@ def _coerce_transition(
     )
 
 
-# ---------------- Hamiltonians in the coupled basis ----------------
-def _qn_key(state: Any) -> tuple:
-    """Hashable label for a CoupledBasisState, robust to how it was generated."""
-    P = getattr(state, "P", None)
-    return (
-        state.electronic_state,
-        int(state.J),
-        float(state.F1),
-        int(state.F),
-        int(state.mF),
-        None if P is None else int(P),
-    )
-
-
-def _x_matrices(
-    Jmin: int, Jmax: int
-) -> tuple[list, np.ndarray, np.ndarray, np.ndarray]:
-    """X-state field-free, Stark and Zeeman matrices in the coupled basis."""
-    Js = list(range(int(Jmin), int(Jmax) + 1))
-    qn_uncoupled = list(generate_uncoupled_states_ground(Js=Js))
-    qn_coupled = list(generate_coupled_states_ground(Js=Js))
-    H = generate_uncoupled_hamiltonian_X(qn_uncoupled)
-    S = generate_transform_matrix(qn_uncoupled, qn_coupled)
-
-    def to_coupled(M: np.ndarray) -> np.ndarray:
-        return np.asarray(S.conj().T @ M @ S)
-
-    return qn_coupled, to_coupled(H.Hff), to_coupled(H.HSz), to_coupled(H.HZz)
-
-
-def _b_matrices(
-    Jmin: int, Jmax: int
-) -> tuple[list, np.ndarray, np.ndarray, np.ndarray]:
-    """B-state field-free, Stark and Zeeman matrices in the parity basis."""
-    selector = QuantumSelector(
-        J=np.arange(int(Jmin), int(Jmax) + 1),
-        F1=None,
-        F=None,
-        mF=None,
-        electronic=ElectronicState.B,
-        P=[-1, +1],
-        Ω=1,
-    )
-    qn = list(generate_coupled_states_B(selector))
-    H = generate_coupled_hamiltonian_B(qn)
-    H0 = H.Hrot + H.H_mhf_Tl + H.H_mhf_F + H.H_LD + H.H_cp1_Tl + H.H_c_Tl
-    return qn, np.asarray(H0), np.asarray(H.HSz), np.asarray(H.HZz)
-
-
-def _track_block(
-    H0: np.ndarray,
-    H_field: np.ndarray,
-    indices: Sequence[int],
-    n_steps: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Adiabatically follow one mF block from zero field to the full field.
-
-    `H_field` is the *total* field perturbation (E*HSz + B*HZz); it is ramped in
-    from zero over `n_steps` steps, matching eigenvectors to the previous step
-    with a Hungarian assignment on the overlap matrix.
-
-    Returns (w_zero_field, V_zero_field, w_field, V_field).
-    """
-    ix = np.asarray(indices, dtype=int)
-    H0b = H0[np.ix_(ix, ix)]
-    Hfb = H_field[np.ix_(ix, ix)]
-
-    w0, V0 = eigh(H0b)
-    w_prev, V_prev = w0.copy(), V0.copy()
-
-    for s in np.linspace(0.0, 1.0, int(n_steps) + 1)[1:]:
-        w, V = eigh(H0b + s * Hfb)
-
-        overlap = np.abs(V_prev.conj().T @ V) ** 2
-        rows, cols = linear_sum_assignment(-overlap)
-        order = np.empty(len(cols), dtype=int)
-        order[rows] = cols
-        w, V = w[order], V[:, order]
-
-        # continuous phase convention, so the overlaps below stay meaningful
-        phase = np.sum(V_prev.conj() * V, axis=0)
-        nonzero = np.abs(phase) > 0
-        phase[nonzero] /= np.abs(phase[nonzero])
-        phase[~nonzero] = 1.0
-        V = V * phase.conj()
-
-        w_prev, V_prev = w, V
-
-    return w0, V0, w_prev, V_prev
-
-
-def _assign_parents(
-    basis: Sequence[Any],
-    block: Sequence[int],
-    V0: np.ndarray,
-    parents: Sequence[Any],
-) -> dict[tuple, int]:
-    """Map each nominal zero-field parent onto a column of `V0`.
-
-    Uses a Hungarian assignment on |<parent|eigenvector>|^2 so that two parents
-    can never claim the same eigenvector.
-    """
-    index_of = {_qn_key(qn): i for i, qn in enumerate(basis)}
-    local = {g: i for i, g in enumerate(block)}
-
-    rows = []
-    for qn in parents:
-        key = _qn_key(qn)
-        if key not in index_of:
-            raise ValueError(f"basis state not found: {qn!r}")
-        rows.append(local[index_of[key]])
-
-    overlap = np.asarray([np.abs(V0[i, :]) ** 2 for i in rows])
-    r_idx, c_idx = linear_sum_assignment(-overlap)
-    return {
-        _qn_key(parents[int(r)]): int(c) for r, c in zip(r_idx, c_idx, strict=True)
-    }
-
-
-def _n_tracking_steps(
-    E: float, B: float, max_step_V_cm: float, max_step_G: float
-) -> int:
-    """Number of ramp steps needed to track both fields on from zero.
-
-    Both fields have to be stepped: sizing the ramp on `E` alone leaves a large
-    `B` (e.g. `E=0, B=500`) crossing its whole range in the floor of 8 steps,
-    which can hand a level the wrong zero-field parent with no warning.
-    """
-    steps_E = int(np.ceil(abs(float(E)) / max(float(max_step_V_cm), 1e-12)))
-    steps_B = int(np.ceil(abs(float(B)) / max(float(max_step_G), 1e-12)))
-    return max(steps_E, steps_B, 8 if B else 1, 1)
-
-
+# ---------------- level structure ----------------
 def _characterize(
     V0: np.ndarray, psi: np.ndarray, parent_columns: dict[Any, int]
 ) -> tuple[dict[Any, float], float]:
@@ -1309,7 +1174,12 @@ def _characterize(
     return character, max(0.0, 1.0 - selected)
 
 
-# ---------------- level structure ----------------
+def _block_columns(tracked: TrackedLevels, mF: int) -> tuple[Any, dict[int, int]]:
+    """The tracked block for `mF` and a map from level index to its column."""
+    blk = tracked.block(mF)
+    return blk, {int(level): k for k, level in enumerate(blk.level_indices)}
+
+
 def _calculate_ground(
     transition: OpticalTransition,
     E: float,
@@ -1319,10 +1189,6 @@ def _calculate_ground(
     max_step_G: float,
 ) -> tuple[list[DressedLevel], list[tuple[float, int]]]:
     J = int(transition.J_ground)
-    basis, H0, HSz, HZz = _x_matrices(max(0, J - j_padding), J + j_padding)
-    H_field = E * HSz + B * HZz
-    n_steps = _n_tracking_steps(E, B, max_step_V_cm, max_step_G)
-
     parents: list[Any] = sorted(
         generate_coupled_states_X(QuantumSelector(J=J)),
         key=lambda qn: (-float(qn.F1), -int(qn.F), int(qn.mF)),
@@ -1331,23 +1197,35 @@ def _calculate_ground(
         {(float(qn.F1), int(qn.F)) for qn in parents},
         key=lambda fam: (-fam[0], -fam[1]),
     )
+    mF_values = sorted({int(qn.mF) for qn in parents})
+    tracked = track_levels(
+        field_matrices_X(max(0, J - j_padding), J + j_padding),
+        [E],
+        B_z=B,
+        max_step_V_cm=max_step_V_cm,
+        max_step_G=max_step_G,
+        mF=mF_values,
+    )
+    w = tracked.energies_Hz[0]
 
     levels: list[DressedLevel] = []
-    for mF in sorted({int(qn.mF) for qn in parents}):
-        block = [i for i, qn in enumerate(basis) if int(qn.mF) == mF]
-        _, V0, w, V = _track_block(H0, H_field, block, n_steps)
-
+    for mF in mF_values:
+        blk, column_of = _block_columns(tracked, mF)
         nominal = [qn for qn in parents if int(qn.mF) == mF]
-        columns = _assign_parents(basis, block, V0, nominal)
 
         # families with |mF| > F simply have no level in this column
         plotted = {
-            (float(qn.F1), int(qn.F)): columns[_qn_key(qn)] for qn in nominal
+            (float(qn.F1), int(qn.F)): column_of[
+                tracked.index((J, float(qn.F1), int(qn.F), mF))
+            ]
+            for qn in nominal
         }
 
         for qn in nominal:
-            col = columns[_qn_key(qn)]
-            character, residual = _characterize(V0, V[:, col], plotted)
+            col = plotted[(float(qn.F1), int(qn.F))]
+            character, residual = _characterize(
+                blk.zero_field_vectors, blk.vectors[0][:, col], plotted
+            )
             levels.append(
                 DressedLevel(
                     electronic_state=ElectronicState.X,
@@ -1355,7 +1233,7 @@ def _calculate_ground(
                     F=int(qn.F),
                     mF=mF,
                     P=None,
-                    energy_MHz=float(w[col] / 1e6),
+                    energy_MHz=float(w[blk.level_indices[col]] / 1e6),
                     character={fam: character.get(fam, 0.0) for fam in families},
                     residual=residual,
                 )
@@ -1376,44 +1254,31 @@ def _calculate_excited(
     F1 = float(transition.F1_excited)
     F = int(transition.F_excited)
 
-    basis, H0, HSz, HZz = _b_matrices(max(1, J - j_padding), J + j_padding)
-    H_field = E * HSz + B * HZz
-    n_steps = _n_tracking_steps(E, B, max_step_V_cm, max_step_G)
-
-    parents: list[Any] = []
-    for P in (-1, +1):
-        parents += sorted(
-            generate_coupled_states_B(
-                QuantumSelector(
-                    J=J,
-                    F1=F1,
-                    F=F,
-                    P=P,
-                    Ω=1,
-                    electronic=ElectronicState.B,
-                )
-            ),
-            key=lambda qn: int(qn.mF),
-        )
+    mF_values = list(range(-F, F + 1))
+    tracked = track_levels(
+        field_matrices_B(max(1, J - j_padding), J + j_padding),
+        [E],
+        B_z=B,
+        max_step_V_cm=max_step_V_cm,
+        max_step_G=max_step_G,
+        mF=mF_values,
+    )
+    w = tracked.energies_Hz[0]
 
     levels: list[DressedLevel] = []
     parity_splitting: dict[int, float] = {}
 
-    for mF in range(-F, F + 1):
-        block = [i for i, qn in enumerate(basis) if int(qn.mF) == mF]
-        w0, V0, w, V = _track_block(H0, H_field, block, n_steps)
-
-        nominal = [qn for qn in parents if int(qn.mF) == mF]
-        columns = _assign_parents(basis, block, V0, nominal)
-        plotted = {
-            int(qn.P): columns[_qn_key(qn)] for qn in nominal if qn.P is not None
-        }
-
+    for mF in mF_values:
+        blk, column_of = _block_columns(tracked, mF)
+        plotted = {P: column_of[tracked.index((J, F1, F, mF, P))] for P in (-1, +1)}
+        w0 = blk.zero_field_energies
         parity_splitting[mF] = float(abs(w0[plotted[+1]] - w0[plotted[-1]]) / 1e6)
 
         for P in (-1, +1):
             col = plotted[P]
-            character, residual = _characterize(V0, V[:, col], plotted)
+            character, residual = _characterize(
+                blk.zero_field_vectors, blk.vectors[0][:, col], plotted
+            )
             levels.append(
                 DressedLevel(
                     electronic_state=ElectronicState.B,
@@ -1421,7 +1286,7 @@ def _calculate_excited(
                     F=F,
                     mF=mF,
                     P=P,
-                    energy_MHz=float(w[col] / 1e6),
+                    energy_MHz=float(w[blk.level_indices[col]] / 1e6),
                     character=character,
                     residual=residual,
                 )

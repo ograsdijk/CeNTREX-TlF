@@ -20,9 +20,10 @@ by `track_levels`. Multiply by `2 * np.pi` once if you need angular units.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -32,19 +33,19 @@ from scipy.optimize import linear_sum_assignment
 from centrex_tlf import states
 from centrex_tlf.states import ElectronicState, QuantumSelector
 
+from .basis_transformations import generate_transform_matrix
 from .generate_hamiltonian import (
     generate_coupled_hamiltonian_B,
     generate_uncoupled_hamiltonian_X,
 )
-from .basis_transformations import generate_transform_matrix
 
 __all__ = [
     "FieldMatrices",
     "LevelParent",
     "TrackedBlock",
     "TrackedLevels",
-    "field_matrices_X",
     "field_matrices_B",
+    "field_matrices_X",
     "track_levels",
 ]
 
@@ -202,9 +203,7 @@ def _parent_of(state: states.CoupledBasisState) -> LevelParent:
 # ---------------------------------------------------------------------------
 # tracking
 # ---------------------------------------------------------------------------
-def _n_tracking_steps(
-    E: float, B: float, max_step_V_cm: float, max_step_G: float
-) -> int:
+def _n_tracking_steps(E: float, B: float, max_step_V_cm: float, max_step_G: float) -> int:
     """Number of ramp steps needed to track both fields on from zero.
 
     Both fields have to be stepped: sizing the ramp on `E` alone leaves a large
@@ -389,7 +388,7 @@ class _ManifoldTracker:
             # zero-field label of each eigenvector: Hungarian on |<basis|eigvec>|^2
             rows, cols = linear_sum_assignment(-(np.abs(tr.V0) ** 2))
             labels: list[LevelParent | None] = [None] * ix.size
-            for r, c in zip(rows, cols):
+            for r, c in zip(rows, cols, strict=False):
                 labels[int(c)] = _parent_of(basis[int(ix[r])])
             self.block_mF.append(m)
             self.block_basis.append(ix)
@@ -426,13 +425,13 @@ class _ManifoldTracker:
 
     def energies(self) -> np.ndarray:
         out = np.empty(self.n_levels)
-        for tr, lv in zip(self.trackers, self.block_levels):
+        for tr, lv in zip(self.trackers, self.block_levels, strict=False):
             out[lv] = tr.w
         return out
 
     def purity(self) -> np.ndarray:
         out = np.empty(self.n_levels)
-        for tr, lv in zip(self.trackers, self.block_levels):
+        for tr, lv in zip(self.trackers, self.block_levels, strict=False):
             out[lv] = tr.purity
         return out
 
@@ -492,7 +491,7 @@ def track_levels(
     purity = np.empty((nE, tracker.n_levels))
     vectors = [
         np.empty((nE, ix.size, ix.size), dtype=tr.V0.dtype)
-        for ix, tr in zip(tracker.block_basis, tracker.trackers)
+        for ix, tr in zip(tracker.block_basis, tracker.trackers, strict=False)
     ]
 
     for i in order:
@@ -517,6 +516,7 @@ def track_levels(
             tracker.block_levels,
             tracker.trackers,
             vectors,
+            strict=False,
         )
     )
     index = {_normalize_key(p.key): i for i, p in enumerate(tracker.parents)}
