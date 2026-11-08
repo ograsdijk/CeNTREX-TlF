@@ -316,6 +316,34 @@ Capabilities that already exist — check here before building something new.
   same numbers without plotting, and every plotted number is on the returned
   `TransitionLevelStructure`. Cross-checked against an independent hand-rolled calculation in
   `tests/utils/test_level_diagram.py`.
+- **Tracked levels versus field.** `hamiltonian.field_matrices_X(Jmin, Jmax)` /
+  `field_matrices_B(Jmin, Jmax)` return the basis plus `H0`, `HSz` (per V/cm) and `HZz`
+  (per Gauss), **all in Hz** (B in the parity basis; cached in-process, read-only).
+  `hamiltonian.track_levels(matrices, E_values, B_z=0.0, max_step_V_cm=2.0)` follows every
+  mF block from zero field (Hungarian matching, continuous phases) and returns energies (Hz),
+  per-block eigenvectors, each level's zero-field `LevelParent` (`J, F1, F, mF`, plus `P` for
+  B) and its purity against the zero-field eigenstate. `B_z` is ramped on with the first
+  field and then held. `calculate_transition_level_structure` is built on it.
+- **Transition components on a field grid.**
+  `transitions.build_optical_field_grid(J_ground_max, E_max_V_cm)` tracks X (`J ≤ Jg+2`) and
+  B (`J ≤ Jg+3`, both parities) and stores, on an adaptive grid of fields, the frequency (Hz,
+  absolute UV) and dressed `|d_q|^2` of every component, labelled by `OpticalTransition` line
+  plus both parents and `q` (`mF' − mF = q` is exact with E along z). Nominally forbidden
+  pairs are kept whenever mixing makes them exceed `coupling_cutoff` (1e-6 of the strongest)
+  anywhere. The zero-field strength-weighted centroid of R(2) F1′=7/2 F′=3 is pinned to
+  `X_B_REFERENCE_FREQUENCY_HZ`, since X and B share no energy origin. Stored fields start at
+  25 V/cm and are bisected where PCHIP misses the exact midpoint by > 0.1 MHz or > 2% in
+  strength (floor 1% of the strongest); tracking always uses ≤ 2 V/cm steps.
+  `grid.flags` lists intervals with sharp purity or strength changes (avoided crossings).
+  Query with `grid.at(E)` (DataFrame), `grid.components(transition, E)` (both upper
+  parities; the allowed one has `upper.P == transition.P_excited`), and
+  `grid.strength(pol, E, ground_population=None)` = `w · |ε_q|² · |d_q|²` per component.
+  `grid.save(path)` / `TransitionFieldGrid.load(path, expected=...)` use `.npz` and refuse a
+  different package version or build parameters. Strengths are hints only (no populations,
+  dark states or saturation — that needs the OBE). Ground `J ≤ 8` over 0–300 V/cm: ~30 s
+  (25 s of it building B matrices), 44 stored fields, 23 498 components, 8.4 MB file.
+  The core `TransitionFieldGrid.build(lower, upper, {q: D_q}, ...)` is X→B agnostic (pass
+  the same `FieldMatrices` twice for X→X); there is no microwave builder yet.
 - **Multi-transition systems.** Lasers and microwaves together — rotational cooling drives
   `P(2)` plus `MicrowaveTransition(1, 2)` and `(2, 3)` in one OBE system.
 - **Polarization switching.** Pass two polarizations for one transition
@@ -424,6 +452,7 @@ Capabilities that already exist — check here before building something new.
 | Stark curves vs field | `examples/hamiltonian/plot_StarkShift_TlF_J2.py`, `plot_StarkShift_B.py` |
 | Detailed field-dependent level analysis | `examples/hamiltonian/j2_mf0_crossing_analysis.ipynb` |
 | A field-dressed X→B diagram for one transition | `utils.plotting.plot_transition_level_diagram` |
+| Line frequencies and couplings versus E field, for peak assignment | `examples/hamiltonian/optical_field_grid.py` |
 | Branching ratios | `examples/couplings/branching_ratios.ipynb` |
 | State preparation (SPA) | `examples/spa paper/state_prep_python_example.ipynb` |
 
