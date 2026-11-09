@@ -207,6 +207,29 @@ ax.grid(True)
 plt.show()
 ```
 
+## Transition components versus electric field
+
+`transitions.build_optical_field_grid` tracks the X and B levels adiabatically from zero
+field (`hamiltonian.track_levels`) and stores the frequency and dressed E1 coupling of every
+X→B component on an adaptive grid of electric fields (along z), interpolated with PCHIP:
+
+```python
+import numpy as np
+from centrex_tlf import transitions
+from centrex_tlf.couplings import polarization_X
+
+grid = transitions.build_optical_field_grid(J_ground_max=2, E_max_V_cm=300.0)
+table = grid.at(171.6)                     # pandas DataFrame, one row per component
+for c in grid.components(transitions.R2_F1_7o2_F3, 171.6):
+    print(c.lower, c.upper, c.q, c.frequency_Hz / 1e12, c.strength)
+weights = grid.strength(polarization_X, 171.6)   # |eps_q|^2 |d_q|^2 per component
+grid.save("r_lines.npz")                   # TransitionFieldGrid.load refuses stale files
+```
+
+Frequencies are absolute (Hz), with the zero-field R(2) F1'=7/2 F'=3 line at
+`constants.X_B_REFERENCE_FREQUENCY_HZ`. Strengths are hints for identifying lines; real
+intensities need the optical Bloch equations.
+
 # `couplings`
 Code for generating the CeNTREX TlF couplings. 
 Includes code for generating branching ratios, electric dipole coupling elements and coupling fields

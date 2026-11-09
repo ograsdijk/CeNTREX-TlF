@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+
+- `centrex_tlf.hamiltonian.tracking` (re-exported from `centrex_tlf.hamiltonian`):
+  `field_matrices_X` / `field_matrices_B` give a basis with its field-free, Stark and
+  Zeeman matrices in Hz, and `track_levels` follows every level adiabatically from zero
+  field per mF block, returning energies, eigenvectors, zero-field parents and purities.
+- `centrex_tlf.transitions.field_grid`: `TransitionFieldGrid`, an adaptive grid of
+  transition components versus electric field (frequency, dressed `|d_q|^2`, parents,
+  purities, avoided-crossing flags) with `at`, `components`, `strength`, `save` and `load`,
+  and `build_optical_field_grid` for X -> B lines with `OpticalTransition` labels and
+  absolute UV frequencies.
+
+### Changed
+
+- `utils.plotting.calculate_transition_level_structure` now runs on
+  `hamiltonian.track_levels`; its results are unchanged.
+
 ## 0.3.2
 
 ### Performance
