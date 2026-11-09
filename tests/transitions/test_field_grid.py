@@ -10,24 +10,27 @@ import json
 
 import numpy as np
 import pytest
+from scipy.interpolate import PchipInterpolator
 from scipy.linalg import eigvalsh
 
 from centrex_tlf import transitions
 from centrex_tlf.constants import X_B_REFERENCE_FREQUENCY_HZ
 from centrex_tlf.couplings import polarization_X, polarization_Z
 from centrex_tlf.hamiltonian import (
+    FieldMatrices,
+    LevelParent,
     field_matrices_B,
     field_matrices_X,
     generate_ED_ME_mixed_state,
     track_levels,
 )
-from centrex_tlf.states import CoupledState
+from centrex_tlf.states import CoupledState, ElectronicState
 from centrex_tlf.transitions import (
     TransitionFieldGrid,
     build_optical_field_grid,
     spherical_components,
 )
-from centrex_tlf.transitions.field_grid import _UNIT_POLARIZATION
+from centrex_tlf.transitions.field_grid import _UNIT_POLARIZATION, _select_stored_fields
 from centrex_tlf.utils.plotting import calculate_transition_level_structure
 
 E_MAX = 50.0
@@ -279,3 +282,147 @@ def test_core_is_generic_same_manifold_x_to_x():
     # J=0 -> J=1 near 2 B_rot ~ 13.3 GHz
     j01 = got[[lo.J == 0 for lo in lower]]
     assert np.all((j01 > 13.2e9) & (j01 < 13.5e9))
+
+
+# ---- code-review regression tests -------------------------------------------
+def test_refinement_checks_every_fine_point_not_only_midpoints():
+    """A feature between interval midpoints (fine index 6) must still be stored."""
+    n_fine, stride = 33, 8  # first-pass midpoints are at 4, 12, 20, 28
+    E_fine = np.linspace(0.0, 32.0, n_fine)
+    flat = np.zeros((n_fine, 1))
+    strengths = np.ones((n_fine, 1))
+    strengths[6] = 2.0
+    index = np.array([0])
+    stored, _ = _select_stored_fields(
+        E_fine,
+        flat,
+        flat,
+        strengths,
+        index,
+        index,
+        stride=stride,
+        frequency_tol_Hz=1e5,
+        strength_rtol=0.02,
+        strength_floor=1e-2,
+    )
+    assert 6 in stored
+    interp = PchipInterpolator(E_fine[stored], strengths[stored], axis=0)(E_fine)
+    relative_error = np.abs(interp - strengths) / np.maximum(strengths, 1e-2)
+    assert np.max(relative_error) <= 0.02
+
+
+def test_frequency_tolerance_holds_at_every_fine_field(grid):
+    fine = np.linspace(0.0, E_MAX, int(E_MAX / grid.parameters["min_spacing_V_cm"]) + 1)
+    lower = track_levels(field_matrices_X(0, 4), fine)
+    upper = track_levels(field_matrices_B(1, 5), fine)
+    el = lower.energies_Hz[:, [lower.index(p) for p in grid.lower_parents]]
+    eu = upper.energies_Hz[:, [upper.index(p) for p in grid.upper_parents]]
+    exact = eu[:, grid.component_upper] - el[:, grid.component_lower]
+    x, cl, cu = grid.E_fields, grid.component_lower, grid.component_upper
+    got = (
+        PchipInterpolator(x, grid.upper_energies_Hz, axis=0)(fine)[:, cu]
+        - PchipInterpolator(x, grid.lower_energies_Hz, axis=0)(fine)[:, cl]
+    )
+    assert np.max(np.abs(got - exact)) <= FREQ_TOL_HZ
+
+
+@pytest.fixture(scope="module")
+def x_to_x():
+    X = field_matrices_X(0, 1)
+    return X, {0: X.HSz / np.max(np.abs(X.HSz))}
+
+
+def test_default_labels_survive_save_load(x_to_x, tmp_path):
+    X, operators = x_to_x
+    g = TransitionFieldGrid.build(
+        X, X, operators, E_max_V_cm=10.0, pair_filter=lambda lo, up, q: up.J == lo.J + 1
+    )
+    loaded = TransitionFieldGrid.load(g.save(tmp_path / "x.npz"))
+    assert loaded.labels == g.labels
+    assert len(loaded.components(g.labels[0], 5.0)) == len(g.components(g.labels[0], 5.0)) > 0
+
+
+def test_custom_labels_match_by_name_after_load_and_fail_loudly(x_to_x, tmp_path):
+    X, operators = x_to_x
+
+    def label(lo, up):
+        return f"{lo.J}->{up.J}"
+
+    g = TransitionFieldGrid.build(
+        X,
+        X,
+        operators,
+        E_max_V_cm=10.0,
+        pair_filter=lambda lo, up, q: up.J == lo.J + 1,
+        pair_label=label,
+    )
+    loaded = TransitionFieldGrid.load(g.save(tmp_path / "custom.npz"))
+    assert len(loaded.components("0->1", 5.0)) == len(g.components("0->1", 5.0)) > 0
+    with pytest.raises(LookupError):
+        loaded.components("missing", 5.0)
+    assert g.components("missing", 5.0) == []
+
+
+def test_parity_allowed_separates_the_two_upper_parities(grid):
+    line = transitions.P2_F1_3o2_F1
+    table = grid.at(40.0)
+    rows = table[table["label"] == line.name]
+    assert set(rows["parity_allowed"]) == {True, False}
+    assert (rows["parity_allowed"] == (rows["P'"] == line.P_excited)).all()
+    allowed = grid.components(line, 40.0, parity_allowed=True)
+    partner = grid.components(line, 40.0, parity_allowed=False)
+    assert allowed and partner
+    assert {c.upper.P for c in allowed} == {line.P_excited}
+    assert {c.upper.P for c in partner} == {-line.P_excited}
+    assert all(c.parity_allowed for c in allowed)
+    assert len(allowed) + len(partner) == len(grid.components(line, 40.0))
+
+
+def test_load_refuses_changed_physics_even_with_unknown_version(grid, tmp_path):
+    path = grid.save(tmp_path / "grid.npz")
+    assert TransitionFieldGrid.load(path).n_components == grid.n_components
+    with np.load(path) as data:
+        arrays = {k: data[k] for k in data.files}
+    arrays["physics_fingerprint"] = arrays["physics_fingerprint"] * (1 + 1e-6)
+    changed = tmp_path / "changed.npz"
+    np.savez_compressed(changed, **arrays)
+    with pytest.raises(ValueError, match="rebuild"):
+        TransitionFieldGrid.load(changed)
+
+
+def test_low_J_grid_uses_the_same_reference_origin(grid):
+    low = build_optical_field_grid(0, E_MAX)
+    assert max(p.J for p in low.lower_parents) == 0
+    assert low.frequency_origin_Hz == pytest.approx(grid.frequency_origin_Hz, abs=1e-3)
+    line = transitions.OpticalTransition(transitions.OpticalTransitionType.R, 0, 1.5, 1)
+    f_low = min(c.frequency_Hz for c in low.components(line, 0.0, parity_allowed=True))
+    f_ref = min(c.frequency_Hz for c in grid.components(line, 0.0, parity_allowed=True))
+    assert f_low == pytest.approx(f_ref, abs=1e6)
+
+
+def test_level_parent_has_no_mixed_ordering_and_keeps_states_distinct():
+    x = LevelParent(ElectronicState.X, 1, 1.5, 1, 0)
+    b = LevelParent(ElectronicState.B, 1, 1.5, 1, 0, -1)
+    assert x != b
+    assert x.parity == -1 and b.parity == -1
+    with pytest.raises(TypeError):
+        x < b  # noqa: B015
+    assert x != LevelParent(ElectronicState.B, 1, 1.5, 1, 0)
+
+
+def test_tracking_keeps_complex_eigenvectors_with_real_h0():
+    X = field_matrices_X(0, 1)
+    mF0 = [i for i, state in enumerate(X.basis) if int(state.mF) == 0]
+    i, j = mF0[0], mF0[1]
+    HSz = X.HSz.astype(np.complex128)
+    HSz[i, j] += 1j * 1e6
+    HSz[j, i] -= 1j * 1e6
+    complex_matrices = FieldMatrices(X.electronic_state, X.basis, X.H0, HSz, X.HZz, X.Jmin, X.Jmax)
+    tracked = track_levels(complex_matrices, [20.0], mF=[0])
+    vectors = tracked.block(0).vectors[0]
+    assert np.iscomplexobj(vectors) and np.any(np.abs(vectors.imag) > 1e-6)
+    H = (X.H0 + 20.0 * HSz)[np.ix_(mF0, mF0)]
+    residual = H @ vectors - vectors @ np.diag(
+        tracked.energies_Hz[0, tracked.block(0).level_indices]
+    )
+    assert np.max(np.abs(residual)) < 1e-2

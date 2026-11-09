@@ -156,8 +156,8 @@ Each of these produces plausible-looking but wrong output rather than an error.
   40005.98 MHz in `examples/hamiltonian/j2_mf0_crossing_report.md`.
   `generate_uncoupled_hamiltonian_X_function` / `generate_coupled_hamiltonian_B_function`
   multiply by 2π, so `H(E, B)` — and `H_int`, `H_symbolic`, detunings, Rabi rates and `Γ`
-  downstream of it — are in **rad/s**. `utils.plotting._x_matrices` / `_b_matrices` build
-  from the attributes and correspondingly report `energy_MHz = w / 1e6`.
+  downstream of it — are in **rad/s**. `hamiltonian.tracking.field_matrices_X` / `field_matrices_B`
+  build from the attributes and stay in Hz, so level energies report `energy_MHz = w / 1e6`.
   You only meet the attributes when you need the Stark and Zeeman terms *separately*, which
   the function does not expose — adiabatic field tracking, per-`mF`-block diagonalization,
   anything that ramps `E` by hand. Reading them as rad/s divides every line spacing by 2π,
@@ -332,16 +332,18 @@ Capabilities that already exist — check here before building something new.
   pairs are kept whenever mixing makes them exceed `coupling_cutoff` (1e-6 of the strongest)
   anywhere. The zero-field strength-weighted centroid of R(2) F1′=7/2 F′=3 is pinned to
   `X_B_REFERENCE_FREQUENCY_HZ`, since X and B share no energy origin. Stored fields start at
-  25 V/cm and are bisected where PCHIP misses the exact midpoint by > 0.1 MHz or > 2% in
-  strength (floor 1% of the strongest); tracking always uses ≤ 2 V/cm steps.
+  25 V/cm; PCHIP is checked at every 1.5625 V/cm fine point, and the worst point of an
+  interval is added while any misses by > 0.1 MHz or > 2% in strength (floor 1% of the
+  strongest). Tracking always uses ≤ 2 V/cm steps.
   `grid.flags` lists intervals with sharp purity or strength changes (avoided crossings).
-  Query with `grid.at(E)` (DataFrame), `grid.components(transition, E)` (both upper
-  parities; the allowed one has `upper.P == transition.P_excited`), and
-  `grid.strength(pol, E, ground_population=None)` = `w · |ε_q|² · |d_q|²` per component.
+  Query with `grid.at(E)` (DataFrame), `grid.components(transition, E, parity_allowed=None)`,
+  and `grid.strength(pol, E, ground_population=None)` = `w · |ε_q|² · |d_q|²` per component.
+  A line label covers both upper parities at different frequencies; separate them with the
+  `parity_allowed` column or argument before summing a peak.
   `grid.save(path)` / `TransitionFieldGrid.load(path, expected=...)` use `.npz` and refuse a
-  different package version or build parameters. Strengths are hints only (no populations,
+  different package version, reference Hamiltonians/dipoles or build parameters. Strengths are hints only (no populations,
   dark states or saturation — that needs the OBE). Ground `J ≤ 8` over 0–300 V/cm: ~30 s
-  (25 s of it building B matrices), 44 stored fields, 23 498 components, 8.4 MB file.
+  (25 s of it building B matrices), 51 stored fields, 23 498 components, 9.7 MB file.
   The core `TransitionFieldGrid.build(lower, upper, {q: D_q}, ...)` is X→B agnostic (pass
   the same `FieldMatrices` twice for X→X); there is no microwave builder yet.
 - **Multi-transition systems.** Lasers and microwaves together — rotational cooling drives

@@ -154,19 +154,24 @@ def field_matrices_B(Jmin: int, Jmax: int) -> FieldMatrices:
 # ---------------------------------------------------------------------------
 # labels
 # ---------------------------------------------------------------------------
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True)
 class LevelParent:
     """Zero-field parent of a tracked level.
 
     `P` is the parity of a B parent and None for X, where parity is `(-1)**J`.
     """
 
-    electronic_state: ElectronicState = field(compare=False)
+    electronic_state: ElectronicState
     J: int
     F1: float
     F: int
     mF: int
     P: int | None = None
+
+    @property
+    def parity(self) -> int:
+        """Parity of the parent: `P` for B, `(-1)**J` for X."""
+        return (-1) ** self.J if self.P is None else self.P
 
     @property
     def key(self) -> tuple:
@@ -220,6 +225,7 @@ class _BlockTracker:
 
     def __init__(self, H0: np.ndarray, HS: np.ndarray, HZ: np.ndarray) -> None:
         self.H0, self.HS, self.HZ = H0, HS, HZ
+        self.dtype = np.result_type(H0, HS, HZ)
         self.w0, self.V0 = eigh(H0)
         self.w, self.V = self.w0.copy(), self.V0.copy()
         self.E = 0.0
@@ -496,7 +502,7 @@ def track_levels(
     energies = np.empty((nE, tracker.n_levels))
     purity = np.empty((nE, tracker.n_levels))
     vectors = [
-        np.empty((nE, ix.size, ix.size), dtype=tr.V0.dtype)
+        np.empty((nE, ix.size, ix.size), dtype=tr.dtype)
         for ix, tr in zip(tracker.block_basis, tracker.trackers, strict=False)
     ]
 

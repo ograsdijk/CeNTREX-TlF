@@ -7,7 +7,7 @@ light. Parity-forbidden components (upper parent parity equal to the ground
 parity) are drawn dashed: they are driven only through Stark mixing.
 
 For ground J <= 8 (X to J=10, B to J=11) the same call takes about 30 s, most
-of it building the B-state matrices, and the saved file is about 8 MB.
+of it building the B-state matrices, and the saved file is about 10 MB.
 """
 
 import matplotlib.pyplot as plt
@@ -40,7 +40,7 @@ rows = [grid.at(E_) for E_ in fields]
 mask = (rows[0]["label"] == line.name).to_numpy()
 freqs = np.array([r["frequency_Hz"].to_numpy()[mask] for r in rows])
 weights = np.array([grid.strength(polarization_X, E_)[mask] for E_ in fields])
-forbidden = (rows[0]["P'"].to_numpy()[mask] != line.P_excited)
+forbidden = ~rows[0]["parity_allowed"].to_numpy()[mask]
 
 f0 = freqs[0][~forbidden].mean()
 fig, ax = plt.subplots(figsize=(8, 6))

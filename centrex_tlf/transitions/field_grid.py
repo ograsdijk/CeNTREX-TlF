@@ -58,7 +58,7 @@ __all__ = [
     "spherical_components",
 ]
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 Q_VALUES = (-1, 0, 1)
 
 # Cartesian polarization vectors that give a unit spherical component for q in
@@ -113,7 +113,8 @@ class CrossingFlag:
     * ``"strength"``: some component's strength changes fast between
       consecutive fine points,
     * ``"min_spacing"``: refinement reached the finest spacing and the last
-      midpoint check there still failed.
+      interpolation check there still failed, so every fine point in the
+      interval is stored.
     """
 
     E_low: float
@@ -135,6 +136,7 @@ class TransitionComponent:
     strength: float
     lower_purity: float
     upper_purity: float
+    parity_allowed: bool
 
 
 @dataclass(frozen=True)
@@ -192,6 +194,8 @@ class TransitionFieldGrid:
     flags: tuple[CrossingFlag, ...] = ()
     parameters: dict[str, Any] = field(default_factory=dict)
     package_version: str = field(default_factory=_package_version)
+    label_scheme: str | None = None
+    labels_are_names: bool = False
     _interp: dict[str, PchipInterpolator] = field(default_factory=dict, repr=False)
 
     # ------------------------------------------------------------------ build
@@ -242,11 +246,15 @@ class TransitionFieldGrid:
             itself.
         pair_label
             `pair_label(lower_parent, upper_parent) -> label`. Defaults to the
-            tuple of the two parents.
+            tuple of the two parents' `key`s. Default and optical labels are
+            restored by `load`; any other labels reload as their names (see
+            `components`).
         frequency_tol_Hz, strength_rtol, strength_floor
-            Refinement tolerances. A midpoint fails if a frequency is off by
-            more than `frequency_tol_Hz`, or a strength by more than
-            `strength_rtol * max(strength, strength_floor * global_max)`.
+            Refinement tolerances, checked at every fine point that is not
+            stored. A point fails if a frequency is off by more than
+            `frequency_tol_Hz`, or a strength by more than
+            `strength_rtol * max(strength, strength_floor * global_max)`; the
+            worst failing point of an interval is then stored.
         coupling_cutoff
             Keep a pair if its `|d_q|^2` exceeds `coupling_cutoff * global_max`
             at any fine field.
@@ -276,77 +284,15 @@ class TransitionFieldGrid:
         tu = tl if same else _ManifoldTracker(upper, B_z=B_z, max_step_V_cm=max_step_V_cm)
         if pair_label is None:
             pair_label = _default_label
+        label_scheme = next((k for k, f in _LABELLERS.items() if f is pair_label), None)
 
-        # ---- candidate pairs, grouped by (q, lower block, upper block)
-        groups = []  # (q, bl, bu, D_sub, rows, cols, pair_ids)
-        pairs_l: list[int] = []
-        pairs_u: list[int] = []
-        pairs_q: list[int] = []
-        for q in Q_VALUES:
-            D = operators.get(q)
-            if D is None:
-                continue
-            D = np.asarray(D)
-            if D.shape != (len(upper.basis), len(lower.basis)):
-                raise ValueError(f"operator q={q} has shape {D.shape}")
-            for bl, m_l in enumerate(tl.block_mF):
-                if (m_l + q) not in tu.block_mF:
-                    continue
-                bu = tu.block_mF.index(m_l + q)
-                D_sub = D[np.ix_(tu.block_basis[bu], tl.block_basis[bl])]
-                if not np.any(D_sub):
-                    continue
-                rows, cols, ids = [], [], []
-                for c, lv_l in enumerate(tl.block_levels[bl]):
-                    par_l = tl.parents[lv_l]
-                    for r, lv_u in enumerate(tu.block_levels[bu]):
-                        if same and lv_u == lv_l:
-                            continue
-                        par_u = tu.parents[lv_u]
-                        if pair_filter is not None and not pair_filter(par_l, par_u, q):
-                            continue
-                        rows.append(r)
-                        cols.append(c)
-                        ids.append(len(pairs_q))
-                        pairs_l.append(int(lv_l))
-                        pairs_u.append(int(lv_u))
-                        pairs_q.append(q)
-                if ids:
-                    groups.append(
-                        (bl, bu, D_sub, np.asarray(rows), np.asarray(cols), np.asarray(ids))
-                    )
-        n_pairs = len(pairs_q)
-        if n_pairs == 0:
-            raise ValueError("no candidate pairs; check operators and pair_filter")
-        pl = np.asarray(pairs_l)
-        pu = np.asarray(pairs_u)
-        pq = np.asarray(pairs_q)
-
-        def dressed_strengths(Vl: list[np.ndarray], Vu: list[np.ndarray]) -> np.ndarray:
-            out = np.empty(n_pairs)
-            for bl, bu, D_sub, rows, cols, ids in groups:
-                d = Vu[bu].conj().T @ D_sub @ Vl[bl]
-                out[ids] = np.abs(d[rows, cols]) ** 2
-            return out
-
-        # ---- zero field (before any ramp) for the frequency origin
-        zf_l = tl.energies_zero_field()
-        zf_u = tu.energies_zero_field()
-        s0 = dressed_strengths([t.V0 for t in tl.trackers], [t.V0 for t in tu.trackers])
+        # ---- candidate pairs and the frequency origin (from zero field, before any ramp)
+        groups, pl, pu, pq = _candidate_pairs(tl, tu, operators, pair_filter)
+        n_pairs = pq.size
         if callable(frequency_origin_Hz):
-            zmask = s0 > 0
-            zf = ZeroFieldComponents(
-                lower=tuple(tl.parents[i] for i in pl[zmask]),
-                upper=tuple(tu.parents[i] for i in pu[zmask]),
-                q=pq[zmask],
-                labels=tuple(
-                    pair_label(tl.parents[i], tu.parents[j])
-                    for i, j in zip(pl[zmask], pu[zmask], strict=True)
-                ),
-                energy_difference_Hz=(zf_u[pu] - zf_l[pl])[zmask],
-                strength=s0[zmask],
+            origin = float(
+                frequency_origin_Hz(_zero_field_components(tl, tu, groups, pl, pu, pq, pair_label))
             )
-            origin = float(frequency_origin_Hz(zf))
         else:
             origin = float(frequency_origin_Hz)
 
@@ -363,7 +309,9 @@ class TransitionFieldGrid:
                 tu.advance(E)
             e_l[i], p_l[i] = tl.energies(), tl.purity()
             e_u[i], p_u[i] = tu.energies(), tu.purity()
-            s_fine[i] = dressed_strengths([t.V for t in tl.trackers], [t.V for t in tu.trackers])
+            s_fine[i] = _dressed_strengths(
+                groups, n_pairs, [t.V for t in tl.trackers], [t.V for t in tu.trackers]
+            )
 
         # ---- keep pairs above the cutoff anywhere
         global_max = float(s_fine.max())
@@ -376,40 +324,21 @@ class TransitionFieldGrid:
         cu = np.searchsorted(used_u, pu)
         e_l, p_l = e_l[:, used_l], p_l[:, used_l]
         e_u, p_u = e_u[:, used_u], p_u[:, used_u]
-        freq_fine = e_u[:, cu] - e_l[:, cl]
 
         # ---- adaptive selection of stored fields
-        stride = 2**levels
-        stored = set(range(0, n_fine, stride))
         floor = strength_floor * global_max
-        failed_at_min: set[tuple[int, int]] = set()
-        while True:
-            idx = np.asarray(sorted(stored))
-            x = E_fine[idx]
-            if idx.size < 2:
-                break
-            interp_l = PchipInterpolator(x, e_l[idx], axis=0)
-            interp_u = PchipInterpolator(x, e_u[idx], axis=0)
-            interp_s = PchipInterpolator(x, s_fine[idx], axis=0)
-            a, b = idx[:-1], idx[1:]
-            check = (b - a) >= 2
-            mids = (a[check] + b[check]) // 2
-            if mids.size == 0:
-                break
-            Em = E_fine[mids]
-            f_int = interp_u(Em)[:, cu] - interp_l(Em)[:, cl]
-            f_err = np.abs(f_int - freq_fine[mids]).max(axis=1)
-            s_ex = s_fine[mids]
-            s_err = np.abs(interp_s(Em) - s_ex) / np.maximum(s_ex, floor)
-            bad = (f_err > frequency_tol_Hz) | (s_err.max(axis=1) > strength_rtol)
-            if not np.any(bad):
-                break
-            for lo, hi, m in zip(a[check][bad], b[check][bad], mids[bad], strict=True):
-                stored.add(int(m))
-                if hi - lo == 2:
-                    failed_at_min.add((int(lo), int(hi)))
-
-        idx = np.asarray(sorted(stored))
+        idx, failed_at_min = _select_stored_fields(
+            E_fine,
+            e_l,
+            e_u,
+            s_fine,
+            cl,
+            cu,
+            stride=2**levels,
+            frequency_tol_Hz=frequency_tol_Hz,
+            strength_rtol=strength_rtol,
+            strength_floor=floor,
+        )
 
         # ---- flags (adjacent intervals with the same reason are merged)
         raw: list[tuple[int, int, str, float]] = []
@@ -474,12 +403,25 @@ class TransitionFieldGrid:
             strengths=s_fine[idx].copy(),
             flags=flags,
             parameters=params,
+            label_scheme=label_scheme,
         )
 
     # ---------------------------------------------------------------- queries
     @property
     def n_components(self) -> int:
         return int(self.component_q.size)
+
+    @property
+    def parity_allowed(self) -> npt.NDArray[np.bool_]:
+        """Whether each component's parents have opposite parity (the E1 rule).
+
+        False marks a component driven only through Stark mixing. An optical
+        label covers both upper parities, at frequencies separated by the
+        Lambda doubling, so use this to tell them apart.
+        """
+        lower = np.array([p.parity for p in self.lower_parents])
+        upper = np.array([p.parity for p in self.upper_parents])
+        return lower[self.component_lower] != upper[self.component_upper]
 
     def frequencies_at_stored_fields(self) -> npt.NDArray[np.floating]:
         """Exact component frequencies at `E_fields`, Hz, shape `(nS, nC)`."""
@@ -528,8 +470,8 @@ class TransitionFieldGrid:
         """Every component at field `E` (V/cm), interpolated, as a DataFrame.
 
         One row per component, in grid order, with the label, both parents'
-        quantum numbers, `q`, `frequency_Hz`, `strength` (`|d_q|^2`) and both
-        purities.
+        quantum numbers, `q`, `parity_allowed`, `frequency_Hz`, `strength`
+        (`|d_q|^2`) and both purities.
         """
         import pandas as pd
 
@@ -550,6 +492,7 @@ class TransitionFieldGrid:
                 "mF'": [p.mF for p in up],
                 "P'": [p.P for p in up],
                 "q": self.component_q,
+                "parity_allowed": self.parity_allowed,
                 "frequency_Hz": v["frequency_Hz"],
                 "strength": v["strength"],
                 "lower_purity": v["lower_purity"],
@@ -557,32 +500,46 @@ class TransitionFieldGrid:
             }
         )
 
-    def components(self, label: Hashable, E: float) -> list[TransitionComponent]:
+    def components(
+        self, label: Hashable, E: float, *, parity_allowed: bool | None = None
+    ) -> list[TransitionComponent]:
         """Components carrying `label` (e.g. an `OpticalTransition`) at `E`.
 
-        For optical grids the label is the line, so both parent parities of
-        the upper level are returned; the parity-allowed ones have
-        `upper.P == label.P_excited`.
+        An optical label is the line, so both upper parities are returned
+        unless `parity_allowed` selects one (True: the nominal line, False:
+        its Stark-mixing-only partner, at a different frequency).
+
+        A grid reloaded with labels that `load` cannot restore (a custom
+        `pair_label`) matches by name, given the name or the original label,
+        and raises `LookupError` when no component has that name. On other
+        grids an empty list means the line is not in the grid.
         """
+        if self.labels_are_names:
+            name = _label_name(label)
+            selected = [k for k, lbl in enumerate(self.labels) if lbl == name]
+            if not selected:
+                raise LookupError(f"no component is labelled {name!r} in this reloaded grid")
+        else:
+            selected = [k for k, lbl in enumerate(self.labels) if lbl == label]
+        allowed = self.parity_allowed
+        if parity_allowed is not None:
+            selected = [k for k in selected if bool(allowed[k]) == parity_allowed]
         v = self._values(E)
-        out = []
-        for k, lbl in enumerate(self.labels):
-            if lbl != label:
-                continue
-            out.append(
-                TransitionComponent(
-                    label=lbl,
-                    lower=self.lower_parents[self.component_lower[k]],
-                    upper=self.upper_parents[self.component_upper[k]],
-                    q=int(self.component_q[k]),
-                    E=float(E),
-                    frequency_Hz=float(v["frequency_Hz"][k]),
-                    strength=float(v["strength"][k]),
-                    lower_purity=float(v["lower_purity"][k]),
-                    upper_purity=float(v["upper_purity"][k]),
-                )
+        return [
+            TransitionComponent(
+                label=self.labels[k],
+                lower=self.lower_parents[self.component_lower[k]],
+                upper=self.upper_parents[self.component_upper[k]],
+                q=int(self.component_q[k]),
+                E=float(E),
+                frequency_Hz=float(v["frequency_Hz"][k]),
+                strength=float(v["strength"][k]),
+                lower_purity=float(v["lower_purity"][k]),
+                upper_purity=float(v["upper_purity"][k]),
+                parity_allowed=bool(allowed[k]),
             )
-        return out
+            for k in selected
+        ]
 
     def strength(
         self,
@@ -593,25 +550,29 @@ class TransitionFieldGrid:
         """Population-weighted strength of every component for a polarization.
 
         Returns `w(lower) * |eps_q|^2 * |d_q|^2` per component (array aligned
-        with `at(E)`); summing over the components of a line gives that line's
-        strength. `ground_population` maps a lower level (`LevelParent` or its
+        with `at(E)`). A label covers both upper parities, at different
+        frequencies, so to sum one peak of a line select with
+        `grid.parity_allowed` or the upper parity first. `ground_population` maps a lower level (`LevelParent` or its
         `key` tuple) to a weight; levels it does not name get 0. The default is
         equal population (weight 1 for every lower level).
         """
         eps = spherical_components(polarization)
-        pol_w = np.array([abs(eps[int(q)]) ** 2 for q in self.component_q])
+        pol_w = np.array([abs(eps[q]) ** 2 for q in Q_VALUES])[self.component_q + 1]
         weights = self._lower_weights(ground_population)
-        return weights[self.component_lower] * pol_w * self._values(E)["strength"]
+        strengths = np.maximum(self._interpolator("strengths")(self._check_E(E)), 0.0)
+        return weights[self.component_lower] * pol_w * strengths
 
     def _lower_weights(self, population: Mapping[Any, float] | None) -> np.ndarray:
         n = len(self.lower_parents)
         if population is None:
             return np.ones(n)
+        from centrex_tlf.hamiltonian.tracking import _normalize_key
+
         by_key = {}
         for k, w in population.items():
             key = k.key if hasattr(k, "key") else tuple(k)
-            by_key[_norm_key(key)] = float(w)
-        return np.array([by_key.get(_norm_key(p.key), 0.0) for p in self.lower_parents])
+            by_key[_normalize_key(key)] = float(w)
+        return np.array([by_key.get(_normalize_key(p.key), 0.0) for p in self.lower_parents])
 
     # ------------------------------------------------------------------- I/O
     def save(self, path: str | Path) -> Path:
@@ -626,12 +587,14 @@ class TransitionFieldGrid:
             "B_z": self.B_z,
             "frequency_origin_Hz": self.frequency_origin_Hz,
             "parameters": self.parameters,
+            "label_scheme": self.label_scheme,
             "label_names": [_label_name(lbl) for lbl in self.labels],
             "flags": [[f.E_low, f.E_high, f.reason, f.detail] for f in self.flags],
         }
         np.savez_compressed(
             path,
             meta=np.asarray(json.dumps(meta)),
+            physics_fingerprint=_flatten_fingerprint(_physics_fingerprint()),
             E_fields=self.E_fields,
             lower_parents=_parents_to_array(self.lower_parents),
             upper_parents=_parents_to_array(self.upper_parents),
@@ -655,9 +618,11 @@ class TransitionFieldGrid:
         """Read a grid written by `save`.
 
         Refuses (``ValueError``) a file written by a different package version
-        or file format, since the Hamiltonians may have changed (see
-        AGENTS.md on stale cached Hamiltonians), and any file whose build
-        parameters differ from `expected`.
+        or file format, a file whose reference Hamiltonian and dipole matrices
+        differ from the current code and constants (this also covers source
+        checkouts, where the version is "unknown"), and any file whose build
+        parameters differ from `expected`. See AGENTS.md on stale cached
+        Hamiltonians.
         """
         with np.load(Path(path), allow_pickle=False) as data:
             meta = json.loads(str(data["meta"]))
@@ -672,6 +637,7 @@ class TransitionFieldGrid:
                     f"{path}: built with centrex-tlf {meta.get('package_version')}, "
                     f"this is {current}; rebuild the grid"
                 )
+            _check_fingerprint(path, data["physics_fingerprint"])
             params = meta["parameters"]
             for key, want in (expected or {}).items():
                 have = params.get(key)
@@ -681,7 +647,8 @@ class TransitionFieldGrid:
             upper_parents = _parents_from_array(data["upper_parents"], data["upper_electronic"])
             cl = data["component_lower"]
             cu = data["component_upper"]
-            label_fn = _LABELLERS.get(meta["kind"])
+            scheme = meta["label_scheme"]
+            label_fn = _LABELLERS.get(scheme) if scheme is not None else None
             if label_fn is None:
                 labels = tuple(meta["label_names"])
             else:
@@ -708,7 +675,186 @@ class TransitionFieldGrid:
                 flags=tuple(CrossingFlag(*f) for f in meta["flags"]),
                 parameters=params,
                 package_version=meta["package_version"],
+                label_scheme=scheme,
+                labels_are_names=label_fn is None,
             )
+
+
+def _candidate_pairs(
+    tl: Any,
+    tu: Any,
+    operators: Mapping[int, npt.NDArray[Any]],
+    pair_filter: Callable[[Any, Any, int], bool] | None,
+) -> tuple[list[tuple[Any, ...]], np.ndarray, np.ndarray, np.ndarray]:
+    """Pairs with `mF_upper - mF_lower = q`, grouped by lower and upper block.
+
+    Returns `(groups, lower_levels, upper_levels, q)`; each group is
+    `(lower_block, upper_block, D_sub, rows, cols, pair_ids)`.
+    """
+    same = tl is tu
+    groups: list[tuple[Any, ...]] = []
+    pairs_l: list[int] = []
+    pairs_u: list[int] = []
+    pairs_q: list[int] = []
+    shape = (len(tu.matrices.basis), len(tl.matrices.basis))
+    for q in Q_VALUES:
+        D = operators.get(q)
+        if D is None:
+            continue
+        D = np.asarray(D)
+        if D.shape != shape:
+            raise ValueError(f"operator q={q} has shape {D.shape}, expected {shape}")
+        for bl, m_l in enumerate(tl.block_mF):
+            if (m_l + q) not in tu.block_mF:
+                continue
+            bu = tu.block_mF.index(m_l + q)
+            D_sub = D[np.ix_(tu.block_basis[bu], tl.block_basis[bl])]
+            if not np.any(D_sub):
+                continue
+            rows, cols, ids = [], [], []
+            for c, lv_l in enumerate(tl.block_levels[bl]):
+                par_l = tl.parents[lv_l]
+                for r, lv_u in enumerate(tu.block_levels[bu]):
+                    if same and lv_u == lv_l:
+                        continue
+                    if pair_filter is not None and not pair_filter(par_l, tu.parents[lv_u], q):
+                        continue
+                    rows.append(r)
+                    cols.append(c)
+                    ids.append(len(pairs_q))
+                    pairs_l.append(int(lv_l))
+                    pairs_u.append(int(lv_u))
+                    pairs_q.append(q)
+            if ids:
+                groups.append((bl, bu, D_sub, np.asarray(rows), np.asarray(cols), np.asarray(ids)))
+    if not pairs_q:
+        raise ValueError("no candidate pairs; check operators and pair_filter")
+    return groups, np.asarray(pairs_l), np.asarray(pairs_u), np.asarray(pairs_q)
+
+
+def _dressed_strengths(
+    groups: Sequence[tuple[Any, ...]],
+    n_pairs: int,
+    Vl: Sequence[np.ndarray],
+    Vu: Sequence[np.ndarray],
+) -> np.ndarray:
+    out = np.empty(n_pairs)
+    for bl, bu, D_sub, rows, cols, ids in groups:
+        d = Vu[bu].conj().T @ D_sub @ Vl[bl]
+        out[ids] = np.abs(d[rows, cols]) ** 2
+    return out
+
+
+def _zero_field_components(
+    tl: Any,
+    tu: Any,
+    groups: Sequence[tuple[Any, ...]],
+    pl: np.ndarray,
+    pu: np.ndarray,
+    pq: np.ndarray,
+    pair_label: Callable[[Any, Any], Hashable],
+) -> ZeroFieldComponents:
+    """Candidate components from the trackers' zero-field eigenvectors."""
+    s0 = _dressed_strengths(
+        groups, pq.size, [t.V0 for t in tl.trackers], [t.V0 for t in tu.trackers]
+    )
+    mask = s0 > 0
+    return ZeroFieldComponents(
+        lower=tuple(tl.parents[i] for i in pl[mask]),
+        upper=tuple(tu.parents[i] for i in pu[mask]),
+        q=pq[mask],
+        labels=tuple(
+            pair_label(tl.parents[i], tu.parents[j])
+            for i, j in zip(pl[mask], pu[mask], strict=True)
+        ),
+        energy_difference_Hz=(tu.energies_zero_field()[pu] - tl.energies_zero_field()[pl])[mask],
+        strength=s0[mask],
+    )
+
+
+def _select_stored_fields(
+    E_fine: np.ndarray,
+    e_l: np.ndarray,
+    e_u: np.ndarray,
+    s_fine: np.ndarray,
+    cl: np.ndarray,
+    cu: np.ndarray,
+    *,
+    stride: int,
+    frequency_tol_Hz: float,
+    strength_rtol: float,
+    strength_floor: float,
+) -> tuple[np.ndarray, set[tuple[int, int]]]:
+    """Choose stored fine-grid indices so PCHIP meets the tolerances at every fine point.
+
+    Starts from every `stride`-th fine point. Each pass adds, per interval, the
+    worst failing fine point. Returns the indices and the intervals of two fine
+    steps that failed (refinement reached the finest spacing there).
+    """
+    n_fine = E_fine.size
+    is_stored = np.zeros(n_fine, dtype=bool)
+    is_stored[::stride] = True
+    is_stored[-1] = True
+    freq_fine = e_u[:, cu] - e_l[:, cl]
+    failed_at_min: set[tuple[int, int]] = set()
+    while True:
+        idx = np.flatnonzero(is_stored)
+        others = np.flatnonzero(~is_stored)
+        if others.size == 0 or idx.size < 2:
+            break
+        x = E_fine[idx]
+        Em = E_fine[others]
+        f_interp = (
+            PchipInterpolator(x, e_u[idx], axis=0)(Em)[:, cu]
+            - PchipInterpolator(x, e_l[idx], axis=0)(Em)[:, cl]
+        )
+        f_err = np.abs(f_interp - freq_fine[others]).max(axis=1)
+        s_exact = s_fine[others]
+        s_interp = PchipInterpolator(x, s_fine[idx], axis=0)(Em)
+        s_err = (np.abs(s_interp - s_exact) / np.maximum(s_exact, strength_floor)).max(axis=1)
+        score = np.maximum(f_err / frequency_tol_Hz, s_err / strength_rtol)
+        bad = np.flatnonzero(score > 1.0)
+        if bad.size == 0:
+            break
+        interval = np.searchsorted(idx, others[bad]) - 1
+        for i in np.unique(interval):
+            members = bad[interval == i]
+            worst = int(others[members[np.argmax(score[members])]])
+            is_stored[worst] = True
+            lo, hi = int(idx[i]), int(idx[i + 1])
+            if hi - lo == 2:
+                failed_at_min.add((lo, hi))
+    return np.flatnonzero(is_stored), failed_at_min
+
+
+def _physics_fingerprint() -> list[np.ndarray]:
+    """Small reference Hamiltonian and dipole matrices that identify the physics."""
+    from centrex_tlf.hamiltonian.tracking import field_matrices_B, field_matrices_X
+
+    X = field_matrices_X(0, 2)
+    B = field_matrices_B(1, 2)
+    D = optical_dipole_operators(X, B)
+    matrices = [X.H0, X.HSz, X.HZz, B.H0, B.HSz, B.HZz, *(D[q] for q in Q_VALUES)]
+    return [np.asarray(M, dtype=np.complex128).ravel() for M in matrices]
+
+
+def _flatten_fingerprint(parts: Sequence[np.ndarray]) -> np.ndarray:
+    values = np.concatenate(parts)
+    return np.concatenate([values.real, values.imag])
+
+
+def _check_fingerprint(path: str | Path, stored: np.ndarray) -> None:
+    # Compared numerically, not hashed: the matrices carry BLAS-dependent rounding.
+    parts = _physics_fingerprint()
+    current = _flatten_fingerprint(parts)
+    tolerance = np.concatenate(
+        [np.concatenate([np.full(p.size, 1e-9 * np.abs(p).max()) for p in parts]) for _ in range(2)]
+    )
+    if stored.shape != current.shape or np.any(np.abs(stored - current) > tolerance):
+        raise ValueError(
+            f"{path}: built from different Hamiltonians or constants than this "
+            "code; rebuild the grid"
+        )
 
 
 def _merge_flags(
@@ -717,7 +863,7 @@ def _merge_flags(
     describe = {
         "purity": "max purity jump per fine step {:.3f}",
         "strength": "max relative strength change per fine step {:.3f}",
-        "min_spacing": "midpoint check still failed at the finest spacing",
+        "min_spacing": "interpolation check still failed at the finest spacing",
     }
     out: list[CrossingFlag] = []
     for reason in ("purity", "strength", "min_spacing"):
@@ -747,14 +893,6 @@ def _label_name(label: Hashable) -> str:
 
 def _jsonable(value: Any) -> Any:
     return json.loads(json.dumps(value))
-
-
-def _norm_key(key: tuple) -> tuple:
-    J, F1, F, mF = key[:4]
-    out: tuple = (int(J), float(F1), int(F), int(mF))
-    if len(key) > 4 and key[4] is not None:
-        out += (int(key[4]),)
-    return out
 
 
 def _default_label(lower: Any, upper: Any) -> Hashable:
@@ -796,7 +934,10 @@ def _optical_label(lower: Any, upper: Any) -> OpticalTransition:
     )
 
 
-_LABELLERS: dict[str, Callable[[Any, Any], Hashable]] = {"optical": _optical_label}
+_LABELLERS: dict[str, Callable[[Any, Any], Hashable]] = {
+    "parents": _default_label,
+    "optical": _optical_label,
+}
 
 
 def optical_dipole_operators(lower: Any, upper: Any) -> dict[int, np.ndarray]:
@@ -846,12 +987,35 @@ def _r2_reference_origin(reference_Hz: float) -> Callable[[ZeroFieldComponents],
             ]
         )
         if not np.any(sel):
-            raise ValueError("R(2) F1'=7/2 F'=3 is not in the grid; need J_ground_max >= 2")
+            raise ValueError("R(2) F1'=7/2 F'=3 is missing from the reference manifolds")
         w = zf.strength[sel]
         centroid = float(np.sum(w * zf.energy_difference_Hz[sel]) / np.sum(w))
         return reference_Hz - centroid
 
     return origin
+
+
+def _optical_reference_origin(
+    J_ground_max: int, lower: Any, upper: Any, operators: Any, reference_Hz: float
+) -> float:
+    """Frequency origin from the R(2) reference line, whatever the grid's J range."""
+    from centrex_tlf.hamiltonian.tracking import (
+        _ManifoldTracker,
+        field_matrices_B,
+        field_matrices_X,
+    )
+
+    if J_ground_max < 2:
+        lower = field_matrices_X(0, 4)
+        upper = field_matrices_B(1, 5)
+        operators = optical_dipole_operators(lower, upper)
+    tl = _ManifoldTracker(lower)
+    tu = _ManifoldTracker(upper)
+    groups, pl, pu, pq = _candidate_pairs(
+        tl, tu, operators, lambda lo, up, q: lo.J == 2 and up.J == 3
+    )
+    zero_field = _zero_field_components(tl, tu, groups, pl, pu, pq, _optical_label)
+    return _r2_reference_origin(float(reference_Hz))(zero_field)
 
 
 def build_optical_field_grid(
@@ -879,6 +1043,9 @@ def build_optical_field_grid(
     strength-weighted centroid of its parity-allowed zero-field components
     (equal ground population, summed over q).
 
+    The reference line is computed from X `J <= 4` and B `J <= 5` at least, so
+    it does not depend on `J_ground_max` and need not be in the grid.
+
     Remaining keyword arguments go to `TransitionFieldGrid.build`.
     """
     from centrex_tlf.constants import X_B_REFERENCE_FREQUENCY_HZ
@@ -902,7 +1069,7 @@ def build_optical_field_grid(
         E_max_V_cm=E_max_V_cm,
         E_min_V_cm=E_min_V_cm,
         B_z=B_z,
-        frequency_origin_Hz=_r2_reference_origin(float(ref)),
+        frequency_origin_Hz=_optical_reference_origin(J_ground_max, lower, upper, operators, ref),
         pair_filter=pair_filter,
         pair_label=_optical_label,
         kind="optical",
