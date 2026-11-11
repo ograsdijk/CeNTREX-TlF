@@ -175,6 +175,45 @@ class TestBStateHamiltonian:
         np.testing.assert_allclose(h_rust.Hrot, h_python.Hrot, atol=1e-4)
         np.testing.assert_allclose(h_rust.HZz, h_python.HZz, atol=1e-4)
 
+    @pytest.mark.parametrize("Ps", [[-1, 1], [1], [-1]])
+    def test_b_parity_builder_matches_python_paths(self, Ps, monkeypatch):
+        """Rust parity builder vs. the two Python routes to the same matrices."""
+        from dataclasses import fields
+
+        from centrex_tlf.hamiltonian import generate_hamiltonian as gh
+
+        b_states = states.generate_coupled_states_excited(Js=[1, 2, 3], Ps=Ps, Omegas=1)
+        constants = BConstants()
+        h_rust = rust.generate_coupled_hamiltonian_B_parity_py(list(b_states), constants)
+        assert gh.generate_coupled_hamiltonian_B(b_states, constants).Hrot.shape == (
+            len(b_states),
+            len(b_states),
+        )
+
+        # Omega-basis matrices from Rust, parity transform in Python: same
+        # arithmetic, so the result is identical, not merely close.
+        monkeypatch.setattr(gh, "_generate_coupled_hamiltonian_B_parity_rust", None)
+        h_transform = gh.generate_coupled_hamiltonian_B(b_states, constants)
+
+        # Element-by-element Python evaluation, no Rust at all.
+        monkeypatch.setattr(gh, "_generate_coupled_hamiltonian_B_rust", None)
+        h_python = gh.generate_coupled_hamiltonian_B(b_states, constants)
+
+        for field in fields(h_python):
+            m_rust = getattr(h_rust, field.name)
+            m_python = getattr(h_python, field.name)
+            np.testing.assert_array_equal(m_rust, getattr(h_transform, field.name))
+            np.testing.assert_array_equal(m_rust, m_rust.conj().T)
+            scale = max(np.abs(m_python).max(), 1.0)
+            np.testing.assert_allclose(m_rust, m_python, rtol=0, atol=1e-13 * scale)
+            # parity-forbidden elements stay exactly zero
+            assert not np.any((m_python == 0) & (m_rust != 0)), field.name
+
+    def test_b_parity_builder_rejects_omega_basis_states(self):
+        b_states = states.generate_coupled_states_excited(Js=[1], Ps=None, Omegas=[-1, 1])
+        with pytest.raises(ValueError, match="parity"):
+            rust.generate_coupled_hamiltonian_B_parity_py(list(b_states), BConstants())
+
 
 class TestTransformMatrix:
     def test_coupled_to_uncoupled_matches_python(self):

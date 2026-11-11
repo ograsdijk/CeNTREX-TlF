@@ -5,8 +5,10 @@ import sys
 import warnings
 from dataclasses import dataclass
 from enum import Enum, auto
+from functools import lru_cache
 from typing import (
     Any,
+    Callable,
     Generic,
     List,
     Literal,
@@ -1096,19 +1098,24 @@ class State(Generic[S]):
         if len(self.data) != len(other.data):
             return False
 
-        # For each component in self, check if it exists in other with same amplitude
+        # For each component in self, check if it exists in other with same amplitude.
+        # The first occurrence of a basis state in other is the one compared.
+        other_amplitudes: dict[Any, Any] = {}
+        for amp2, basis_state2 in other.data:
+            other_amplitudes.setdefault(basis_state2, amp2)
+
         for amp1, basis_state1 in self.data:
-            found = False
-            for amp2, basis_state2 in other.data:
-                if basis_state1 == basis_state2:
-                    # Use numpy's allclose for robust floating point comparison
-                    if np.allclose(amp1, amp2, rtol=1e-15, atol=1e-15):
-                        found = True
-                        break
-                    else:
-                        return False  # Same basis state but different amplitude
-            if not found:
+            if basis_state1 not in other_amplitudes:
                 return False  # Basis state in self not found in other
+            amp2 = other_amplitudes[basis_state1]
+            # np.allclose(amp1, amp2, rtol=1e-15, atol=1e-15) for finite scalars
+            difference = abs(amp1 - amp2)
+            limit = 1e-15 + 1e-15 * abs(amp2)
+            if np.isfinite(difference) and np.isfinite(limit):
+                if not difference <= limit:
+                    return False  # Same basis state but different amplitude
+            elif not np.allclose(amp1, amp2, rtol=1e-15, atol=1e-15):
+                return False
 
         return True  # direct access to a component
 
@@ -1180,9 +1187,10 @@ class State(Generic[S]):
         if not self.data:
             raise ValueError("Cannot find largest component of empty state")
 
-        # Order the state by amplitude
-        state = self.order_by_amp()
-        return state.data[0][1]
+        # First component of the largest |amplitude|², i.e. what order_by_amp()
+        # puts first (its descending sort is stable), without building and
+        # sorting a new state on every call.
+        return max(self.data, key=lambda x: np.abs(x[0]) ** 2)[1]
 
     @property
     def largest(self) -> S:
@@ -1218,7 +1226,7 @@ class State(Generic[S]):
             New state with small components removed
         """
         purged_data = [
-            (amp, basis_state) for amp, basis_state in self.data if np.abs(amp) > tol
+            (amp, basis_state) for amp, basis_state in self.data if abs(amp) > tol
         ]
         return self._create_new_instance(purged_data)
 
@@ -1322,11 +1330,7 @@ class State(Generic[S]):
         Returns:
             New state with all components transformed to Omega basis
         """
-        state = self._create_new_instance(data=[])
-        for amp, basis_state in self.data:
-            state += amp * basis_state.transform_to_omega_basis()
-
-        return state
+        return self._transform_components(_omega_basis_components)
 
     def transform_to_parity_basis(self) -> Self:
         """Transform all basis states to the parity basis.
@@ -1334,11 +1338,48 @@ class State(Generic[S]):
         Returns:
             New state with all components transformed to parity basis
         """
-        state = self._create_new_instance(data=[])
-        for amp, basis_state in self.data:
-            state += amp * basis_state.transform_to_parity_basis()
+        return self._transform_components(_parity_basis_components)
 
-        return state
+    def _transform_components(self, components: Callable[[Any], tuple]) -> Self:
+        """Expand every basis state through ``components`` and sum the result.
+
+        Equivalent to ``state += amp * basis_state.transform(...)`` over the
+        components, which rebuilds the whole state at every step. The same
+        products and sums are formed in the same order here, in one ordered
+        mapping: an amplitude that sums to exactly zero is dropped at the step
+        where that happens, so a basis state reappearing later is appended at
+        the end, exactly as the repeated additions do.
+        """
+        amplitudes: dict[Any, Any] = {}
+        for amp, basis_state in self.data:
+            touched = []
+            for coefficient, new_state in components(basis_state):
+                value = amp * coefficient
+                if value == 0:
+                    continue
+                if new_state in amplitudes:
+                    amplitudes[new_state] = amplitudes[new_state] + value
+                else:
+                    amplitudes[new_state] = value
+                touched.append(new_state)
+            for new_state in touched:
+                if amplitudes.get(new_state, 1) == 0:
+                    del amplitudes[new_state]
+        return self._create_new_instance(
+            [(value, new_state) for new_state, value in amplitudes.items()]
+        )
+
+
+@lru_cache(maxsize=100_000)
+def _omega_basis_components(basis_state: BasisState) -> tuple:
+    """(amplitude, basis state) pairs of a basis state in the Omega basis."""
+    return tuple(basis_state.transform_to_omega_basis().data)
+
+
+@lru_cache(maxsize=100_000)
+def _parity_basis_components(basis_state: BasisState) -> tuple:
+    """(amplitude, basis state) pairs of a basis state in the parity basis."""
+    return tuple(basis_state.transform_to_parity_basis().data)
 
 
 class CoupledState(State):

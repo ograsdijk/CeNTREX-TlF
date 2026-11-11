@@ -285,6 +285,148 @@ pub fn generate_coupled_hamiltonian_b(
     }
 }
 
+/// Signed-Omega expansion of a set of parity-basis B states.
+///
+/// `|J, |Omega|, P> = (|J, +Omega> + P (-1)^J |J, -Omega>) / sqrt(2)`, so every
+/// parity state has exactly two Omega-basis components of magnitude 1/sqrt(2).
+/// The common magnitude is left out here and applied once in the transform.
+struct ParityExpansion {
+    /// Omega-basis states, in order of first appearance
+    omega_basis: Vec<CoupledBasisState>,
+    /// Index into `omega_basis` of the +Omega component of each parity state
+    plus: Vec<usize>,
+    /// Index into `omega_basis` of the -Omega component of each parity state
+    minus: Vec<usize>,
+    /// Sign `P (-1)^J` of the -Omega component (the +Omega sign is +1)
+    minus_sign: Vec<f64>,
+}
+
+fn expand_parity_basis(qn: &[CoupledBasisState]) -> Result<ParityExpansion, String> {
+    let mut omega_basis: Vec<CoupledBasisState> = Vec::with_capacity(2 * qn.len());
+    let mut index: HashMap<CoupledBasisState, usize> = HashMap::with_capacity(2 * qn.len());
+    let mut plus = Vec::with_capacity(qn.len());
+    let mut minus = Vec::with_capacity(qn.len());
+    let mut minus_sign = Vec::with_capacity(qn.len());
+
+    let mut index_of = |state: CoupledBasisState, omega_basis: &mut Vec<CoupledBasisState>| {
+        *index.entry(state).or_insert_with(|| {
+            omega_basis.push(state);
+            omega_basis.len() - 1
+        })
+    };
+
+    for state in qn {
+        let parity = state
+            .parity
+            .ok_or_else(|| "parity-basis states need a parity (P)".to_string())?;
+        if parity != 1 && parity != -1 {
+            return Err(format!("parity must be +1 or -1, got {parity}"));
+        }
+        if state.omega == 0 || state.electronic_state != crate::states::ElectronicState::B {
+            return Err(
+                "only B states with nonzero Omega have a parity-basis expansion".to_string(),
+            );
+        }
+        let mut state_plus = *state;
+        state_plus.parity = None;
+        let mut state_minus = state_plus;
+        state_minus.omega = -state.omega;
+
+        plus.push(index_of(state_plus, &mut omega_basis));
+        minus.push(index_of(state_minus, &mut omega_basis));
+        let j_sign = if state.j % 2 == 0 { 1.0 } else { -1.0 };
+        minus_sign.push(parity as f64 * j_sign);
+    }
+
+    Ok(ParityExpansion {
+        omega_basis,
+        plus,
+        minus,
+        minus_sign,
+    })
+}
+
+/// `T^dagger M T` for the parity expansion, with `M` an `n_omega x n_omega`
+/// row-major matrix, followed by the same Hermitian symmetrization the Python
+/// path applies. Each element is a signed sum of four elements of `M`.
+fn omega_matrix_to_parity(m: &[Complex64], expansion: &ParityExpansion) -> Vec<Complex64> {
+    let n_omega = expansion.omega_basis.len();
+    let n = expansion.plus.len();
+    debug_assert_eq!(m.len(), n_omega * n_omega);
+
+    let mut transformed = vec![Complex64::ZERO; n * n];
+    for i in 0..n {
+        let row_plus = expansion.plus[i] * n_omega;
+        let row_minus = expansion.minus[i] * n_omega;
+        let sign_i = expansion.minus_sign[i];
+        for j in 0..n {
+            let col_plus = expansion.plus[j];
+            let col_minus = expansion.minus[j];
+            // (row combination) first, then (column combination): the order the
+            // sparse products in Python accumulate in.
+            let left = m[row_plus + col_plus] + m[row_minus + col_plus] * sign_i;
+            let right = m[row_plus + col_minus] + m[row_minus + col_minus] * sign_i;
+            transformed[i * n + j] = left + right * expansion.minus_sign[j];
+        }
+    }
+
+    // amplitude 1/sqrt(2) on both sides, written as Python evaluates it
+    let amplitude = 1.0 / 2.0_f64.sqrt();
+    let factor = 0.5 * (amplitude * amplitude);
+    let mut result = vec![Complex64::ZERO; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            result[i * n + j] = (transformed[i * n + j] + transformed[j * n + i].conj()) * factor;
+        }
+    }
+    result
+}
+
+/// B Hamiltonian for parity-basis states: built in the signed-Omega basis the
+/// operators are written in, then transformed.
+pub fn generate_coupled_hamiltonian_b_parity(
+    qn: &[CoupledBasisState],
+    constants: &BConstants,
+) -> Result<HamiltonianCoupledB, String> {
+    let expansion = expand_parity_basis(qn)?;
+    let omega = generate_coupled_hamiltonian_b(&expansion.omega_basis, constants);
+
+    let matrices = [
+        &omega.h_rot,
+        &omega.h_mhf_tl,
+        &omega.h_mhf_f,
+        &omega.h_ld,
+        &omega.h_cp1_tl,
+        &omega.h_c_tl,
+        &omega.h_sx,
+        &omega.h_sy,
+        &omega.h_sz,
+        &omega.h_zx,
+        &omega.h_zy,
+        &omega.h_zz,
+    ];
+    let results: Vec<Vec<Complex64>> = matrices
+        .into_par_iter()
+        .map(|m| omega_matrix_to_parity(m, &expansion))
+        .collect();
+
+    let mut it = results.into_iter();
+    Ok(HamiltonianCoupledB {
+        h_rot: it.next().unwrap(),
+        h_mhf_tl: it.next().unwrap(),
+        h_mhf_f: it.next().unwrap(),
+        h_ld: it.next().unwrap(),
+        h_cp1_tl: it.next().unwrap(),
+        h_c_tl: it.next().unwrap(),
+        h_sx: it.next().unwrap(),
+        h_sy: it.next().unwrap(),
+        h_sz: it.next().unwrap(),
+        h_zx: it.next().unwrap(),
+        h_zy: it.next().unwrap(),
+        h_zz: it.next().unwrap(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -708,6 +850,98 @@ mod tests {
                 assert!(diff < 1e-12, "not Hermitian at ({i},{j}): diff={diff}");
             }
         }
+    }
+
+    /// Parity basis for J = 1..=jmax, both parities, Omega = 1.
+    fn make_b_parity_basis(jmax: i32) -> Vec<CoupledBasisState> {
+        let mut states = Vec::new();
+        for parity in [-1i8, 1] {
+            for mut state in make_b_basis(jmax) {
+                state.parity = Some(parity);
+                states.push(state);
+            }
+        }
+        states
+    }
+
+    #[test]
+    fn test_parity_hamiltonian_matches_explicit_transform() {
+        let constants = BConstants::default();
+        let qn = make_b_parity_basis(3);
+        let n = qn.len();
+        let expansion = expand_parity_basis(&qn).unwrap();
+        let n_omega = expansion.omega_basis.len();
+        assert_eq!(n_omega, n);
+
+        let omega = generate_coupled_hamiltonian_b(&expansion.omega_basis, &constants);
+        let parity = generate_coupled_hamiltonian_b_parity(&qn, &constants).unwrap();
+
+        // Dense T (n_omega x n), then T^dagger M T the slow way.
+        let amplitude = 1.0 / 2.0_f64.sqrt();
+        let mut t = vec![0.0; n_omega * n];
+        for i in 0..n {
+            t[expansion.plus[i] * n + i] += amplitude;
+            t[expansion.minus[i] * n + i] += amplitude * expansion.minus_sign[i];
+        }
+        for (m, got) in [
+            (&omega.h_rot, &parity.h_rot),
+            (&omega.h_ld, &parity.h_ld),
+            (&omega.h_mhf_f, &parity.h_mhf_f),
+            (&omega.h_sz, &parity.h_sz),
+            (&omega.h_sy, &parity.h_sy),
+            (&omega.h_zx, &parity.h_zx),
+        ] {
+            let scale = m.iter().map(|v| v.norm()).fold(0.0, f64::max);
+            for i in 0..n {
+                for j in 0..n {
+                    let mut expected = Complex64::ZERO;
+                    for k in 0..n_omega {
+                        if t[k * n + i] == 0.0 {
+                            continue;
+                        }
+                        for l in 0..n_omega {
+                            expected += m[k * n_omega + l] * (t[k * n + i] * t[l * n + j]);
+                        }
+                    }
+                    let diff = (expected - got[i * n + j]).norm();
+                    assert!(
+                        diff <= 1e-12 * scale,
+                        "({i},{j}): {expected:?} vs {:?}",
+                        got[i * n + j]
+                    );
+                    let asym = (got[i * n + j] - got[j * n + i].conj()).norm();
+                    assert!(asym == 0.0, "not Hermitian at ({i},{j})");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parity_hamiltonian_is_block_diagonal_in_parity_without_field() {
+        // Field-free terms conserve parity; Stark terms connect opposite parity only.
+        let constants = BConstants::default();
+        let qn = make_b_parity_basis(2);
+        let n = qn.len();
+        let ham = generate_coupled_hamiltonian_b_parity(&qn, &constants).unwrap();
+        for i in 0..n {
+            for j in 0..n {
+                let same_parity = qn[i].parity == qn[j].parity;
+                if same_parity {
+                    assert_eq!(ham.h_sz[i * n + j], Complex64::ZERO);
+                } else {
+                    assert_eq!(ham.h_rot[i * n + j], Complex64::ZERO);
+                    assert_eq!(ham.h_ld[i * n + j], Complex64::ZERO);
+                    assert_eq!(ham.h_mhf_tl[i * n + j], Complex64::ZERO);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parity_hamiltonian_rejects_states_without_parity() {
+        let constants = BConstants::default();
+        let qn = make_b_basis(1);
+        assert!(generate_coupled_hamiltonian_b_parity(&qn, &constants).is_err());
     }
 
     #[test]

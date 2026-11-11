@@ -18,7 +18,10 @@ mod x_uncoupled;
 
 use constants::{BConstants, XConstants};
 use coupling::generate_coupling_matrix;
-use generate_hamiltonian::{generate_coupled_hamiltonian_b, generate_uncoupled_hamiltonian_x};
+use generate_hamiltonian::{
+    generate_coupled_hamiltonian_b, generate_coupled_hamiltonian_b_parity,
+    generate_uncoupled_hamiltonian_x, HamiltonianCoupledB,
+};
 use states::{CoupledBasisState, CoupledState, UncoupledBasisState};
 
 use wigner::{wigner_3j_f, wigner_6j_f};
@@ -233,8 +236,33 @@ fn generate_coupled_hamiltonian_B_py<'py>(
     let constants = parse_b_constants(constants)?;
 
     let hamiltonian = py.detach(|| generate_coupled_hamiltonian_b(&qn, &constants));
+    coupled_hamiltonian_b_to_py(py, hamiltonian, qn.len())
+}
 
-    let n = qn.len();
+/// B Hamiltonian for parity-basis states (`P` set, unsigned `Omega`).
+#[pyfunction(signature = (states, constants))]
+fn generate_coupled_hamiltonian_B_parity_py<'py>(
+    py: Python<'py>,
+    states: Vec<Bound<'py, PyAny>>,
+    constants: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let qn: Vec<CoupledBasisState> = states
+        .iter()
+        .map(|s| parse_coupled_basis_state(s))
+        .collect::<PyResult<Vec<_>>>()?;
+    let constants = parse_b_constants(constants)?;
+
+    let hamiltonian = py
+        .detach(|| generate_coupled_hamiltonian_b_parity(&qn, &constants))
+        .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)?;
+    coupled_hamiltonian_b_to_py(py, hamiltonian, qn.len())
+}
+
+fn coupled_hamiltonian_b_to_py<'py>(
+    py: Python<'py>,
+    hamiltonian: HamiltonianCoupledB,
+    n: usize,
+) -> PyResult<Bound<'py, PyAny>> {
     let to_pyarray = |vec: Vec<Complex64>| -> PyResult<Bound<'py, PyArray2<Complex64>>> {
         let array = PyArray1::from_vec(py, vec);
         array.reshape((n, n))
@@ -372,6 +400,10 @@ fn generate_coupling_matrix_py<'py>(
 fn centrex_tlf_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_uncoupled_hamiltonian_X_py, m)?)?;
     m.add_function(wrap_pyfunction!(generate_coupled_hamiltonian_B_py, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        generate_coupled_hamiltonian_B_parity_py,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(wigner_3j_py, m)?)?;
     m.add_function(wrap_pyfunction!(wigner_6j_py, m)?)?;
     m.add_function(wrap_pyfunction!(generate_transform_matrix_py, m)?)?;

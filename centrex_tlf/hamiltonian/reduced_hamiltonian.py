@@ -451,7 +451,13 @@ def _match_excited_states(
     approximate_states: Sequence[CoupledBasisState], dressed_states: List[CoupledState]
 ) -> List[CoupledState]:
     construction_basis = list(get_unique_basisstates_from_states(dressed_states))
-    vectors = np.column_stack([state.state_vector(construction_basis) for state in dressed_states])
+    # state vectors of all dressed states, with one shared basis index instead
+    # of a per-state scan of the construction basis
+    basis_index = {basis_state: idx for idx, basis_state in enumerate(construction_basis)}
+    vectors = np.zeros((len(construction_basis), len(dressed_states)), dtype=complex)
+    for column, state in enumerate(dressed_states):
+        for amp, basis_state in state.data:
+            vectors[basis_index[basis_state], column] += amp
     return find_exact_states(
         [1 * state for state in approximate_states], construction_basis, dressed_states, V=vectors
     )

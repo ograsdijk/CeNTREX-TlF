@@ -636,6 +636,18 @@ def _lower_hamiltonian_upper_triangle_entrywise(
     }
 
 
+def _is_symbol_power(factor: smp.Expr) -> bool:
+    """True for a symbol or a positive integer power of one."""
+    if factor.is_Symbol:
+        return True
+    return bool(
+        factor.is_Pow
+        and factor.base.is_Symbol
+        and factor.exp.is_Integer
+        and factor.exp.is_positive
+    )
+
+
 def _lower_hamiltonian_upper_triangle_decomposed(
     hamiltonian: smp.Matrix,
     slot_index_by_name: dict[str, int],
@@ -657,7 +669,10 @@ def _lower_hamiltonian_upper_triangle_decomposed(
             else:
                 symbolic_factors.append(factor)
         symbolic = smp.Mul(*symbolic_factors) if symbolic_factors else smp.Integer(1)
-        symbolic = smp.simplify(smp.factor_terms(symbolic))
+        # A product of symbols (or positive integer powers of them) is already in
+        # the form simplify returns; only other factors need the general routine.
+        if not all(_is_symbol_power(factor) for factor in symbolic_factors):
+            symbolic = smp.simplify(smp.factor_terms(symbolic))
         return complex(numeric.evalf()), symbolic
 
     def group_basis_rows(basis_upper: np.ndarray) -> list[dict[str, Any]]:
@@ -699,7 +714,15 @@ def _lower_hamiltonian_upper_triangle_decomposed(
     coefficient_terms: dict[str, tuple[smp.Expr, np.ndarray]] = {}
     for i in range(n):
         for j in range(i, n):
-            expr = smp.expand(smp.factor_terms(smp.simplify(hamiltonian[i, j])))
+            entry = hamiltonian[i, j]
+            if entry == 0:
+                continue
+            if entry.is_polynomial(*entry.free_symbols):
+                # Numbers times products of symbols, the usual rotating-frame
+                # entry: expanding is all the general simplification amounts to.
+                expr = smp.expand(entry)
+            else:
+                expr = smp.expand(smp.factor_terms(smp.simplify(entry)))
             for term in smp.Add.make_args(expr):
                 numeric, symbolic = split_numeric_factor(term)
                 if abs(numeric) == 0.0:

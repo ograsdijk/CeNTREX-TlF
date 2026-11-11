@@ -1,5 +1,134 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Rust builder for the B Hamiltonian in the parity basis,
+  `generate_coupled_hamiltonian_B_parity_py` (`generate_coupled_hamiltonian_b_parity` in
+  `rust/src/generate_hamiltonian.rs`). It expands every parity state into its two signed-Omega
+  components, builds the twelve Omega-basis matrices with the existing operators and forms
+  each parity-basis element as a signed sum of four of their elements. It raises
+  `ValueError` for states without a parity, with Omega = 0, or outside the B state.
+- `couplings.utils_compact.CollapseOperators` and `compact_collapse_operators`: collapse
+  operators held as (row, column, value) triples, and compaction on that form.
+
+### Performance
+
+- `generate_coupled_hamiltonian_B` no longer evaluates parity-basis states (`P` set) in a
+  pure-Python loop; only the Omega basis used Rust before. It now calls the Rust parity
+  builder, falls back to Rust Omega-basis matrices plus a sparse transform in Python for an
+  extension built before the builder existed, and only without any extension to the old
+  loop. J = 1-3 with both parities (120 states) goes from 388 to 2 ms, J = 1-4 (192) from
+  734 to 2.5 ms; J = 1-11 (1144) takes 70 ms. The Rust builder and the Python transform
+  give identical matrices; both agree with the old loop to 1e-15 relative and keep its
+  exact zeros (parity-forbidden elements). `field_matrices_B` and
+  `build_optical_field_grid` inherit this: the ground `J <= 8`, 0-300 V/cm grid builds in
+  about 4 s instead of about 30 s.
+- OBE builds (`generate_OBE_system_transitions`) are 2-6x faster, with `H_symbolic`, the
+  collapse matrices and `H_int` bitwise identical to before on four representative systems:
+  0.97 -> 0.26 s (P2 F1'=3/2 F'=1, compact, opposite parity retained, 29 levels),
+  3.00 -> 0.52 s (R2 F1'=7/2 F'=3 with polarization switching, 31 levels), 1.59 -> 0.35 s
+  (P2 plus two microwave transitions, 67 levels) and 0.26 -> 0.11 s (Q1, 45 levels).
+  The individual changes:
+  - Rotating-frame substitutions visit only the matrix entries that contain the symbol
+    being replaced and convert the replacement values to SymPy once. `Matrix.subs`
+    re-converted every level energy for every nonzero entry.
+  - The rotation frequencies come from a walk over the coupling graph instead of
+    `sympy.solve`; a closed loop of couplings with inconsistent frequencies still goes to
+    the solver.
+  - The expand, substitution and compaction loops over the symbolic Hamiltonian iterate
+    its nonzero entries, and compaction rebuilds the matrix once instead of deleting one
+    row and column per compacted state.
+  - Branching ratios accumulate the three Cartesian polarizations in one pass per state
+    pair, skip pairs the E1 selection rules make exactly zero, and reduce each ground
+    state once per call to `collapse_matrices` instead of once per excited state.
+  - Collapse-operator compaction works on (row, column, value) triples instead of dense
+    `(n_operators, n, n)` arrays.
+  - `State.transform_to_parity_basis` / `transform_to_omega_basis` accumulate in a single
+    ordered mapping instead of rebuilding the state for every component, and cache the
+    expansion of each basis state.
+  - `State.largest` takes a maximum instead of sorting a copy of the state, and
+    `State.__eq__` uses one dictionary lookup per component and a scalar closeness test
+    in place of a nested scan with `np.allclose`.
+
+- `prepare_lindblad_problem` with the decomposed Hamiltonian representation no longer runs
+  `sympy.simplify` on entries that are polynomials in their symbols, or on terms that are
+  products of symbols; expanding them gives the same result. Lowering the 29-level P2
+  system goes from 199 to 4 ms (preparation as a whole from 0.23 s to 10 ms), the 67-level
+  rotational-cooling system from 744 to 56 ms. Other entries still take the general
+  route. The lowered problem is identical on eight systems, including ones with
+  non-polynomial entries.
+
+- `dense_eig` worker processes now start concurrently. The prepared-problem payload
+  (about 1 MB) was passed as a pool initializer argument, which under the spawn start
+  method made the parent wait for each worker to finish importing the package before it
+  could start the next: about 1.4 s per worker, 11.8 s for 8 workers. The payload now
+  goes through a temporary file that is removed when the pool shuts down (or, for a
+  `DenseLindbladSession`, once every worker has loaded it), and 8 workers start in
+  about 1.5 s. A 380-point `dense_eig` grid scan with `parallel=True` goes from 12.7 to
+  2.2 s and a 32-point one from 10.3 to 1.6 s. Results are unchanged.
+- `import centrex_tlf` takes about 1.0 s instead of 1.4 s. pandas is imported inside the
+  DataFrame helpers that use it (`generate_br_dataframe`, `generate_coupling_dataframe`),
+  and `centrex_tlf.utils.plotting` (and with it matplotlib) is loaded on first attribute
+  access. `utils.plotting`, `from centrex_tlf.utils import plotting` and the plotting
+  names on `centrex_tlf.utils` all still work.
+
+- `hamiltonian.threej_f` and `sixj_f` evaluate a symbol in Rust the first time it is
+  needed, instead of with sympy, when every angular momentum is at most 40
+  (`hamiltonian.wigner.RUST_MAX_J`). The cache in front is unchanged, so only first
+  evaluations are affected: 1.6 instead of 156 microseconds per distinct symbol, which
+  takes a first OBE build in a fresh process from 0.29 to 0.22 s. Above J = 40, without
+  the extension, or for a symbol Rust refuses, sympy is used as before.
+
+- The `H(E, B)` functions from `generate_uncoupled_hamiltonian_X_function` and
+  `generate_coupled_hamiltonian_B_function` skip field components that are exactly zero
+  and accumulate in place, and the B function sums its six field-independent terms once
+  when it is created instead of on every call. With fields along z, a call goes from 18
+  to 7 microseconds for X (64 states) and from 74 to 18 for B (120 states); with all six
+  components nonzero, X is unchanged and B goes from 78 to 45. Results are identical.
+  This matters to code that evaluates `H(E, B)` at every time step, such as the
+  `centrex-state-prep` simulator.
+
+### Documentation
+
+- The AGENTS.md recipe and performance defaults no longer pass
+  `execution_mode="expanded_sparse"` to CPU solves. The packed D+S+U kernel has been the
+  default since 0.3.1 and is 1.4-1.5x faster on the recipe, with photon numbers agreeing
+  to 2e-15. The same argument is removed from the CPU solves in 16 notebooks and
+  `obe_solve_speed_benchmark.py` under `examples/lindblad/`; their stored outputs are
+  untouched. `p2_f1_3o2_f1_mf_scan.ipynb` keeps it, because it records the mode in its
+  committed cache, and `rotational_cooling_old_setup.py` keeps it for its CUDA solve.
+
+- AGENTS.md now recommends `solver="dense_eig"` for static drives. On the recipe's
+  380-point detuning scan it takes 2.7 s with `parallel=True` and 8 s on one core,
+  against 30 s for `dopri5` on 16 logical cores, with photon numbers agreeing to 1.5e-11.
+  The notes also record why the explicit solvers are slow there (the step is limited by
+  stability, not accuracy: about 46 000 steps per trajectory at `reltol=1e-7` and `1e-4`
+  alike) and when `parallel=True` pays for `dense_eig` (above roughly 150 points).
+- `benchmarks/RUST_IMPLICIT_SOLVER_PLAN.md`: an investigation of an implicit Rust solver
+  for time-dependent drives, with prototype measurements. Outcome: not recommended; on
+  multipass Gaussian profiles with sinusoidal polarization switching it does not beat
+  `dopri5`.
+
+### Changed
+
+- `State.remove_small_components` compares with the built-in `abs` instead of `np.abs`. A
+  component whose amplitude is within one rounding step of the tolerance could in
+  principle be kept or dropped differently.
+- Wigner symbols with all angular momenta up to 40 now come from the Rust
+  implementation, so they differ from sympy's values in the last digit (5e-16 relative
+  up to J = 20, 5e-15 at J = 40). Everything built from the Python wrappers moves by the
+  same amount: dipole matrix elements, branching ratios, collapse matrices and the
+  off-diagonal elements of `H_symbolic` changed by at most 5e-16 relative on four test
+  systems, and field-grid strengths by 1.2e-15. `H_int`, level energies and purities are
+  bitwise unchanged; the X and B Hamiltonians already used Rust's Wigner code.
+- The function returned by `generate_coupled_hamiltonian_B_function` captures the sum of
+  the field-independent B terms when it is created. Changing those matrices on the
+  Hamiltonian object afterwards no longer affects an existing function; build a new one.
+- `generate_unitary_transformation_matrix` returns the identity for a Hamiltonian without
+  couplings instead of failing inside the solver.
+
 ## 0.4.0
 
 ### Added
