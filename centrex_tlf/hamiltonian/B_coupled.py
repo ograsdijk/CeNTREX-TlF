@@ -52,15 +52,15 @@ def H_LD(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """Lambda-doubling Hamiltonian for B state in coupled basis.
     
     Describes the splitting of rotational levels with Λ≠0 due to the coupling
-    between electronic orbital angular momentum and molecular rotation. Mixes
-    states with opposite parity (P=±1).
+    between electronic orbital angular momentum and molecular rotation. It is
+    diagonal in parity; in the Omega basis it couples Ω=+1 and Ω=-1.
     
     Args:
         psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF,P⟩
         constants (BConstants): B state molecular constants (q parameter)
     
     Returns:
-        CoupledState: Lambda-doubling contribution coupling P=+1 and P=-1 states
+        CoupledState: Parity-preserving lambda-doubling energy contribution
     """
     J = psi.J
     I1 = psi.I1
@@ -118,11 +118,12 @@ def H_mhf_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """Magnetic hyperfine interaction for Tl nucleus in B state.
     
     Describes the interaction between the electronic angular momentum and the
-    nuclear spin of Tl (I₁). Uses Fermi contact (b) and dipolar (c) terms.
+    nuclear spin of Tl (I₁), parameterized by the effective constant h1_Tl
+    within the isolated Ω=1 electronic manifold.
     
     Args:
         psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
-        constants (BConstants): B state molecular constants (b_Tl, c_Tl)
+        constants (BConstants): B state molecular constants (h1_Tl)
     
     Returns:
         CoupledState: Magnetic hyperfine energy contribution for Tl nucleus
@@ -189,7 +190,8 @@ def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """Magnetic hyperfine interaction for F nucleus in B state.
     
     Describes the interaction between the electronic angular momentum and the
-    nuclear spin of F (I₂). Uses Fermi contact (b) and dipolar (c) terms.
+    nuclear spin of F (I₂), parameterized by the effective constant h1_F
+    within the isolated Ω=1 electronic manifold.
     
     Args:
         psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
@@ -268,17 +270,18 @@ def H_mhf_F(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 
 
 def H_c_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
-    """Nuclear electric quadrupole interaction for Tl nucleus in B state.
+    """Nuclear spin-rotation interaction for Tl nucleus in B state.
     
-    Describes the interaction between the Tl nuclear quadrupole moment and the
-    electric field gradient at the nucleus. Couples states with ΔF₁ = 0, ±1, ±2.
+    Implements C_I(Tl) I_Tl·J, diagonal in J, F₁, F, mF, and parity.
+    This is a magnetic spin-rotation interaction; the spin-1/2 Tl nucleus
+    has no nuclear electric quadrupole moment.
     
     Args:
         psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
         constants (BConstants): B state molecular constants (c_Tl)
     
     Returns:
-        CoupledState: Nuclear quadrupole energy contribution for Tl nucleus
+        CoupledState: Nuclear spin-rotation energy contribution for Tl nucleus
     """
     # Find the quantum numbers of the input state
     J = psi.J
@@ -330,12 +333,13 @@ def H_c_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 def H_cp1_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """Nuclear spin-rotation interaction for Tl nucleus in B state.
     
-    Describes the coupling between the nuclear spin of Tl and the molecular
-    rotation. This is typically a small correction term.
+    Implements the Λ-doubling contribution C'_I(Tl) to the effective nuclear
+    spin-rotation interaction. It couples opposite Ω components and gives
+    parity-dependent shifts in this parity basis.
     
     Args:
         psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩
-        constants (BConstants): B state molecular constants (cp1_Tl)
+        constants (BConstants): B state molecular constants (c1p_Tl)
     
     Returns:
         CoupledState: Nuclear spin-rotation energy contribution for Tl nucleus

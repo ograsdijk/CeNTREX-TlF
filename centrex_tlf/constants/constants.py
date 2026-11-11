@@ -38,7 +38,10 @@ References:
     B-state constants:
         Meijer & Sartakov, arXiv:1911.10734, Table I, based on a refit of the
         spectroscopy in Norrgard et al., Phys. Rev. A 95, 062506 (2017),
-        arXiv:1702.02548. The sign of H follows the original Norrgard convention.
+        arXiv:1702.02548. H retains the original 2017 fitted sign; the 2020
+        table prints the opposite sign. See H_const below for this unresolved
+        source discrepancy. The B-state dipole moment is from Clayburn et al.,
+        Phys. Rev. A 102, 052802 (2020), arXiv:2007.16101: 2.28(7) D.
 
     B-state lifetime and decay rate Γ:
         Hunter et al., Phys. Rev. A 85, 012511 (2012), arXiv:1110.3748:
@@ -308,9 +311,13 @@ class BConstants(HamiltonianConstants):
             Hamiltonian uses B J² - D J⁴ + H J⁶.
 
         H_const:
-            Sextic centrifugal-distortion constant H (Hz). The negative sign
-            follows Norrgard et al.'s original fitted value and Hamiltonian
-            convention.
+            Sextic centrifugal-distortion constant H (Hz), multiplying +[J(J+1)]³.
+            Norrgard et al. (2017), Eqs. (9)-(10) and Table III, give
+            H = -8.1e-8 MHz = -0.081 Hz. Meijer & Sartakov (2020), Table I,
+            print +8.1e-8 MHz, although the text says H is taken from the
+            2017 fit. We retain the original negative value. The source
+            discrepancy is unresolved; it is not an established operator-
+            convention conversion. Verify it before precision high-J use.
 
         h1_Tl:
             Tl magnetic hyperfine constant h1(Tl) (Hz).
@@ -345,7 +352,8 @@ class BConstants(HamiltonianConstants):
 
         μ_E:
             Body-fixed permanent electric dipole moment of the B state expressed
-            as a Stark frequency per electric field, in Hz/(V/cm).
+            as a Stark frequency per electric field, in Hz/(V/cm), from
+            Clayburn et al. (2020): 2.28(7) D.
 
         Γ:
             Excited-state population decay rate (s⁻¹), derived directly from
