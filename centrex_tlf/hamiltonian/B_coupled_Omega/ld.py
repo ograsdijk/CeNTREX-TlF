@@ -101,7 +101,7 @@ def H_cp1_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
         - Couples states with J' = J-1, J, J+1 and Omega' = -Omega
         - The matrix element involves two terms (T(J)T(J) and T(Jp)T(Jp))
         - Typical values for c1p_Tl in TlF B state: ~11 MHz
-        - Selection rules: ΔJ = 0, ±1; ΔΩ = 0 but Omega changes sign
+        - Selection rules: ΔJ = 0, ±1; Ω changes sign (ΔΩ = ±2)
 
     References:
         Brown, J. M., & Carrington, A. (2003). "Rotational Spectroscopy of Diatomic

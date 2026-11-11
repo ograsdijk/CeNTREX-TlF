@@ -8,11 +8,15 @@ use in optical Bloch equations.
 
 import warnings
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple, Union, cast
+from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
-import pandas as pd
+
+if TYPE_CHECKING:
+    # pandas is only needed by the DataFrame helpers; importing it there keeps
+    # ~0.25 s off every `import centrex_tlf`, including in worker processes.
+    import pandas as pd
 
 from centrex_tlf import hamiltonian, states
 from centrex_tlf.states.states import CoupledBasisState
@@ -310,7 +314,9 @@ class CouplingFields:
 
 def _generate_coupling_dataframe(
     field: CouplingField, states_list: Sequence[states.CoupledState]
-) -> pd.DataFrame:
+) -> "pd.DataFrame":
+    import pandas as pd
+
     indices = np.nonzero(np.triu(field.field))
     ground_states = []
     excited_states = []
@@ -332,7 +338,7 @@ def _generate_coupling_dataframe(
 
 def generate_coupling_dataframe(
     fields: CouplingFields, states_list: Sequence[states.CoupledState]
-) -> Sequence[pd.DataFrame]:
+) -> Sequence["pd.DataFrame"]:
     """
     Generate a list of pandas DataFrames with the non-zero couplings between states
     listed for each separate CouplingField input

@@ -1,12 +1,11 @@
 """Hamiltonian operators for TlF B electronic state in coupled Omega basis.
 
-This subpackage provides all Hamiltonian operator implementations for the B(¹)²Π₁/₂
-electronic state of TlF using the coupled basis |J,F₁,F,mF,I₁,I₂,Ω⟩ where Omega
-(projection of electronic angular momentum) is a good quantum number.
+This subpackage provides all Hamiltonian operator implementations for the B³Π₁
+electronic state of TlF using the coupled basis |J,F₁,F,mF,I₁,I₂,Ω⟩. The basis
+contains Ω=±1 components; lambda-doubling terms couple these components.
 
-The B state is a ²Π₁/₂ state with significant lambda-doubling and spin-orbit effects.
-This basis is particularly convenient for describing states with definite parity and
-well-defined Omega projection.
+The effective model describes an isolated Ω=1 electronic manifold, conventionally
+labelled B³Π₁. Definite-parity states are superpositions of the Ω=±1 basis states.
 
 Modules:
     rotational: Rotational energy (B·J² - D·J⁴ + H·J⁶) with centrifugal distortion

@@ -5,7 +5,8 @@ and branching ratio arrays by combining degenerate or nearly-degenerate states i
 single manifolds.
 """
 import copy
-from typing import List, Sequence, TypeVar, Union
+from dataclasses import dataclass
+from typing import Any, List, Optional, Sequence, TypeVar, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -21,6 +22,8 @@ __all__: List[str] = [
     "C_array_to_BR",
     "compact_BR_array_indices",
     "compact_C_array_indices",
+    "CollapseOperators",
+    "compact_collapse_operators",
     "compact_coupling_field",
     "compact_coupling_field_indices",
 ]
@@ -115,13 +118,20 @@ def compact_BR_array_indices(
     new_shape = np.asarray(BR_array.shape[1:]) - len(indices_compact) + 1
     if BR_array.shape[0] == 0:
         return np.zeros((0, *new_shape), dtype=BR_array.dtype)
-    BR_array_new = []
-    for BR in BR_array:
-        id1, id2 = np.nonzero(BR)
-        id1 = id1[0]
-        id2 = id2[0]
-        if (id1 not in indices_compact) & (id2 not in indices_compact):
-            BR_array_new.append(delete_row_column_indices(BR, indices_compact))
+    # Row and column of the first nonzero element of every matrix, in one pass
+    # instead of one np.nonzero call per matrix.
+    nonzero = BR_array.reshape(BR_array.shape[0], -1) != 0
+    if not nonzero.any(axis=1).all():
+        raise IndexError("branching ratio matrix without a nonzero element")
+    id1, id2 = np.divmod(nonzero.argmax(axis=1), BR_array.shape[2])
+    keep = ~np.isin(id1, indices_compact) & ~np.isin(id2, indices_compact)
+    BR_array_new = list(
+        np.delete(
+            np.delete(BR_array[keep], indices_compact[1:], axis=1),
+            indices_compact[1:],
+            axis=2,
+        )
+    )
 
     BR_sum = np.zeros(new_shape, "complex")
     BR_sum[indices_compact[0], :] = np.sum(BR_array, axis=0)[indices_compact].sum(
@@ -145,6 +155,88 @@ def compact_C_array_indices(
     BR_compact = compact_BR_array_indices(BR, indices_compact)
     C_array_compact = BR_to_C_array(BR_compact, Gamma)
     return C_array_compact
+
+
+@dataclass
+class CollapseOperators:
+    """Collapse operators that each have a single nonzero element.
+
+    Operator ``k`` is the ``n x n`` matrix that is zero except for ``values[k]``
+    at ``(rows[k], cols[k])``. This is what `collapse_matrices` produces, and
+    carrying the three arrays instead of ``(n_operators, n, n)`` dense matrices
+    keeps compaction proportional to the number of operators.
+    """
+
+    rows: npt.NDArray[np.intp]
+    cols: npt.NDArray[np.intp]
+    values: npt.NDArray[Any]
+    n: int
+
+    def to_dense(self) -> npt.NDArray[Any]:
+        dense = np.zeros((len(self.values), self.n, self.n), dtype=self.values.dtype)
+        dense[np.arange(len(self.values)), self.rows, self.cols] = self.values
+        return dense
+
+
+def compact_collapse_operators(
+    operators: CollapseOperators,
+    Gamma: float,
+    indices_compact: npt.NDArray[np.int_],
+) -> Optional[CollapseOperators]:
+    """`compact_C_array_indices` for single-element collapse operators.
+
+    Performs the same arithmetic, in the same order and with the same dtypes, as
+    the dense routine applied to ``operators.to_dense()``, so the result is
+    identical to it. Returns None for inputs the dense routine treats specially
+    (no operators, zero elements, two operators on the same element, an empty
+    result); the caller then uses the dense routine.
+    """
+    rows, cols, n = operators.rows, operators.cols, operators.n
+    indices_compact = np.asarray(indices_compact)
+    if (
+        len(rows) == 0
+        or len(indices_compact) == 0
+        or not np.all(operators.values != 0)
+        or len(np.unique(rows * n + cols)) != len(rows)
+    ):
+        return None
+    removed = np.sort(indices_compact[1:])
+    n_new = n - len(removed)
+    representative = int(indices_compact[0])
+    if not 0 <= representative < n_new:
+        return None
+
+    BR = C_array_to_BR(operators.values, Gamma)
+
+    # operators that do not touch the compacted states: renumber past the
+    # removed rows and columns
+    keep = ~np.isin(rows, indices_compact) & ~np.isin(cols, indices_compact)
+    kept_rows = rows[keep] - np.searchsorted(removed, rows[keep])
+    kept_cols = cols[keep] - np.searchsorted(removed, cols[keep])
+
+    # decays into the compacted states: per column, the sum over the compacted
+    # rows in the order they are listed
+    column_sum = np.zeros(n, dtype=BR.dtype)
+    for row in indices_compact:
+        in_row = rows == row
+        column_sum[cols[in_row]] += BR[in_row]
+    # the dense routine keeps the last n_new columns of this sum
+    merged = column_sum[n - n_new :].astype(complex)
+    merged_cols = np.flatnonzero(merged)
+
+    if len(merged_cols):
+        BR_new = np.concatenate([BR[keep].astype(complex), merged[merged_cols]])
+    else:
+        BR_new = BR[keep]
+    if len(BR_new) == 0:
+        return None
+
+    return CollapseOperators(
+        np.concatenate([kept_rows, np.full(len(merged_cols), representative, dtype=np.intp)]),
+        np.concatenate([kept_cols, merged_cols]),
+        BR_to_C_array(BR_new, Gamma),
+        n_new,
+    )
 
 
 def compact_coupling_field(

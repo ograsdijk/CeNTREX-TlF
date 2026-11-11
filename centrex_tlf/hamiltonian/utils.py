@@ -106,13 +106,5 @@ def reduced_basis_hamiltonian(
             idx = basis_original.index(state_red)
         index_red[i] = idx
 
-    # Initialize matrix for Hamiltonian in reduced basis
-    H_red = np.zeros((len(basis_reduced), len(basis_reduced)), dtype=complex)
-
-    # Loop over reduced basis states and pick out the correct matrix elements
-    # for the Hamiltonian in the reduced basis
-    for i, state_i in enumerate(basis_reduced):
-        for j, state_j in enumerate(basis_reduced):
-            H_red[i, j] = H_original[index_red[i], index_red[j]]
-
-    return H_red
+    # Pick out the matrix elements for the Hamiltonian in the reduced basis
+    return np.asarray(H_original)[np.ix_(index_red, index_red)].astype(complex)

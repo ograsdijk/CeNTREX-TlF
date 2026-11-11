@@ -5,6 +5,7 @@ by identifying and combining quantum states that are not coupled to the system o
 interest. This compacting reduces computational cost while maintaining physical accuracy.
 """
 
+from collections import defaultdict
 from typing import Sequence, Union
 
 import numpy as np
@@ -94,23 +95,33 @@ def compact_symbolic_hamiltonian_indices(
 
     # Delete rows and columns for all states except the first (representative) state
     # We keep the first index as the representative that will hold the mean energy
-    num_deleted = 0
     representative_idx = indices_compact[0]
 
-    for idx in indices_compact[1:]:
-        # Adjust index for previously deleted rows/columns
-        current_idx = idx - num_deleted
+    # Indices are checked against the rows/columns still present at that point,
+    # as if each were deleted before the next is examined, but the matrix itself
+    # is only rebuilt once at the end instead of twice per deleted state.
+    remaining = list(range(hamiltonian_compact.shape[0]))
+    remaining_set = set(remaining)
+    row_entries: dict = defaultdict(list)
+    col_entries: dict = defaultdict(list)
+    for (i, j), element in sorted(hamiltonian_compact.todok().items()):
+        row_entries[i].append((j, element))
+        col_entries[j].append((i, element))
 
-        # Get row and column for this state
-        row = hamiltonian_compact[current_idx, :]
-        col = hamiltonian_compact[:, current_idx]
+    for idx in indices_compact[1:]:
+        idx = int(idx)
 
         # Verify no off-diagonal couplings exist
         # Sum of row/column minus the diagonal element should be zero
-        # Access diagonal element directly from the matrix
-        diagonal_element = hamiltonian_compact[current_idx, current_idx]
-        row_coupling = np.sum(row) - diagonal_element  # type: ignore[arg-type]
-        col_coupling = np.sum(col) - diagonal_element  # type: ignore[arg-type]
+        diagonal_element = hamiltonian_compact[idx, idx]
+        row_coupling = (
+            sum(element for other, element in row_entries[idx] if other in remaining_set)
+            - diagonal_element
+        )
+        col_coupling = (
+            sum(element for other, element in col_entries[idx] if other in remaining_set)
+            - diagonal_element
+        )
 
         if row_coupling != 0:
             raise ValueError(
@@ -123,10 +134,11 @@ def compact_symbolic_hamiltonian_indices(
                 f"Sum of off-diagonal elements: {col_coupling}. Cannot compact."
             )
 
-        # Delete this row and column
-        hamiltonian_compact.row_del(current_idx)
-        hamiltonian_compact.col_del(current_idx)
-        num_deleted += 1
+        # Drop this row and column
+        remaining.remove(idx)
+        remaining_set.discard(idx)
+
+    hamiltonian_compact = hamiltonian_compact.extract(remaining, remaining)
 
     # Set the representative state's diagonal element to the mean energy
     # Note: representative_idx doesn't change since we only delete indices after it

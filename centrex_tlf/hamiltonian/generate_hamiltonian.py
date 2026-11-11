@@ -4,6 +4,7 @@ from typing import Any, Callable, List, Sequence, Union
 
 import numpy as np
 import numpy.typing as npt
+from scipy import sparse
 
 from centrex_tlf.constants import BConstants, HamiltonianConstants, XConstants
 from centrex_tlf.states import (
@@ -24,7 +25,15 @@ try:
     )
 
     HAS_RUST = True
+    try:
+        from ..centrex_tlf_rust import (
+            generate_coupled_hamiltonian_B_parity_py as _generate_coupled_hamiltonian_B_parity_rust,
+        )
+    except ImportError:
+        # extension built before the parity-basis builder was added
+        _generate_coupled_hamiltonian_B_parity_rust = None  # type: ignore[assignment]
 except ImportError:
+    _generate_coupled_hamiltonian_B_parity_rust = None  # type: ignore[assignment]
     _generate_coupled_hamiltonian_B_rust = None  # type: ignore[assignment]
     _generate_uncoupled_hamiltonian_X_rust = None  # type: ignore[assignment]
     HAS_RUST = False
@@ -262,6 +271,74 @@ def _generate_coupled_hamiltonian_B_python(
     )
 
 
+def _coupled_hamiltonian_B_parity_from_omega(
+    QN_omega: Sequence[CoupledState],
+    constants: BConstants,
+) -> HamiltonianCoupledBOmega:
+    """Parity-basis B Hamiltonian from the Rust Ω-basis matrices.
+
+    Python counterpart of ``generate_coupled_hamiltonian_B_parity_py``, used when
+    the installed extension predates it.
+
+    Each parity state is a two-term superposition of signed-Ω basis states, so
+    with ``T[k, i] = ⟨Ω_k|P_i⟩`` every term is ``T† H_Ω T``. ``H_Ω`` is built over
+    exactly the Ω states the parity states expand into; components an operator
+    generates outside that set have no overlap with any parity state and drop
+    out, as they do in the element-by-element Python evaluation.
+    """
+    index: dict[CoupledBasisState, int] = {}
+    rows: list[int] = []
+    cols: list[int] = []
+    amps: list[complex] = []
+    for i, state in enumerate(QN_omega):
+        for amp, basis_state in state:
+            rows.append(index.setdefault(basis_state, len(index)))
+            cols.append(i)
+            amps.append(amp)
+
+    T = np.zeros((len(index), len(QN_omega)), dtype=np.complex128)
+    np.add.at(T, (rows, cols), amps)
+    # The expansion amplitudes are all ±1/√2. Factoring that magnitude out leaves
+    # a matrix of signs, so the product is sums and differences of H_Ω elements
+    # and parity-forbidden elements cancel exactly instead of to ~1e-16.
+    magnitudes = np.abs(T[T != 0])
+    scale = float(magnitudes[0]) if magnitudes.size else 1.0
+    if np.allclose(magnitudes, scale, rtol=1e-12, atol=0.0):
+        T = np.round(T / scale)
+        norm = scale * scale
+    else:
+        norm = 1.0
+
+    H_omega = _generate_coupled_hamiltonian_B_rust(list(index), constants)
+
+    # two entries per column: sparse products instead of dense n^3 ones
+    T_sparse = sparse.csr_matrix(T)
+    T_dagger = T_sparse.conj().T.tocsr()
+
+    def transform(M: npt.NDArray[np.complex128]) -> npt.NDArray[np.complex128]:
+        return (T_sparse.T @ (T_dagger @ M).T).T
+
+    def to_parity(M: npt.NDArray[np.complex128]) -> npt.NDArray[np.complex128]:
+        M = transform(M)
+        # H_Ω is exactly Hermitian; remove the rounding asymmetry of the product
+        return (0.5 * norm) * (M + M.conj().T)
+
+    return HamiltonianCoupledBOmega(
+        to_parity(H_omega.Hrot),
+        to_parity(H_omega.H_mhf_Tl),
+        to_parity(H_omega.H_mhf_F),
+        to_parity(H_omega.H_LD),
+        to_parity(H_omega.H_cp1_Tl),
+        to_parity(H_omega.H_c_Tl),
+        to_parity(H_omega.HSx),
+        to_parity(H_omega.HSy),
+        to_parity(H_omega.HSz),
+        to_parity(H_omega.HZx),
+        to_parity(H_omega.HZy),
+        to_parity(H_omega.HZz),
+    )
+
+
 def generate_coupled_hamiltonian_B(
     QN: Union[Sequence[CoupledBasisState], npt.NDArray[Any]],
     constants: BConstants = BConstants(),
@@ -291,10 +368,13 @@ def generate_coupled_hamiltonian_B(
         if not isinstance(qn, CoupledBasisState):
             raise TypeError("supply list with CoupledBasisStates")
     if all([qn.basis == Basis.CoupledP for qn in QN]):
-        # raise NotImplementedError(
-        #     "Generating the hamiltonian in the CoupledP basis is not yet implemented."
-        # )
+        if HAS_RUST and _generate_coupled_hamiltonian_B_parity_rust is not None:
+            return _generate_coupled_hamiltonian_B_parity_rust(list(QN), constants)
+
         QN_omega = [s.transform_to_omega_basis() for s in QN]
+
+        if HAS_RUST and _generate_coupled_hamiltonian_B_rust is not None:
+            return _coupled_hamiltonian_B_parity_from_omega(QN_omega, constants)
 
         return HamiltonianCoupledBOmega(
             HMatElemsBCoupledP(B_coupled_Omega.rotational.Hrot, QN_omega, constants),
@@ -319,23 +399,45 @@ def generate_coupled_hamiltonian_B(
         raise AssertionError("QN basis not supported")
 
 
+def _field_dependent_hamiltonian(
+    field_free: npt.NDArray[np.complex128],
+    terms: Sequence[tuple[Any, npt.NDArray[np.complex128]]],
+) -> npt.NDArray[np.complex128]:
+    """``2π (field_free + Σ value · matrix)``, added in the order given.
+
+    Terms whose field component is exactly zero are skipped: adding ``0 · M`` changes
+    nothing, and with fields along z that is four of the six terms. The remaining
+    terms are accumulated in place, so the result has the values of the plain
+    left-to-right sum without one temporary matrix per term.
+    """
+    total = field_free
+    owned = False
+    for value, matrix in terms:
+        if value == 0:
+            continue
+        if owned:
+            total += value * matrix
+        else:
+            total = total + value * matrix
+            owned = True
+    return 2 * np.pi * total
+
+
 def _uncoupled_ham_func_X(
     E: Union[List[float], npt.NDArray[np.float64]],
     B: Union[List[float], npt.NDArray[np.float64]],
     H: HamiltonianUncoupledX,
 ) -> npt.NDArray[np.complex128]:
-    return (
-        2
-        * np.pi
-        * (
-            H.Hff
-            + E[0] * H.HSx
-            + E[1] * H.HSy
-            + E[2] * H.HSz
-            + B[0] * H.HZx
-            + B[1] * H.HZy
-            + B[2] * H.HZz
-        )
+    return _field_dependent_hamiltonian(
+        H.Hff,
+        (
+            (E[0], H.HSx),
+            (E[1], H.HSy),
+            (E[2], H.HSz),
+            (B[0], H.HZx),
+            (B[1], H.HZy),
+            (B[2], H.HZz),
+        ),
     )
 
 
@@ -358,28 +460,29 @@ def generate_uncoupled_hamiltonian_X_function(
     return partial(_uncoupled_ham_func_X, H=H)
 
 
+def _field_free_B(
+    H: Union[HamiltonianCoupledBP, HamiltonianCoupledBOmega],
+) -> npt.NDArray[np.complex128]:
+    """Sum of the six field-independent B terms, in the order they were always added."""
+    return H.Hrot + H.H_mhf_Tl + H.H_mhf_F + H.H_LD + H.H_cp1_Tl + H.H_c_Tl
+
+
 def _coupled_ham_func_B(
     E: Union[List[float], npt.NDArray[np.float64]],
     B: Union[List[float], npt.NDArray[np.float64]],
     H: Union[HamiltonianCoupledBP, HamiltonianCoupledBOmega],
+    field_free: npt.NDArray[np.complex128] | None = None,
 ) -> npt.NDArray[np.complex128]:
-    return (
-        2
-        * np.pi
-        * (
-            H.Hrot
-            + H.H_mhf_Tl
-            + H.H_mhf_F
-            + H.H_LD
-            + H.H_cp1_Tl
-            + H.H_c_Tl
-            + E[0] * H.HSx
-            + E[1] * H.HSy
-            + E[2] * H.HSz
-            + B[0] * H.HZx
-            + B[1] * H.HZy
-            + B[2] * H.HZz
-        )
+    return _field_dependent_hamiltonian(
+        _field_free_B(H) if field_free is None else field_free,
+        (
+            (E[0], H.HSx),
+            (E[1], H.HSy),
+            (E[2], H.HSz),
+            (B[0], H.HZx),
+            (B[1], H.HZy),
+            (B[2], H.HZz),
+        ),
     )
 
 
@@ -399,5 +502,10 @@ def generate_coupled_hamiltonian_B_function(
 
     Returns:
         Callable: Function H(E, B) -> Hamiltonian matrix
+
+    Note:
+        The six field-independent terms are summed once, here, rather than on every
+        call. The returned function therefore reflects those matrices as they were
+        when it was created; build a new function after changing them.
     """
-    return partial(_coupled_ham_func_B, H=H)
+    return partial(_coupled_ham_func_B, H=H, field_free=_field_free_B(H))

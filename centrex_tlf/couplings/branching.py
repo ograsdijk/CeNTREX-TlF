@@ -1,8 +1,11 @@
-from typing import List, Optional, Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence
 
 import numpy as np
 import numpy.typing as npt
-import pandas as pd
+
+if TYPE_CHECKING:
+    # pandas is only needed by generate_br_dataframe; see coupling_matrix.py
+    import pandas as pd
 
 from centrex_tlf import hamiltonian, states
 
@@ -40,26 +43,61 @@ def calculate_br(
         >>> BRs = calculate_br(excited_state, ground_states)
         >>> print(f"Decay to state 0: {BRs[0]*100:.1f}%")
     """
-    strengths = np.zeros(len(ground_states), dtype=np.float64)
     if not len(ground_states):
-        return strengths
-    polarizations = np.eye(3, dtype=np.complex128)
+        return np.zeros(0, dtype=np.float64)
+    return _branching_ratios_reduced(
+        _reduce_for_branching(excited_state, tol),
+        [_reduce_for_branching(ground_state, tol) for ground_state in ground_states],
+    )
 
-    # Both the small-component removal and the Omega-basis transform inside
-    # generate_ED_ME_mixed_state depend only on the excited state, so doing
-    # them once here saves one rebuild of each per ground state.
-    excited_reduced = hamiltonian.to_omega_basis(excited_state.remove_small_components(tol=tol))
-    for idg, ground_state in enumerate(ground_states):
-        ground_reduced = hamiltonian.to_omega_basis(ground_state.remove_small_components(tol=tol))
-        strengths[idg] = sum(
-            abs(
-                hamiltonian.generate_ED_ME_mixed_state(
-                    ground_reduced, excited_reduced, pol_vec=polarization, normalize_pol=False
-                )
-            )
-            ** 2
-            for polarization in polarizations
-        )
+
+# Cartesian unit polarizations, as the tuples ED_ME_coupled is cached on.
+_CARTESIAN_POLARIZATIONS = tuple(
+    tuple(polarization) for polarization in np.eye(3, dtype=np.complex128)
+)
+
+
+def _reduce_for_branching(state: states.CoupledState, tol: float) -> states.CoupledState:
+    """Drop small components and move to the Omega basis.
+
+    Depends on one state only, so callers looping over excited states can do it
+    once per ground state instead of once per (ground, excited) pair.
+    """
+    return hamiltonian.to_omega_basis(state.remove_small_components(tol=tol))
+
+
+def _branching_ratios_reduced(
+    excited_reduced: states.CoupledState,
+    ground_states_reduced: Sequence[states.CoupledState],
+) -> npt.NDArray[np.floating]:
+    """Branching ratios for states already passed through `_reduce_for_branching`.
+
+    Same sum as three `generate_ED_ME_mixed_state` calls per ground state (one
+    per Cartesian polarization), accumulated in the same component order, but
+    in a single pass over the basis-state pairs and skipping pairs the E1
+    selection rules make exactly zero before the cached lookup.
+    """
+    strengths = np.zeros(len(ground_states_reduced), dtype=np.float64)
+    ED_ME_coupled = hamiltonian.ED_ME_coupled
+    pol_x, pol_y, pol_z = _CARTESIAN_POLARIZATIONS
+    excited_data = excited_reduced.data
+    for idg, ground_reduced in enumerate(ground_states_reduced):
+        me_x = me_y = me_z = 0j
+        for amp_bra, bra in ground_reduced.data:
+            amp_bra_conj = amp_bra.conjugate()
+            for amp_ket, ket in excited_data:
+                if (
+                    abs(bra.J - ket.J) > 1
+                    or abs(bra.mF - ket.mF) > 1
+                    or abs(bra.F - ket.F) > 1
+                    or abs(bra.Omega - ket.Omega) > 1
+                ):
+                    continue
+                weight = amp_bra_conj * amp_ket
+                me_x += weight * ED_ME_coupled(bra, ket, pol_vec=pol_x, rme_only=False)
+                me_y += weight * ED_ME_coupled(bra, ket, pol_vec=pol_y, rme_only=False)
+                me_z += weight * ED_ME_coupled(bra, ket, pol_vec=pol_z, rme_only=False)
+        strengths[idg] = sum(abs(me) ** 2 for me in (me_x, me_y, me_z))
 
     total_strength = strengths.sum()
     if total_strength == 0:
@@ -76,7 +114,7 @@ def generate_br_dataframe(
     group_excited: bool = True,
     remove_zeros: bool = True,
     tolerance: float = 1e-3,
-) -> pd.DataFrame:
+) -> "pd.DataFrame":
     """Generate pandas DataFrame of branching ratios for optical transitions.
 
     Creates a table showing the branching ratios for spontaneous emission from excited
@@ -112,6 +150,8 @@ def generate_br_dataframe(
         >>> df = generate_br_dataframe(ground_states, excited_states, group_ground="J")
         >>> print(df)  # Shows branching ratios grouped by ground state J
     """
+    import pandas as pd
+
     br: List[npt.NDArray[np.floating]] = []
     for es in excited_states:
         br.append(calculate_br(es, ground_states, tolerance))

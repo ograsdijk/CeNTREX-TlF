@@ -7,8 +7,12 @@ import numpy.typing as npt
 
 from centrex_tlf import states
 
-from .branching import calculate_br
-from .utils_compact import compact_C_array_indices
+from .branching import _branching_ratios_reduced, _reduce_for_branching, calculate_br
+from .utils_compact import (
+    CollapseOperators,
+    compact_C_array_indices,
+    compact_collapse_operators,
+)
 
 __all__ = ["collapse_matrices"]
 
@@ -82,7 +86,11 @@ def collapse_matrices(
     elif decay_rate is None:
         decay_rate = 1
 
-    C_list: List[npt.NDArray[np.floating]] = []
+    # One collapse operator per decay path, each with a single nonzero element:
+    # kept as (row, column, value) until the dense array is built at the end.
+    rows: List[int] = []
+    cols: List[int] = []
+    values: List[float] = []
 
     qn_index = {id(state): idx for idx, state in enumerate(QN)}
     for state in ground_states:
@@ -92,29 +100,50 @@ def collapse_matrices(
         if id(state) not in qn_index:
             qn_index[id(state)] = QN.index(state)
 
+    # the ground-state reduction is the same for every excited state
+    ground_states_reduced = [_reduce_for_branching(state, 1e-3) for state in ground_states]
+
     for excited_state in excited_states:
         j = qn_index[id(excited_state)]
-        BRs = calculate_br(excited_state, ground_states)
+        if len(ground_states):
+            BRs = _branching_ratios_reduced(
+                _reduce_for_branching(excited_state, 1e-3), ground_states_reduced
+            )
+        else:
+            BRs = calculate_br(excited_state, ground_states)
         if not np.allclose(np.sum(BRs), 1.0):
             warnings.warn(f"Branching ratio sum > 1, difference = {np.sum(BRs) - 1:.2e}")
         for ground_state, BR in zip(ground_states, BRs):
             i = qn_index[id(ground_state)]
 
             if np.sqrt(BR) > tol:
-                # Initialize the coupling matrix
-                H = np.zeros((len(QN), len(QN)), dtype=np.float64)
-                H[i, j] = np.sqrt(BR * decay_rate)
+                rows.append(i)
+                cols.append(j)
+                values.append(np.sqrt(BR * decay_rate))
 
-                C_list.append(H)
+    operators = CollapseOperators(
+        np.asarray(rows, dtype=np.intp),
+        np.asarray(cols, dtype=np.intp),
+        np.asarray(values, dtype=np.float64),
+        len(QN),
+    )
 
-    C_array = np.array(C_list, dtype=float).reshape(-1, len(QN), len(QN))
+    if not qn_compact:
+        return operators.to_dense()
 
-    if qn_compact:
-        if isinstance(qn_compact, states.QuantumSelector):
-            qn_compact = [qn_compact]
-        QN_compact = copy.deepcopy(QN)
-        for qnc in qn_compact:
-            indices_compact = states.get_indices_quantumnumbers(qnc, QN_compact)
-            QN_compact = states.compact_QN_coupled_indices(QN_compact, indices_compact)
-            C_array = compact_C_array_indices(C_array, decay_rate, indices_compact)
-    return C_array
+    if isinstance(qn_compact, states.QuantumSelector):
+        qn_compact = [qn_compact]
+    QN_compact = copy.deepcopy(QN)
+    C_array: Optional[npt.NDArray[np.floating]] = None
+    for qnc in qn_compact:
+        indices_compact = states.get_indices_quantumnumbers(qnc, QN_compact)
+        QN_compact = states.compact_QN_coupled_indices(QN_compact, indices_compact)
+        if C_array is None:
+            compacted = compact_collapse_operators(operators, decay_rate, indices_compact)
+            if compacted is not None:
+                operators = compacted
+                continue
+            # not expressible as single-element operators: finish on dense arrays
+            C_array = operators.to_dense()
+        C_array = compact_C_array_indices(C_array, decay_rate, indices_compact)
+    return operators.to_dense() if C_array is None else C_array

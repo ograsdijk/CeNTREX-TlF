@@ -5,12 +5,13 @@ from __future__ import annotations
 import hashlib
 import os
 import pickle
+import tempfile
 import threading
 import time
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from concurrent.futures.process import BrokenProcessPool
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from multiprocessing import get_context
 from typing import Any
@@ -36,6 +37,31 @@ def _physical_workers() -> int:
     import psutil
 
     return psutil.cpu_count(logical=False) or max(1, (os.cpu_count() or 1) // 2)
+
+
+def _spool_payload(payload: dict[str, Any]) -> str:
+    """Write the worker payload to a temporary file and return its path.
+
+    Passing the payload itself as an initializer argument makes worker start-up
+    serial under the spawn start method: the parent blocks in ``Process.start``
+    until the child has read the whole pickled process object from a pipe, and
+    the child only gets to the (megabyte-sized) payload after it has imported
+    this package to resolve the initializer. Each worker then costs a full
+    package import, one after the other. With only a path in the arguments the
+    parent returns at once and the workers import concurrently.
+    """
+    with tempfile.NamedTemporaryFile(
+        prefix="centrex_tlf_dense_", suffix=".pkl", delete=False
+    ) as handle:
+        pickle.dump(payload, handle, protocol=5)
+    return handle.name
+
+
+def _remove_spooled_payload(path: str | None) -> None:
+    if path is None:
+        return
+    with suppress(OSError):
+        os.unlink(path)
 
 
 def _payload_digest(prepared: PreparedLindbladProblem) -> bytes:
@@ -72,6 +98,7 @@ class DenseLindbladSession:
         self.startup_seconds = 0.0
         self._digest = _payload_digest(prepared)
         self._pool: ProcessPoolExecutor | None = None
+        self._payload_path: str | None = None
         self._closed = False
         self._lock = threading.Lock()
 
@@ -100,12 +127,13 @@ class DenseLindbladSession:
             return 0.0
         start = time.perf_counter()
         context = get_context("spawn")
+        payload_path = _spool_payload(self.prepared.to_payload())
         pool = ProcessPoolExecutor(
             max_workers=self.workers,
             mp_context=context,
             initializer=_initialize_worker,
             initargs=(
-                self.prepared.to_payload(),
+                payload_path,
                 self.execution_mode,
                 context.Barrier(self.workers),
             ),
@@ -116,8 +144,11 @@ class DenseLindbladSession:
                 raise RuntimeError("dense session worker initialization failed")
         except BaseException:
             pool.shutdown(wait=True, cancel_futures=True)
+            _remove_spooled_payload(payload_path)
             self._closed = True
             raise
+        # every worker has read the payload by now (the barrier above waits for all)
+        _remove_spooled_payload(payload_path)
         self._pool = pool
         self.startup_seconds = time.perf_counter() - start
         return self.startup_seconds
@@ -643,9 +674,23 @@ def _output_rows(
     return rows, output in INTEGRAL_OUTPUTS, output == "selected"
 
 
-def _initialize_worker(payload: dict[str, Any], execution_mode: str, barrier: Any) -> None:
+@contextmanager
+def _spooled_payload_cleanup(path: str | None):
+    try:
+        yield
+    finally:
+        _remove_spooled_payload(path)
+
+
+def _initialize_worker(
+    payload: dict[str, Any] | str, execution_mode: str, barrier: Any
+) -> None:
     global _WORKER_EXTRACTOR, _WORKER_LIMIT, _WORKER_BARRIER
     _WORKER_LIMIT = threadpool_limits(limits=1)
+    if isinstance(payload, str):
+        # path written by _spool_payload
+        with open(payload, "rb") as handle:
+            payload = pickle.load(handle)
     _WORKER_EXTRACTOR = _StaticLiouvillian(payload, execution_mode)
     _WORKER_BARRIER = barrier
 
@@ -893,6 +938,9 @@ def _solve_dense_batch(
             steady_seconds = time.perf_counter() - compute_start
         else:
             context = get_context("spawn")
+            # Workers can be spawned at any point while tasks are being submitted,
+            # so the spooled payload stays until the pool has shut down.
+            payload_path = _spool_payload(payload) if dense_session is None else None
             pool_context = (
                 dense_session._lease(prepared, execution_mode)
                 if dense_session is not None
@@ -901,13 +949,13 @@ def _solve_dense_batch(
                     mp_context=context,
                     initializer=_initialize_worker,
                     initargs=(
-                        payload,
+                        payload_path,
                         execution_mode,
                         context.Barrier(workers) if profile_startup else None,
                     ),
                 )
             )
-            with pool_context as handle:
+            with _spooled_payload_cleanup(payload_path), pool_context as handle:
                 if dense_session is not None:
                     pool, startup_seconds, pool_reused = handle
                 else:

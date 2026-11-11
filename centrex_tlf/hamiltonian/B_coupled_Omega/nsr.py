@@ -46,7 +46,7 @@ def H_c_Tl(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
         - The operator is completely diagonal (no state mixing)
         - Selection rules: ΔJ = 0; ΔI₁ = 0; ΔF₁ = 0; ΔF = 0; ΔmF = 0; ΔΩ = 0
         - For TlF B state: c(Tl) ≈ -7.83 MHz
-        - The negative sign indicates antiparallel coupling is favored
+        - Negative c(Tl) lowers the energy for positive I₁·J (parallel coupling)
         - NSR constants are typically much smaller than hyperfine constants
         - The interaction scales with J(J+1) and I₁(I₁+1)
 

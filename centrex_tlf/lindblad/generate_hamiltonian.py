@@ -33,6 +33,50 @@ __all__ = [
 ]
 
 
+def _rotation_frequencies_from_graph(
+    coupled_states: Sequence[Tuple[int, int, smp.Symbol]],
+    n_states: int,
+) -> Optional[dict]:
+    """Solve ``ω = a_i - a_j`` for every coupling by walking the coupling graph.
+
+    Reproduces what ``sympy.solve`` followed by "set the free parameters to
+    zero" returns for this system. Each connected set of coupled states has one
+    undetermined frequency; the linear solve leaves the highest-index state of
+    the set free, so that state is the zero of the set here too and every other
+    state follows by adding or subtracting ω along the couplings. The free
+    states themselves are left out of the result, as they are in the solve.
+
+    Returns None when two paths to the same state disagree (a closed loop of
+    couplings whose frequencies do not cancel), so the caller can fall back to
+    the general solver.
+    """
+    neighbours: dict = defaultdict(list)
+    for i, j, ω in coupled_states:
+        i, j = int(i), int(j)
+        neighbours[i].append((j, ω))  # a_j = a_i - ω
+        neighbours[j].append((i, -ω))  # a_i = a_j + ω
+
+    frequencies: dict = {}
+    roots = set()
+    for root in sorted(neighbours, reverse=True):
+        if root in frequencies:
+            continue
+        roots.add(root)
+        frequencies[root] = smp.Integer(0)
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            for other, shift in neighbours[node]:
+                value = frequencies[node] - shift
+                if other not in frequencies:
+                    frequencies[other] = value
+                    stack.append(other)
+                elif frequencies[other] != value:
+                    return None
+    # the root of every connected set is the free parameter: not part of the solution
+    return {idx: frequencies[idx] for idx in sorted(frequencies) if idx not in roots}
+
+
 def generate_unitary_transformation_matrix(
     hamiltonian: smp.MutableDenseMatrix,
     manifold_indices: Optional[List[List[int]]] = None,
@@ -68,9 +112,10 @@ def generate_unitary_transformation_matrix(
     t = smp.Symbol("t", real=True)
 
     coupled_states = []
-    for i, j in zip(*np.nonzero(hamiltonian)):
+    # nonzero entries in row-major order, without converting the matrix to NumPy
+    for (i, j), element in sorted(hamiltonian.todok().items()):
         if i < j:
-            syms = hamiltonian[i, j].free_symbols
+            syms = element.free_symbols
             syms = [s for s in syms if str(s)[0] == "ω"]
             if len(syms) != 1:
                 raise ValueError(f"Too many/few couplings, syms = {syms}")
@@ -78,17 +123,21 @@ def generate_unitary_transformation_matrix(
 
     # solve equations to generate unitary transformation to rotating frame
     A = smp.symbols(f"a:{n_states}")
-    Eqns = []
-    # generate equations
-    for i, j, ω in coupled_states:
-        Eqns.append(ω - (A[i] - A[j]))
-    # solve system of equations
-    sol = smp.solve(Eqns, A)
-    # set free parameters to zero in the solution
-    free_params = [value for value in A if value not in list(sol.keys())]
-    for free_param in free_params:
-        for key, val in sol.items():
-            sol[key] = val.subs(free_param, 0)
+    frequencies = _rotation_frequencies_from_graph(coupled_states, n_states)
+    if frequencies is not None:
+        sol = {A[idx]: frequency for idx, frequency in frequencies.items()}
+    else:
+        Eqns = []
+        # generate equations
+        for i, j, ω in coupled_states:
+            Eqns.append(ω - (A[i] - A[j]))
+        # solve system of equations
+        sol = smp.solve(Eqns, A)
+        # set free parameters to zero in the solution
+        free_params = [value for value in A if value not in list(sol.keys())]
+        for free_param in free_params:
+            for key, val in sol.items():
+                sol[key] = val.subs(free_param, 0)
 
     # propagate rotation frequencies within manifolds
     if manifold_indices is not None:
@@ -140,11 +189,10 @@ def symbolic_hamiltonian_to_rotating_frame(
     # use unitary matrix to transform to rotating frame
     transformed = T.adjoint() @ hamiltonian @ T - 1j * T.adjoint() @ smp.diff(T, t)
     # expand to get rid of exponentials that cancel out
-    for i in range(transformed.shape[0]):
-        for j in range(i + 1, transformed.shape[0]):
-            if transformed[i, j] != 0:
-                transformed[i, j] = smp.expand(transformed[i, j])
-                transformed[j, i] = smp.conjugate(transformed[i, j])
+    for (i, j), element in sorted(transformed.todok().items()):
+        if i < j:
+            transformed[i, j] = smp.expand(element)
+            transformed[j, i] = smp.conjugate(transformed[i, j])
     # transformed = smp.expand(transformed)
 
     transformed = smp.Matrix(transformed)
@@ -168,9 +216,13 @@ def symbolic_hamiltonian_to_rotating_frame(
 
         # transform to δ instead of ω and E
         if idg < ide:
-            transformed = transformed.subs(ω, energies[ide] - energies[idg] + δ)
+            _subs_where_present(
+                transformed, [(ω, energies[ide] - energies[idg] + δ)]
+            )
         elif idg > ide:
-            transformed = transformed.subs(ω, energies[idg] - energies[ide] + δ)
+            _subs_where_present(
+                transformed, [(ω, energies[idg] - energies[ide] + δ)]
+            )
 
     # remove excited state energy from all diagonal entries
     for idc, (δ, coupling) in enumerate(zip(δs, couplings)):
@@ -187,11 +239,31 @@ def symbolic_hamiltonian_to_rotating_frame(
         transformed[idx, idx] = strip_float_ones(transformed[idx, idx])
 
     # substitute level energies for symbolic values
-    transformed = transformed.subs(
-        [(E, val) for E, val in zip(energies, np.diag(H_int))]
-    )
+    _subs_where_present(transformed, list(zip(energies, np.diag(H_int))))
 
     return transformed
+
+
+def _subs_where_present(
+    matrix: smp.MutableDenseMatrix,
+    replacements: Sequence[Tuple[Any, Any]],
+) -> None:
+    """Substitute symbols in place, visiting only the entries that contain them.
+
+    Gives the same entries as ``matrix.subs(replacements)`` for symbol → value
+    pairs, but ``Matrix.subs`` converts every replacement to SymPy and walks the
+    expression tree once per pair for *every* nonzero entry. Here the pairs are
+    converted once and each entry is only offered the symbols it actually
+    holds, in the original order, so the sequential-substitution result is
+    unchanged.
+    """
+    pairs = [(smp.sympify(old), smp.sympify(new)) for old, new in replacements]
+    symbols = {old for old, _ in pairs}
+    for (i, j), entry in sorted(matrix.todok().items()):
+        present = entry.free_symbols & symbols
+        if not present:
+            continue
+        matrix[i, j] = entry.subs([pair for pair in pairs if pair[0] in present])
 
 
 def generate_symbolic_hamiltonian(

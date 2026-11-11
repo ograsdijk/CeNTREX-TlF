@@ -2,7 +2,7 @@
 
 This module implements the interaction between molecular magnetic moment and external
 magnetic fields (Zeeman effect). The electronic magnetic moment in the B state
-(²Π₁/₂) couples to magnetic fields through the orbital angular momentum projection Ω.
+(B³Π₁, |Ω|=1) couples to magnetic fields through the effective electronic moment.
 
 The Zeeman interaction is important for understanding magnetic field effects on
 molecular energy levels and for experiments using magnetic fields for state manipulation.
@@ -25,8 +25,8 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
     """Magnetic dipole operator (pth spherical tensor component) for B state.
 
     Applies the pth component (p = -1, 0, +1) of the magnetic dipole operator in
-    spherical tensor form. For molecules in ²Π states, the electronic magnetic moment
-    is primarily due to orbital angular momentum, with g_L ≈ 1.
+    spherical tensor form. The isolated B³Π₁ model uses the orbital contribution
+    with g_L ≈ 1 and Σ=0. Its body-fixed moment is proportional to g_L Ω.
 
     The operator couples rotational states through the electronic magnetic moment,
     which is proportional to the projection Ω of electronic angular momentum along
@@ -50,10 +50,11 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
 
     Notes:
         - Selection rules: ΔJ = 0, ±1; ΔF₁ = 0, ±1; ΔF = 0, ±1; ΔmF = p; ΔΩ = 0
-        - g_L = 1 (orbital g-factor) appropriate for ²Π₁/₂ state
+        - g_L = 1 is the orbital g-factor in the isolated B³Π₁ approximation
         - Amplitude proportional to Ω (vanishes for Σ states with Ω=0)
         - For TlF B state: μ_B ≈ 1.4 MHz/Gauss
-        - Spin contribution neglected (g_S terms small for ²Π₁/₂)
+        - The diagonal spin contribution vanishes for Σ=0; g_S is not used here
+        - Nuclear and rotational Zeeman terms and nearby-state corrections are omitted
         - Matrix elements similar to electric dipole but with magnetic coupling
 
     References:
@@ -68,7 +69,7 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
         >>> result_sp = mu_p(state, +1, constants)     # σ⁺ component
         >>> result_sm = mu_p(state, -1, constants)     # σ⁻ component
     """
-    # Electronic orbital g-factor (appropriate for ²Π₁/₂ state)
+    # Orbital g-factor for the isolated B³Π₁ (Σ=0) model
     gL = constants.gL
 
     # Find the quantum numbers of the input state

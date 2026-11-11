@@ -94,7 +94,10 @@ pub struct BConstants {
     pub b_rot: f64,
     /// Centrifugal distortion constant (Hz)
     pub d_rot: f64,
-    /// Higher order centrifugal distortion constant (Hz)
+    /// Sextic constant multiplying +[J(J+1)]^3 (Hz). Retains the negative
+    /// 2017 fitted value; the 2020 table prints the opposite sign despite
+    /// citing that fit. This source discrepancy remains unresolved; see
+    /// Python BConstants.H_const documentation.
     pub h_const: f64,
     /// Tl hyperfine constant (Hz)
     pub h1_tl: f64,

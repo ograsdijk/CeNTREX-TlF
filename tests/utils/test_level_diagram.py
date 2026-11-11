@@ -397,3 +397,16 @@ def test_plot_into_supplied_axes_keeps_the_figure_suptitle(p2_structure):
         assert fig.get_suptitle() == "caller's own title"
     finally:
         plt.close(fig)
+
+
+def test_lazy_plotting_names_match_the_module():
+    """`centrex_tlf.utils` loads `plotting` on first use; its name list must not drift."""
+    import importlib
+
+    from centrex_tlf import utils
+
+    plotting_module = importlib.import_module("centrex_tlf.utils.plotting")
+    assert tuple(plotting_module.__all__) == utils._PLOTTING_NAMES
+    assert utils.plotting is plotting_module
+    for name in utils._PLOTTING_NAMES:
+        assert getattr(utils, name) is getattr(plotting_module, name)
