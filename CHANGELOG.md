@@ -110,6 +110,13 @@
   for time-dependent drives, with prototype measurements. Outcome: not recommended; on
   multipass Gaussian profiles with sinusoidal polarization switching it does not beat
   `dopri5`.
+- Corrected B-state docstrings and comments (no code changes): the state is B³Π₁ with
+  Ω = ±1 components, not ²Π₁/₂; Λ-doubling is diagonal in parity and couples Ω = +1 and
+  −1; the Tl term `H_c_Tl` is nuclear spin-rotation, not an electric quadrupole
+  interaction (Tl has spin 1/2); the hyperfine terms are parameterized by `h1_Tl` and
+  `h1_F`; the Zeeman notes describe the isolated Σ = 0 model. `BConstants.H_const` now
+  documents the unresolved sign discrepancy between the 2017 fit (−8.1e-8 MHz, used
+  here) and the 2020 table, and the dipole moment cites Clayburn et al. (2020).
 
 ### Changed
 
