@@ -134,12 +134,16 @@ result = lindblad.grid_scan(
     prepared, rho0, (0.0, T_END),
     scan={"detuning": 2 * np.pi * 1e6 * np.arange(-30.0, 160.0, 0.5),
           "rabi": np.array([rabi_value])},
-    solver="dopri5", execution_mode="expanded_sparse",
+    solver="dopri5",
     output="photon_integral", integral_weights=[(i, float(GAMMA)) for i in excited],
     output_when="saveat", saveat=np.linspace(0.0, T_END, 801),
     dt=2e-9, reltol=1e-7, abstol=1e-9, parallel=True)
 photons = result.values.reshape(-1, 801)[:, -1].real   # integrated photons per molecule
 ```
+
+This drive is static, so `solver="dense_eig"` gives the same photon numbers (to 1.5e-11)
+about 11× faster; see Performance. `dopri5` is shown because it also covers
+time-dependent drives.
 
 Everything used above is re-exported from `centrex_tlf.lindblad` directly; the deeper import paths
 (`lindblad.plan_static`, `lindblad.parameters`) that older notebooks use still work but are not
@@ -342,8 +346,8 @@ Capabilities that already exist — check here before building something new.
   `parity_allowed` column or argument before summing a peak.
   `grid.save(path)` / `TransitionFieldGrid.load(path, expected=...)` use `.npz` and refuse a
   different package version, reference Hamiltonians/dipoles or build parameters. Strengths are hints only (no populations,
-  dark states or saturation — that needs the OBE). Ground `J ≤ 8` over 0–300 V/cm: ~30 s
-  (25 s of it building B matrices), 51 stored fields, 23 498 components, 9.7 MB file.
+  dark states or saturation — that needs the OBE). Ground `J ≤ 8` over 0–300 V/cm: ~4 s
+  (0.1 s of it building B matrices), 51 stored fields, 23 498 components, 9.7 MB file.
   The core `TransitionFieldGrid.build(lower, upper, {q: D_q}, ...)` is X→B agnostic (pass
   the same `FieldMatrices` twice for X→X); there is no microwave builder yet.
 - **Multi-transition systems.** Lasers and microwaves together — rotational cooling drives
@@ -367,8 +371,38 @@ Capabilities that already exist — check here before building something new.
 ## Performance
 
 - Defaults that are almost always right: `solver="dopri5"`,
-  `execution_mode="expanded_sparse"`, `hamiltonian_representation="decomposed"`,
-  `backend="rust"`, `parallel=True`. `tsit5` is a reasonable alternative.
+  `hamiltonian_representation="decomposed"`, `backend="rust"`, `parallel=True`, and
+  **no `execution_mode` argument**. `tsit5` is a reasonable alternative.
+- **For a static drive, use `solver="dense_eig"`.** "Static" means nothing in the problem
+  depends on time: constant Rabi rates and polarizations, no beam profile, no switching.
+  The recipe above is static, and its 380-point scan takes 2.7 s with `dense_eig` and
+  `parallel=True`, 8 s with `parallel=False` (21 ms per point with 801 save points, 16 ms
+  with `output_when="final"`), against 30 s for `dopri5` on 16 logical cores, with photon
+  numbers agreeing to 1.5e-11. It is a drop-in change: `dt`, `reltol` and `abstol` are
+  accepted and ignored. The explicit solvers are slow here because their step is pinned
+  to ~2 ns by stability (coherences oscillating at the detuning plus the B-state
+  splittings), whatever the tolerance: `dopri5` takes ~46 000 steps per trajectory at
+  `reltol=1e-7` and at `1e-4` alike.
+- `parallel=True` with `dense_eig` starts a process pool, which costs ~1.5 s before the
+  first point (one package import per worker, done concurrently). Use it when the serial
+  scan would take longer than ~3 s, roughly 150 points; what decides that is the total
+  work, not the number of initial states. Measured, serial against parallel: 32 points ×
+  1 state, 0.5 vs 1.6 s; 380 points × 1 state, 5.9 vs 2.2 s; 32 points × 1000 states,
+  1.0 vs 1.9 s; 380 points × 1000 states, 12.3 vs 7.6 s. To pay the start-up once across
+  several calls, hold a `DenseLindbladSession` and pass `dense_session=`.
+- Extra initial states are almost free with `dense_eig`
+  (`grid_scan(..., rho0=None, rho0_batch=...)`): one parameter point takes 0.04 s for 1
+  or for 1000 initial states and 0.8 s for 20 000. A parameter point costs 15–35 ms
+  depending on how much of the level structure the initial states populate.
+- Keep `dopri5` for anything time-dependent, for terminal events and for sampled
+  quadrature; `dense_eig` rejects those. An implicit (Radau) solver was investigated
+  for that case and is not worth building: on multipass Gaussian profiles with
+  sinusoidal polarization switching it does not beat `dopri5`. Measurements are in
+  `benchmarks/RUST_IMPLICIT_SOLVER_PLAN.md`.
+- Do not pass `execution_mode="expanded_sparse"` to CPU solves. Many committed notebooks
+  do, from before 0.3.1 made the packed D+S+U kernel the default; on the recipe above it
+  costs 1.4–1.5× (120 vs 85 ms per point) for photon numbers that agree to 2e-15. It is
+  still the required mode for the CUDA ODE solvers.
 - SciPy `scipy_bdf` / `scipy_radau` exist only as stiff fallbacks and are much slower for scans.
   `python_rk45` is for correctness checks.
 - Prepare once, scan many times — symbolic lowering happens in `prepare_lindblad_problem`.
@@ -393,8 +427,30 @@ Capabilities that already exist — check here before building something new.
   both default to True. These choices carry through batch/grid payloads.
   See `benchmarks/rust_specialized_rhs_results/PREPARED_HAMILTONIAN_INTEGRATION.md`.
 - Cache expensive rebuilds with `@lru_cache` keyed on **integer grid indices**, not floats.
-- Cost anchor (29-level system, 109 µs trajectory, 8-core laptop): ~1 s per OBE build,
-  ~130 ms per trajectory, so ~50 s for a 380-point detuning spectrum with `parallel=True`.
+- Cost anchor (29-level system, 109 µs trajectory, 8-core laptop): ~0.2 s per OBE build,
+  ~10 ms for `prepare_lindblad_problem`, ~85 ms per trajectory with `dopri5`, so ~32 s
+  for a 380-point detuning spectrum with `parallel=True` (one trajectory alone is ~0.7 s
+  on one core). With `dense_eig` the same spectrum takes ~8 s on one core and ~2.7 s
+  with `parallel=True`. `import centrex_tlf` takes ~1.0 s; pandas and matplotlib are
+  loaded on first use, not at import.
+  Builds scale with the system: 0.1–0.5 s for 30–70 levels, polarization switching at the
+  upper end. Trajectories, not builds, now dominate a scan that rebuilds per point.
+- `generate_coupled_hamiltonian_B` runs in Rust in both bases. Parity-basis states
+  (`P` set — what the OBE builders' inputs and `field_matrices_B` use) go through
+  `generate_coupled_hamiltonian_B_parity_py`, which builds the signed-Ω matrices and
+  combines them; J=1–4 with both parities (192 states) takes ~2.5 ms, J=1–11 (1144) ~70 ms.
+  An extension built before that function existed still works, through the Rust Ω-basis
+  matrices plus a sparse transform in Python (~4× slower, identical output); with no
+  extension at all it falls back to a pure-Python loop that is 300–700× slower. If B
+  matrices are unexpectedly slow, the installed `.pyd` is stale: rebuild with
+  `python -m maturin develop --release` (with `VIRTUAL_ENV` pointing at `.venv`).
+- Wigner symbols (`hamiltonian.threej_f` / `sixj_f`) are cached per process. A first
+  evaluation runs in Rust (1.6 µs) when every angular momentum is ≤ 40, and in sympy
+  (156 µs, exact) above that, without the extension, or for a symbol Rust refuses. For
+  the symbols the package uses — one small angular momentum, such as (J, 1, J′) — Rust
+  agrees with sympy to 5e-16 up to J = 20 and 5e-15 at J = 40. The X and B Hamiltonian
+  builders in Rust use the same Rust code at every J, with no sympy cut-off: its error
+  for these symbols is ~1e-12 at J = 100 and ~1e-9 at J = 2000.
 - Anything that changes the coupling matrix (polarization, E field) needs a rebuild. Detuning,
   Rabi rate and other runtime parameters do not — put them in the same `grid_scan`.
 - On-disk caching convention (from `examples/ramsey_rf/benchmarks/_cache`): the filename encodes
@@ -405,7 +461,8 @@ Capabilities that already exist — check here before building something new.
 
 - `solver="dense_eig"` is an optional static-generator path in the usual single,
   batch and grid APIs. CPU decomposition is shared across initial states and
-  sample times. The default remains `dopri5`.
+  sample times. The default remains `dopri5`, but for static drives `dense_eig` is
+  several times faster; see the timings under Performance.
 - It rejects direct/indirect runtime time dependence, terminal events, sampled
   quadrature, and singular/ill-conditioned eigenbases. ODE tolerances/timesteps
   do not control its accuracy.
