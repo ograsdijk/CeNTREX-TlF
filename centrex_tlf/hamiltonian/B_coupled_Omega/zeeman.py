@@ -26,7 +26,10 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
 
     Applies the pth component (p = -1, 0, +1) of the magnetic dipole operator in
     spherical tensor form. The isolated B³Π₁ model uses the orbital contribution
-    with g_L ≈ 1 and Σ=0. Its body-fixed moment is proportional to g_L Ω.
+    with g_L ≈ 1 and Σ=0. Its body-fixed moment is -g_L Ω μ_B: the electron's
+    magnetic moment is antiparallel to its angular momentum, so the Zeeman
+    Hamiltonian -μ·B equals +g_L μ_B B·L and a pure |J, Ω, mJ⟩ state shifts by
+    +μ_B Ω² mJ B_z / (J(J+1)).
 
     The operator couples rotational states through the electronic magnetic moment,
     which is proportional to the projection Ω of electronic angular momentum along
@@ -100,8 +103,11 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
         for F1 in np.arange(np.abs(J - I1), J + I1 + 1):
             # Loop over possible values of F
             for F in np.arange(np.abs(F1 - I2), F1 + I2 + 1):
+                # The electron's magnetic moment is antiparallel to its angular
+                # momentum: mu = -g_L mu_B L, so the body-frame moment is
+                # -g_L Omega mu_B and H_Z = -mu.B = +g_L mu_B B.L.
                 amp = (
-                    gL
+                    -gL
                     * Omega
                     * constants.μ_B
                     * (-1) ** (F + Fp + F1 + F1p + I1 + I2 - Omega - mF)
@@ -228,7 +234,8 @@ def HZz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     Notes:
         - Preserves mF (ΔmF = 0)
         - For quantization along z, this represents longitudinal field
-        - Creates linear Zeeman shift: E_Zeeman = -μ_z·B_z
+        - Creates linear Zeeman shift: E_Zeeman = -μ_z·B_z = +g_F μ_B mF B_z,
+          with g_F > 0 for the low-J B-state levels
         - Most important component for DC magnetic field experiments
         - Energy shifts proportional to mF for weak fields
         - Used for magnetic substate selection and manipulation

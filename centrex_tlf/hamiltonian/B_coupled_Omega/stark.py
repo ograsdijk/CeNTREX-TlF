@@ -49,7 +49,7 @@ def d_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
 
     Notes:
         - Selection rules: ΔJ = 0, ±1; ΔF₁ = 0, ±1; ΔF = 0, ±1; ΔmF = p; ΔΩ = 0
-        - For TlF B state: μ_E ≈ 1.15 MHz/(V/cm) = 4.22 Debye
+        - For TlF B state: μ_E ≈ 1.15 MHz/(V/cm) = 2.28 Debye
         - The operator conserves parity for ΔJ = ±1, changes parity for ΔJ = 0
         - Matrix elements scale as √[J(J+1)] for transitions between adjacent J
 

@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The B-state Zeeman Hamiltonian had the wrong overall sign. `mu_p` used a body-frame
+  moment of `+gL·Ω·μ_B`; the electronic moment is antiparallel to the angular momentum,
+  so it is `-gL·Ω·μ_B` and `H_Z = +gL μ_B B·L`. Magnitudes were right, but every B-state
+  level moved the wrong way in a magnetic field: g_F of J̃ = 1, F₁ = 1/2, F = 1 came out
+  as -0.32 where Meijer & Sartakov (PRA 101, 042506) give +0.32. Fixed in
+  `B_coupled_Omega/zeeman.py`, `B_coupled.py` and `rust/src/b_coupled.rs`; `HZx`, `HZy`
+  and `HZz` all change sign. The X-state Zeeman term was already correct.
+  - Effect: equivalent, to within the kHz/G X-state nuclear Zeeman effect, to reversing
+    the magnetic field. Results with linearly polarized light are unchanged. With
+    circular or elliptical light in a magnetic field, the σ⁺ and σ⁻ components swap
+    sides: up to 0.45 MHz/G (J̃ = 1) or 0.60 MHz/G (J̃ = 2, F₁ = 3/2, F = 1).
+  - Which sublevels a polarization drives was and is correct.
+  - Cached or pickled B Hamiltonians and `.npz` results computed with a nonzero magnetic
+    field are stale. Rebuild the Rust extension (`python -m maturin develop --release`);
+    an old `.pyd` still has the old sign.
+  - Test references follow: `tests/hamiltonian/B_reduced_parity.pkl` and
+    `H_reduced_total.pkl` are regenerated (the old files are reproduced exactly by
+    `BConstants(gL=-1)`, so the sign is the only difference), and the hard-coded Zeeman
+    offsets at the `B = 1e-5 G` placeholder in `tests/lindblad/test_generate_hamiltonian.py`
+    and the g-factors in `tests/hamiltonian/test_hamiltonian.py` change sign.
+
+### Added
+
+- `tests/hamiltonian/test_B_literature.py`: the zero-field B Hamiltonian against
+  published numbers. Λ-doublet splittings and g_F (sign and magnitude, Rust and Python
+  builders) for J̃ = 1 and 2 against Meijer & Sartakov Table 2, and the J̃ = 1 hyperfine
+  and Λ-doublet splittings against the measurements of Clayburn et al. (PRA 102, 052802)
+  Table I.
+
+### Documentation
+
+- `BConstants`: the constants are those of Meijer & Sartakov, PRA 101, 042506 (2020),
+  Table 1, now cited with the fit uncertainties and the accuracy of the model (2-4 MHz
+  for J̃ = 1 against direct measurement, about 8 MHz for J′ ≥ 2). The sign of `H_const`
+  is no longer described as unresolved: -8.1(6)e-8 MHz is the fitted value of Norrgard
+  et al. (2017) and the unsigned entry in the 2020 table is a dropped sign.
+- `B_coupled_Omega/stark.py` quoted the X-state dipole (4.22 D) for the B state; it is
+  2.28 D.
+- `couplings/polarization.py` defines σ⁺/σ⁻ by the ΔmF they drive and states the vector
+  convention, in place of "left"/"right" circular.
+
 ## 0.4.1
 
 ### Added

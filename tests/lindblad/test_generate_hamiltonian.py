@@ -60,8 +60,8 @@ def test_generate_symbolic_hamiltonian():
         δl,
         δl - 0.10302734375,
         δl - 0.206100463867188,
-        56.5034961700439,
-        28.2517433166504,
+        -56.5034961700439,
+        -28.2517433166504,
         0,
     ]
     angular_frequency_atol = 0.01
@@ -134,8 +134,8 @@ def test_generate_total_symbolic_hamiltonian():
         δl - 0.103073120117188,
         δl - 0.206039428710938,
         508269908134.471,
-        56.5186948776245,
-        28.2593536376953,
+        -56.5186948776245,
+        -28.2593536376953,
         0,
     ]
     for dh, dtv in zip(np.diag(hamiltonian_symbolic), true_values):
