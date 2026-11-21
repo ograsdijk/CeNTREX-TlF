@@ -13,7 +13,8 @@ searching for hadronic CP violation via the Schiff moment of the <sup>205</sup>T
 The physical model is a two-electronic-state molecule: the ground **X** <sup>1</sup>Σ<sup>+</sup>
 state (Ω=0) and the electronically excited **B** <sup>3</sup>Π<sub>1</sub> state (Ω=±1, with
 Λ-doubled parity pairs). Both carry hyperfine structure from two spin-1/2 nuclei
-(<sup>205</sup>Tl and <sup>19</sup>F), coupled as `F1 = J + I_F` and `F = F1 + I_Tl`.
+(<sup>205</sup>Tl and <sup>19</sup>F), coupled as `F1 = J + I_Tl` and `F = F1 + I_F` (Tl first, in both X and B: `CoupledBasisState.I1`
+is the Tl spin, the one the c1 / h1(Tl) terms act on).
 
 Published to PyPI as `centrex-tlf`. Heavy numerics run through a compiled Rust extension
 (`centrex_tlf_rust`, sources in `rust/`). An optional Julia backend lives in a separate package,

@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- The coupled-basis docs said `F1 = J + I_F`, `F = F1 + I_Tl`. The Hamiltonians couple the Tl
+  spin first in both X and B: `CoupledBasisState.I1` is the spin the X `c1` (126 kHz) and the B
+  `h1_Tl` terms act on, and X `Hc1` is exactly diagonal in F1 while `Hc2` is not. The
+  `generate_coupled_states_*` docstring, AGENTS.md and an example report now say
+  `F1 = J + I_Tl`, `F = F1 + I_F`, and the generators pass `I_Tl` as `I1`. Both spins are 1/2,
+  so no state, label or number changes.
 - The B-state Zeeman Hamiltonian had the wrong overall sign. `mu_p` used a body-frame
   moment of `+gL·Ω·μ_B`; the electronic moment is antiparallel to the angular momentum,
   so it is `-gL·Ω·μ_B` and `H_Z = +gL μ_B B·L`. Magnitudes were right, but every B-state
