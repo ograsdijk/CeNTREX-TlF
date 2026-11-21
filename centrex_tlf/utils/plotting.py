@@ -12,6 +12,7 @@ from matplotlib.figure import Figure
 from matplotlib.font_manager import FontProperties
 from matplotlib.ticker import FormatStrFormatter, MaxNLocator
 
+from centrex_tlf.constants import BConstants, XConstants
 from centrex_tlf.hamiltonian.tracking import (
     TrackedLevels,
     _n_tracking_steps,  # noqa: F401  (re-exported for tests and callers)
@@ -1187,6 +1188,7 @@ def _calculate_ground(
     j_padding: int,
     max_step_V_cm: float,
     max_step_G: float,
+    constants: XConstants = XConstants(),
 ) -> tuple[list[DressedLevel], list[tuple[float, int]]]:
     J = int(transition.J_ground)
     parents: list[Any] = sorted(
@@ -1199,7 +1201,7 @@ def _calculate_ground(
     )
     mF_values = sorted({int(qn.mF) for qn in parents})
     tracked = track_levels(
-        field_matrices_X(max(0, J - j_padding), J + j_padding),
+        field_matrices_X(max(0, J - j_padding), J + j_padding, constants),
         [E],
         B_z=B,
         max_step_V_cm=max_step_V_cm,
@@ -1249,6 +1251,7 @@ def _calculate_excited(
     j_padding: int,
     max_step_V_cm: float,
     max_step_G: float,
+    constants: BConstants = BConstants(),
 ) -> tuple[list[DressedLevel], dict[int, float]]:
     J = int(transition.J_excited)
     F1 = float(transition.F1_excited)
@@ -1256,7 +1259,7 @@ def _calculate_excited(
 
     mF_values = list(range(-F, F + 1))
     tracked = track_levels(
-        field_matrices_B(max(1, J - j_padding), J + j_padding),
+        field_matrices_B(max(1, J - j_padding), J + j_padding, constants),
         [E],
         B_z=B,
         max_step_V_cm=max_step_V_cm,
@@ -1309,6 +1312,8 @@ def calculate_transition_level_structure(
     b_j_padding: int = 2,
     max_tracking_step_V_cm: float = 2.0,
     max_tracking_step_G: float = 1.0,
+    X_constants: XConstants = XConstants(),
+    B_constants: BConstants = BConstants(),
 ) -> TransitionLevelStructure:
     """Field-dressed X and B levels of an optical transition, with the zero-field
     parent character of every level.
@@ -1343,6 +1348,9 @@ def calculate_transition_level_structure(
         Electric and magnetic field steps used for adiabatic tracking; the ramp
         uses whichever demands more steps. Smaller is safer near avoided
         crossings; a converged result is step-size independent.
+    X_constants, B_constants
+        Molecular constants for the X and B Hamiltonians; library values by
+        default.
 
     Returns
     -------
@@ -1366,6 +1374,7 @@ def calculate_transition_level_structure(
         int(x_j_padding),
         float(max_tracking_step_V_cm),
         float(max_tracking_step_G),
+        X_constants,
     )
     excited, parity_splitting = _calculate_excited(
         tr,
@@ -1374,6 +1383,7 @@ def calculate_transition_level_structure(
         int(b_j_padding),
         float(max_tracking_step_V_cm),
         float(max_tracking_step_G),
+        B_constants,
     )
 
     return TransitionLevelStructure(
@@ -1894,6 +1904,8 @@ def plot_transition_level_diagram(
     b_j_padding: int = 2,
     max_tracking_step_V_cm: float = 2.0,
     max_tracking_step_G: float = 1.0,
+    X_constants: XConstants = XConstants(),
+    B_constants: BConstants = BConstants(),
     # figure
     ax: Axes | None = None,
     info_ax: Axes | None = None,
@@ -2000,6 +2012,8 @@ def plot_transition_level_diagram(
             b_j_padding=b_j_padding,
             max_tracking_step_V_cm=max_tracking_step_V_cm,
             max_tracking_step_G=max_tracking_step_G,
+            X_constants=X_constants,
+            B_constants=B_constants,
         )
 
     tr = structure.transition

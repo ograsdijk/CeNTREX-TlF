@@ -5,8 +5,14 @@ manipulating them. Common polarizations (X, Y, Z, σ⁺, σ⁻) are predefined.
 
 The polarization vector is represented in the [Ex, Ey, Ez] basis, where:
     - X, Y, Z are linear polarizations along the respective axes
-    - σ⁺ (sigma plus) corresponds to left circular polarization (ΔmF = +1)
-    - σ⁻ (sigma minus) corresponds to right circular polarization (ΔmF = -1)
+    - σ⁺ (sigma plus) is defined as the vector that drives ΔmF = +1 in absorption
+    - σ⁻ (sigma minus) is defined as the vector that drives ΔmF = -1 in absorption
+
+The predefined σ⁺ vector is (-1, +i, 0)/√2, the complex conjugate of the standard
+spherical unit vector e₊₁ = -(x̂ + iŷ)/√2; this corresponds to writing the field as
+ε·exp(+iωt). The package is self-consistent with that choice. When translating a
+laboratory handedness and propagation direction into a vector by hand, check which
+ΔmF it drives rather than relying on the names "left" and "right" circular.
 
 Examples
 --------

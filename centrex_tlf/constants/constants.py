@@ -36,12 +36,27 @@ References:
         University Press (1956), for the general formalism).
 
     B-state constants:
-        Meijer & Sartakov, arXiv:1911.10734, Table I, based on a refit of the
-        spectroscopy in Norrgard et al., Phys. Rev. A 95, 062506 (2017),
-        arXiv:1702.02548. H retains the original 2017 fitted sign; the 2020
-        table prints the opposite sign. See H_const below for this unresolved
-        source discrepancy. The B-state dipole moment is from Clayburn et al.,
+        Meijer & Sartakov, Phys. Rev. A 101, 042506 (2020), arXiv:1911.10734,
+        Table 1: a single-Hamiltonian refit of the 131 hyperfine splittings of
+        Norrgard et al., Phys. Rev. A 95, 062506 (2017), arXiv:1702.02548
+        (standard deviation of the fit 8 MHz). It supersedes the separate
+        e/f-parity fits of the 2017 paper, which did not treat Lambda-doubling
+        correctly (Clayburn et al. 2020). Fitted: h1(Tl) = 28789(34),
+        h1(F) = 861(17), C_I(Tl) = -7.83(43), C'_I(Tl) = 11.17(85) MHz
+        (42, 20, 1.57 and 3.00 MHz when scaled by the fit's sqrt(Q)). Held
+        fixed from the 2017 paper: B, D, H and q. C_I(F) and C'_I(F) are
+        consistent with zero (within 0.1 and 0.3 MHz) and are not modelled.
+        The sextic constant H is negative; see H_const below.
+        The B-state dipole moment is from Clayburn et al.,
         Phys. Rev. A 102, 052802 (2020), arXiv:2007.16101: 2.28(7) D.
+
+        Accuracy: the J~ = 1 hyperfine and Lambda-doublet splittings agree
+        with the direct measurements of Clayburn et al. to 2-4 MHz
+        (tests/hamiltonian/test_B_literature.py); the largest tension is the
+        F1 = 1/2 Lambda-doublet, 16.0 MHz here against 14.4(9) MHz measured.
+        For J' >= 2 the only test is the global fit, so hyperfine positions
+        there carry an uncertainty of about 8 MHz and the Lambda-doublet
+        splittings 2-4 MHz.
 
     B-state lifetime and decay rate Γ:
         Hunter et al., Phys. Rev. A 85, 012511 (2012), arXiv:1110.3748:
@@ -313,11 +328,13 @@ class BConstants(HamiltonianConstants):
         H_const:
             Sextic centrifugal-distortion constant H (Hz), multiplying +[J(J+1)]³.
             Norrgard et al. (2017), Eqs. (9)-(10) and Table III, give
-            H = -8.1e-8 MHz = -0.081 Hz. Meijer & Sartakov (2020), Table I,
-            print +8.1e-8 MHz, although the text says H is taken from the
-            2017 fit. We retain the original negative value. The source
-            discrepancy is unresolved; it is not an established operator-
-            convention conversion. Verify it before precision high-J use.
+            H = -8.1(6)e-8 MHz = -0.081 Hz with H_rot = B J² - D J⁴ + H J⁶,
+            in agreement with the earlier -9.0(6)e-8 MHz of Tiemann quoted in
+            the same table. Meijer & Sartakov (2020), Table 1, list 8.1e-8 MHz
+            without a sign while stating that the value is taken from the
+            2017 fit, and give no energy expression; that is a dropped sign,
+            not a different convention. The negative value is correct. The
+            term is 0.65 kHz at J = 4 and only matters at high J.
 
         h1_Tl:
             Tl magnetic hyperfine constant h1(Tl) (Hz).
@@ -344,6 +361,12 @@ class BConstants(HamiltonianConstants):
 
         gL:
             Orbital electronic g-factor used by the model (dimensionless).
+            The Zeeman Hamiltonian is H_Z = +gL μ_B B·L (the electronic
+            moment is antiparallel to L), so levels with positive g_F and
+            positive mF move up in a field along +z. The body-frame value
+            gL·|Ω| = 1 is the isolated-³Π₁ (Σ = 0) assumption; no B-state
+            g-factor has been measured, and nearby electronic states could
+            change it.
 
         gS:
             Spin electronic g-factor used by the uncoupled-basis model

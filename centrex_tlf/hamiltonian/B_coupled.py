@@ -480,8 +480,11 @@ def mu_p(psi: CoupledBasisState, p: int, constants: BConstants) -> CoupledState:
         for F1 in np.arange(np.abs(J - I1), J + I1 + 1).tolist():
             # Loop over possible values of F
             for F in np.arange(np.abs(F1 - I2), F1 + I2 + 1).tolist():
+                # The electron's magnetic moment is antiparallel to its angular
+                # momentum: mu = -g_L mu_B L, so the body-frame moment is
+                # -g_L Omega mu_B and H_Z = -mu.B = +g_L mu_B B.L.
                 amp = (
-                    gL
+                    -gL
                     * Omega
                     * constants.μ_B
                     * (-1) ** (F + Fp + F1 + F1p + I1 + I2 - Omega - mF)
@@ -552,7 +555,7 @@ def HZy(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
 def HZz(psi: CoupledBasisState, constants: BConstants) -> CoupledState:
     """Zeeman Hamiltonian for z-component of magnetic field in B state.
     
-    H_Zz = μ₀
+    H_Zz = -μ₀, with μ = -g_L μ_B L (electronic moment antiparallel to L)
     
     Args:
         psi (CoupledBasisState): Coupled basis state |J,F,F₁,mF⟩

@@ -122,7 +122,7 @@ def generate_coupled_states_ground(
 
     Creates all possible coupled basis states for specified rotational levels J
     of the ground X electronic state. States are coupled in the |F, mF, F1, J⟩ basis
-    where F1 = J + I_F and F = F1 + I_Tl (hyperfine structure).
+    where F1 = J + I_Tl and F = F1 + I_F (hyperfine structure).
 
     Args:
         Js (Union[List[int], npt.NDArray[np.int_]]): Rotational quantum numbers J to
@@ -142,16 +142,16 @@ def generate_coupled_states_ground(
                 mF,
                 float(F1),
                 J,
-                I_F,
                 I_Tl,
+                I_F,
                 electronic_state=ElectronicState.X,
                 P=parity_X(J),
                 Omega=0,
                 basis=Basis.Coupled,
             )
             for J in Js
-            for F1 in np.arange(np.abs(J - I_F), J + I_F + 1)
-            for F in range(int(abs(F1 - I_Tl)), int(F1 + I_Tl + 1))
+            for F1 in np.arange(np.abs(J - I_Tl), J + I_Tl + 1)
+            for F in range(int(abs(F1 - I_F)), int(F1 + I_F + 1))
             for mF in range(-F, F + 1)
         ]
     )
@@ -214,16 +214,16 @@ def generate_coupled_states_excited(
                 mF,
                 float(F1),
                 J,
-                I_F,
                 I_Tl,
+                I_F,
                 electronic_state=ElectronicState.B,
                 P=P,
                 Omega=Omega,
                 basis=basis,
             )
             for J in Js
-            for F1 in np.arange(np.abs(J - I_F), J + I_F + 1)
-            for F in range(int(abs(F1 - I_Tl)), int(F1 + I_Tl + 1))
+            for F1 in np.arange(np.abs(J - I_Tl), J + I_Tl + 1)
+            for F in range(int(abs(F1 - I_F)), int(F1 + I_F + 1))
             for mF in range(-F, F + 1)
             for P in _Ps
             for Omega in _Omegas
@@ -289,12 +289,12 @@ def generate_coupled_states_base(
     Js, F1s, Fs, mFs, estates, Ps, Ωs = quantum_numbers
     for estate in estates:
         for J in Js:
-            F1_allowed = np.arange(np.abs(J - I_F), J + I_F + 1)
+            F1_allowed = np.arange(np.abs(J - I_Tl), J + I_Tl + 1)
             F1sl = F1s if F1s[0] is not None else F1_allowed
             for F1 in F1sl:
                 if F1 not in F1_allowed:
                     continue
-                Fs_allowed = range(int(abs(F1 - I_Tl)), int(F1 + I_Tl + 1))
+                Fs_allowed = range(int(abs(F1 - I_F)), int(F1 + I_F + 1))
                 Fsl = Fs if Fs[0] is not None else Fs_allowed
                 for F in Fsl:
                     if F not in Fs_allowed:
@@ -316,8 +316,8 @@ def generate_coupled_states_base(
                                         mF,
                                         float(F1),
                                         J,
-                                        I_F,
                                         I_Tl,
+                                        I_F,
                                         electronic_state=estate,
                                         P=P_resolved,
                                         Ω=Ω,

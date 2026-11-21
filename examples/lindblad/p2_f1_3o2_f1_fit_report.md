@@ -16,7 +16,7 @@ distribution, with an important caveat set out in [§6](#6-the-mf0-line-and-what
 ## 1. The system
 
 Two-electronic-state TlF: ground X ¹Σ⁺ (Ω=0) driven to excited B ³Π₁ (Ω=±1, Λ-doubled parity
-pairs), both with hyperfine structure from ²⁰⁵Tl and ¹⁹F coupled as `F1 = J + I_F`, `F = F1 + I_Tl`.
+pairs), both with hyperfine structure from ²⁰⁵Tl and ¹⁹F coupled as `F1 = J + I_Tl`, `F = F1 + I_F`.
 P branch means ΔJ = −1, so X J=2 → B J′=1.
 
 | | |

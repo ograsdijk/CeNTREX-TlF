@@ -375,7 +375,10 @@ pub fn h_sz(psi: CoupledBasisState, constants: &BConstants) -> CoupledState {
 }
 
 fn mu_p(psi: CoupledBasisState, p: i32, constants: &BConstants) -> CoupledState {
-    let prefactor = constants.gl * psi.omega as f64 * constants.mu_b;
+    // The electron's magnetic moment is antiparallel to its angular momentum
+    // (mu = -g_L mu_B L), so the body-frame moment is -g_L Omega mu_B and
+    // H_Z = -mu.B = +g_L mu_B B.L.
+    let prefactor = -constants.gl * psi.omega as f64 * constants.mu_b;
     spherical_tensor_matrix_element(&psi, p, prefactor)
 }
 

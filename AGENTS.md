@@ -13,7 +13,8 @@ searching for hadronic CP violation via the Schiff moment of the <sup>205</sup>T
 The physical model is a two-electronic-state molecule: the ground **X** <sup>1</sup>Σ<sup>+</sup>
 state (Ω=0) and the electronically excited **B** <sup>3</sup>Π<sub>1</sub> state (Ω=±1, with
 Λ-doubled parity pairs). Both carry hyperfine structure from two spin-1/2 nuclei
-(<sup>205</sup>Tl and <sup>19</sup>F), coupled as `F1 = J + I_F` and `F = F1 + I_Tl`.
+(<sup>205</sup>Tl and <sup>19</sup>F), coupled as `F1 = J + I_Tl` and `F = F1 + I_F` (Tl first, in both X and B: `CoupledBasisState.I1`
+is the Tl spin, the one the c1 / h1(Tl) terms act on).
 
 Published to PyPI as `centrex-tlf`. Heavy numerics run through a compiled Rust extension
 (`centrex_tlf_rust`, sources in `rust/`). An optional Julia backend lives in a separate package,
@@ -264,6 +265,24 @@ Each of these produces plausible-looking but wrong output rather than an error.
   ~100× less sensitive. **For quantitative work involving ±mF pairs, use a B field that
   actually lifts the degeneracy (≥1e-3 G, ideally the real experimental field) rather than
   the 1e-5 placeholder.**
+- **The B-state Zeeman sign was wrong up to and including 0.4.1.** The electronic
+  moment is antiparallel to L, so `H_Z = +gL μ_B B·L` and g_F is positive for the low-J
+  B levels (+0.32 for J̃=1, F₁=1/2, F=1, i.e. +0.45 MHz/G for mF=+1). Earlier versions had
+  the opposite sign, which is equivalent to reversing the magnetic field: nothing changes
+  for linearly polarized light, but with circular or elliptical light in a magnetic field
+  the σ⁺ and σ⁻ lines sat on the wrong sides. B Hamiltonians and results cached with a
+  nonzero B field before the fix are stale, and so is a Rust extension built before it.
+  `polarization_σp` / `polarization_σm` are defined by the ΔmF they drive (σp is
+  `(-1, +i, 0)/√2`, an `exp(+iωt)` convention); check ΔmF, not the handedness name, when
+  writing a lab polarization by hand.
+- **B-state level positions are only as good as the fit behind the constants.** The
+  constants are Meijer & Sartakov's refit (PRA 101, 042506) of Norrgard's spectra. J̃=1
+  hyperfine and Λ-doublet splittings agree with Clayburn et al.'s direct measurements to
+  2–4 MHz (the F₁=1/2 doublet is 16.0 MHz here, 14.4(9) measured). For J′≥2 there is no
+  direct measurement: hyperfine positions carry about 8 MHz and Λ-doublet splittings
+  2–4 MHz. The doublet splitting sets parity mixing below roughly 50 V/cm; above
+  ~100 V/cm the B state is fully polarized and insensitive to it. The body-frame g = 1
+  and the B dipole of 2.28(7) D (3%) are the other soft inputs.
 - **`method=` on the OBE builders is deprecated and does nothing.** Several committed notebooks
   still pass `method="matrix"`. Drop it in new code.
 - **`generate_uniform_population_state_indices` used to be defined twice** in

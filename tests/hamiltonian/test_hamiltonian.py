@@ -34,7 +34,9 @@ def test_gfactor_B_hamiltonian():
     V_1G[:, :] = V_1G[:, indices]
 
     # convert J/T to Hz/G with factor 1.509e29
-    gFactors = -(E_1G - E_0G) / (
+    # g_F defined by E = +g_F mu_B mF B (all states checked below have mF = +1,
+    # except the F = 0 state, whose entry is its second-order shift).
+    gFactors = (E_1G - E_0G) / (
         2 * np.pi * physical_constants["Bohr magneton"][0] * 1.509 * 1e29
     )
 
@@ -139,14 +141,17 @@ def test_gfactor_B_hamiltonian():
         gFactors[indices_states],
         np.array(
             [
-                3.13907697e-04,
-                3.21317622e-01,
-                2.53480569e-01,
-                1.41905995e-01,
-                1.10733025e-01,
-                7.64660293e-02,
-                4.25436704e-01,
-                2.54422663e-01,
+                # Shift at 1 G in units of mu_B: g_F plus the small quadratic
+                # term, which is why these differ from the linear g_F in the
+                # fifth digit. The first entry (mF = 0) is purely quadratic.
+                -3.13907708e-04,
+                3.21278624e-01,
+                2.53413928e-01,
+                1.41967464e-01,
+                1.10718103e-01,
+                7.64939653e-02,
+                4.25322548e-01,
+                2.54522604e-01,
             ]
         ),
     )

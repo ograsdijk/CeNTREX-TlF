@@ -594,7 +594,9 @@ class TransitionFieldGrid:
         np.savez_compressed(
             path,
             meta=np.asarray(json.dumps(meta)),
-            physics_fingerprint=_flatten_fingerprint(_physics_fingerprint()),
+            physics_fingerprint=_flatten_fingerprint(
+                _physics_fingerprint(*_constants_from_parameters(self.parameters))
+            ),
             E_fields=self.E_fields,
             lower_parents=_parents_to_array(self.lower_parents),
             upper_parents=_parents_to_array(self.upper_parents),
@@ -637,8 +639,8 @@ class TransitionFieldGrid:
                     f"{path}: built with centrex-tlf {meta.get('package_version')}, "
                     f"this is {current}; rebuild the grid"
                 )
-            _check_fingerprint(path, data["physics_fingerprint"])
             params = meta["parameters"]
+            _check_fingerprint(path, data["physics_fingerprint"], params)
             for key, want in (expected or {}).items():
                 have = params.get(key)
                 if _jsonable(want) != have:
@@ -827,12 +829,19 @@ def _select_stored_fields(
     return np.flatnonzero(is_stored), failed_at_min
 
 
-def _physics_fingerprint() -> list[np.ndarray]:
-    """Small reference Hamiltonian and dipole matrices that identify the physics."""
+def _physics_fingerprint(
+    X_constants: Any = None, B_constants: Any = None
+) -> list[np.ndarray]:
+    """Small reference Hamiltonian and dipole matrices that identify the physics.
+
+    Built with the given constants (library defaults if None), so a grid made
+    with modified constants is checked against the same constants on load.
+    """
+    from centrex_tlf.constants import BConstants, XConstants
     from centrex_tlf.hamiltonian.tracking import field_matrices_B, field_matrices_X
 
-    X = field_matrices_X(0, 2)
-    B = field_matrices_B(1, 2)
+    X = field_matrices_X(0, 2, X_constants if X_constants is not None else XConstants())
+    B = field_matrices_B(1, 2, B_constants if B_constants is not None else BConstants())
     D = optical_dipole_operators(X, B)
     matrices = [X.H0, X.HSz, X.HZz, B.H0, B.HSz, B.HZz, *(D[q] for q in Q_VALUES)]
     return [np.asarray(M, dtype=np.complex128).ravel() for M in matrices]
@@ -843,9 +852,34 @@ def _flatten_fingerprint(parts: Sequence[np.ndarray]) -> np.ndarray:
     return np.concatenate([values.real, values.imag])
 
 
-def _check_fingerprint(path: str | Path, stored: np.ndarray) -> None:
+def _constants_from_parameters(params: Mapping[str, Any]) -> tuple[Any, Any]:
+    """XConstants and BConstants recorded in a grid's parameters (defaults if absent)."""
+    from dataclasses import replace
+
+    from centrex_tlf.constants import BConstants, XConstants
+
+    X = replace(XConstants(), **dict(params.get("X_constants") or {}))
+    B = replace(BConstants(), **dict(params.get("B_constants") or {}))
+    return X, B
+
+
+def _constant_overrides(constants: Any, default: Any) -> dict[str, float]:
+    """Fields of `constants` that differ from `default`, as plain floats (JSON-safe)."""
+    from dataclasses import fields
+
+    out = {}
+    for f in fields(default):
+        a, b = getattr(constants, f.name), getattr(default, f.name)
+        if a != b:
+            out[f.name] = float(a)
+    return out
+
+
+def _check_fingerprint(
+    path: str | Path, stored: np.ndarray, params: Mapping[str, Any] | None = None
+) -> None:
     # Compared numerically, not hashed: the matrices carry BLAS-dependent rounding.
-    parts = _physics_fingerprint()
+    parts = _physics_fingerprint(*_constants_from_parameters(params or {}))
     current = _flatten_fingerprint(parts)
     tolerance = np.concatenate(
         [np.concatenate([np.full(p.size, 1e-9 * np.abs(p).max()) for p in parts]) for _ in range(2)]
@@ -996,9 +1030,16 @@ def _r2_reference_origin(reference_Hz: float) -> Callable[[ZeroFieldComponents],
 
 
 def _optical_reference_origin(
-    J_ground_max: int, lower: Any, upper: Any, operators: Any, reference_Hz: float
+    J_ground_max: int,
+    lower: Any,
+    upper: Any,
+    operators: Any,
+    reference_Hz: float,
+    X_constants: Any = None,
+    B_constants: Any = None,
 ) -> float:
     """Frequency origin from the R(2) reference line, whatever the grid's J range."""
+    from centrex_tlf.constants import BConstants, XConstants
     from centrex_tlf.hamiltonian.tracking import (
         _ManifoldTracker,
         field_matrices_B,
@@ -1006,8 +1047,8 @@ def _optical_reference_origin(
     )
 
     if J_ground_max < 2:
-        lower = field_matrices_X(0, 4)
-        upper = field_matrices_B(1, 5)
+        lower = field_matrices_X(0, 4, X_constants if X_constants is not None else XConstants())
+        upper = field_matrices_B(1, 5, B_constants if B_constants is not None else BConstants())
         operators = optical_dipole_operators(lower, upper)
     tl = _ManifoldTracker(lower)
     tu = _ManifoldTracker(upper)
@@ -1026,6 +1067,8 @@ def build_optical_field_grid(
     B_z: float = 0.0,
     frequency_tol_Hz: float = 1e5,
     reference_frequency_Hz: float | None = None,
+    X_constants: Any = None,
+    B_constants: Any = None,
     **kwargs: Any,
 ) -> TransitionFieldGrid:
     """X -> B transition components for ground `J <= J_ground_max`.
@@ -1046,14 +1089,27 @@ def build_optical_field_grid(
     The reference line is computed from X `J <= 4` and B `J <= 5` at least, so
     it does not depend on `J_ground_max` and need not be in the grid.
 
+    `X_constants` and `B_constants` (`XConstants`, `BConstants`; library values
+    if omitted) set the Hamiltonians, as for the other builders in the library.
+    Values that differ from the library are recorded in the grid's parameters
+    (`X_constants`, `B_constants`), checked again by `TransitionFieldGrid.load`,
+    and can be required through its `expected` argument. The R(2) reference
+    line is computed with the same constants, so the frequency origin moves
+    with them: compare positions within one grid, not absolute frequencies
+    across grids built with different constants.
+
     Remaining keyword arguments go to `TransitionFieldGrid.build`.
     """
-    from centrex_tlf.constants import X_B_REFERENCE_FREQUENCY_HZ
+    from centrex_tlf.constants import X_B_REFERENCE_FREQUENCY_HZ, BConstants, XConstants
     from centrex_tlf.hamiltonian.tracking import field_matrices_B, field_matrices_X
 
     J_ground_max = int(J_ground_max)
-    lower = field_matrices_X(0, J_ground_max + 2)
-    upper = field_matrices_B(1, J_ground_max + 3)
+    Xc = XConstants() if X_constants is None else X_constants
+    Bc = BConstants() if B_constants is None else B_constants
+    if not isinstance(Xc, XConstants) or not isinstance(Bc, BConstants):
+        raise TypeError("X_constants and B_constants must be XConstants and BConstants")
+    lower = field_matrices_X(0, J_ground_max + 2, Xc)
+    upper = field_matrices_B(1, J_ground_max + 3, Bc)
     operators = optical_dipole_operators(lower, upper)
     ref = X_B_REFERENCE_FREQUENCY_HZ if reference_frequency_Hz is None else reference_frequency_Hz
 
@@ -1062,6 +1118,12 @@ def build_optical_field_grid(
 
     params = dict(kwargs.pop("parameters", {}) or {})
     params.update(J_ground_max=J_ground_max, reference_frequency_Hz=float(ref))
+    x_over = _constant_overrides(Xc, XConstants())
+    b_over = _constant_overrides(Bc, BConstants())
+    if x_over:
+        params["X_constants"] = x_over
+    if b_over:
+        params["B_constants"] = b_over
     return TransitionFieldGrid.build(
         lower,
         upper,
@@ -1069,7 +1131,9 @@ def build_optical_field_grid(
         E_max_V_cm=E_max_V_cm,
         E_min_V_cm=E_min_V_cm,
         B_z=B_z,
-        frequency_origin_Hz=_optical_reference_origin(J_ground_max, lower, upper, operators, ref),
+        frequency_origin_Hz=_optical_reference_origin(
+            J_ground_max, lower, upper, operators, ref, Xc, Bc
+        ),
         pair_filter=pair_filter,
         pair_label=_optical_label,
         kind="optical",
