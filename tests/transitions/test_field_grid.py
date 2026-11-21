@@ -24,7 +24,7 @@ from centrex_tlf.hamiltonian import (
     generate_ED_ME_mixed_state,
     track_levels,
 )
-from centrex_tlf.states import CoupledState, ElectronicState
+from centrex_tlf.states import CoupledState, ElectronicState, QuantumSelector
 from centrex_tlf.transitions import (
     TransitionFieldGrid,
     build_optical_field_grid,
@@ -459,12 +459,15 @@ def test_modified_constants_reach_matrices_grid_parameters_and_load(grid, tmp_pa
     # Independent reference: zero-field B-state eigenvalues of the same matrices.
     def reference(constants, F1, F):
         m = field_matrices_B(1, 5, constants)
-        w, v = np.linalg.eigh(m.H0)
         out = {}
-        for k in range(len(w)):
-            s = m.basis[int(np.argmax(np.abs(v[:, k])))]
-            if s.J == 3 and s.F1 == F1 and s.F == F and s.mF == 0:
-                out[s.P] = w[k] / 1e6
+        for parity in (1, -1):
+            # Restrict to one conserved block before diagonalizing. Otherwise
+            # the eigensolver can choose arbitrary mixtures of degenerate mF.
+            block = QuantumSelector(F=F, mF=0, P=parity).get_indices(m.basis)
+            parent = QuantumSelector(J=3, F1=F1, F=F, mF=0, P=parity).get_indices(m.basis).item()
+            parent_row = np.flatnonzero(block == parent).item()
+            w, v = np.linalg.eigh(m.H0[np.ix_(block, block)])
+            out[parity] = w[np.argmax(np.abs(v[parent_row, :]))] / 1e6
         return out[1] - out[-1]
 
     for constants, g in ((BConstants(), grid), (newB, modified)):
