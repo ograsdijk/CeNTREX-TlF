@@ -1,6 +1,29 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
+
+### Added
+
+- `hamiltonian.field_matrices_X` / `field_matrices_B`, `transitions.build_optical_field_grid`,
+  `utils.plotting.calculate_transition_level_structure` and `plot_transition_level_diagram`
+  take molecular constants (`constants=` for the matrix builders, `X_constants=` /
+  `B_constants=` for the others), as the Hamiltonian and OBE builders already did. Defaults
+  are the library constants, so existing calls are unchanged. A field grid records the
+  values that differ from the library in its `parameters`, builds its save/load physics
+  fingerprint with them, and `TransitionFieldGrid.load(expected=...)` can require them.
+- `tests/hamiltonian/test_B_literature.py`: the zero-field B Hamiltonian against
+  published numbers. Λ-doublet splittings and g_F (sign and magnitude, Rust and Python
+  builders) for J̃ = 1 and 2 against Meijer & Sartakov Table 2, and the J̃ = 1 hyperfine
+  and Λ-doublet splittings against the measurements of Clayburn et al. (PRA 102, 052802)
+  Table I.
+- Rust builder for the B Hamiltonian in the parity basis,
+  `generate_coupled_hamiltonian_B_parity_py` (`generate_coupled_hamiltonian_b_parity` in
+  `rust/src/generate_hamiltonian.rs`). It expands every parity state into its two signed-Omega
+  components, builds the twelve Omega-basis matrices with the existing operators and forms
+  each parity-basis element as a signed sum of four of their elements. It raises
+  `ValueError` for states without a parity, with Omega = 0, or outside the B state.
+- `couplings.utils_compact.CollapseOperators` and `compact_collapse_operators`: collapse
+  operators held as (row, column, value) triples, and compaction on that form.
 
 ### Fixed
 
@@ -30,39 +53,6 @@
     `BConstants(gL=-1)`, so the sign is the only difference), and the hard-coded Zeeman
     offsets at the `B = 1e-5 G` placeholder in `tests/lindblad/test_generate_hamiltonian.py`
     and the g-factors in `tests/hamiltonian/test_hamiltonian.py` change sign.
-
-### Added
-
-- `tests/hamiltonian/test_B_literature.py`: the zero-field B Hamiltonian against
-  published numbers. Λ-doublet splittings and g_F (sign and magnitude, Rust and Python
-  builders) for J̃ = 1 and 2 against Meijer & Sartakov Table 2, and the J̃ = 1 hyperfine
-  and Λ-doublet splittings against the measurements of Clayburn et al. (PRA 102, 052802)
-  Table I.
-
-### Documentation
-
-- `BConstants`: the constants are those of Meijer & Sartakov, PRA 101, 042506 (2020),
-  Table 1, now cited with the fit uncertainties and the accuracy of the model (2-4 MHz
-  for J̃ = 1 against direct measurement, about 8 MHz for J′ ≥ 2). The sign of `H_const`
-  is no longer described as unresolved: -8.1(6)e-8 MHz is the fitted value of Norrgard
-  et al. (2017) and the unsigned entry in the 2020 table is a dropped sign.
-- `B_coupled_Omega/stark.py` quoted the X-state dipole (4.22 D) for the B state; it is
-  2.28 D.
-- `couplings/polarization.py` defines σ⁺/σ⁻ by the ΔmF they drive and states the vector
-  convention, in place of "left"/"right" circular.
-
-## 0.4.1
-
-### Added
-
-- Rust builder for the B Hamiltonian in the parity basis,
-  `generate_coupled_hamiltonian_B_parity_py` (`generate_coupled_hamiltonian_b_parity` in
-  `rust/src/generate_hamiltonian.rs`). It expands every parity state into its two signed-Omega
-  components, builds the twelve Omega-basis matrices with the existing operators and forms
-  each parity-basis element as a signed sum of four of their elements. It raises
-  `ValueError` for states without a parity, with Omega = 0, or outside the B state.
-- `couplings.utils_compact.CollapseOperators` and `compact_collapse_operators`: collapse
-  operators held as (row, column, value) triples, and compaction on that form.
 
 ### Performance
 
@@ -141,8 +131,35 @@
   This matters to code that evaluates `H(E, B)` at every time step, such as the
   `centrex-state-prep` simulator.
 
+### Changed
+
+- `State.remove_small_components` compares with the built-in `abs` instead of `np.abs`. A
+  component whose amplitude is within one rounding step of the tolerance could in
+  principle be kept or dropped differently.
+- Wigner symbols with all angular momenta up to 40 now come from the Rust
+  implementation, so they differ from sympy's values in the last digit (5e-16 relative
+  up to J = 20, 5e-15 at J = 40). Everything built from the Python wrappers moves by the
+  same amount: dipole matrix elements, branching ratios, collapse matrices and the
+  off-diagonal elements of `H_symbolic` changed by at most 5e-16 relative on four test
+  systems, and field-grid strengths by 1.2e-15. `H_int`, level energies and purities are
+  bitwise unchanged; the X and B Hamiltonians already used Rust's Wigner code.
+- The function returned by `generate_coupled_hamiltonian_B_function` captures the sum of
+  the field-independent B terms when it is created. Changing those matrices on the
+  Hamiltonian object afterwards no longer affects an existing function; build a new one.
+- `generate_unitary_transformation_matrix` returns the identity for a Hamiltonian without
+  couplings instead of failing inside the solver.
+
 ### Documentation
 
+- `BConstants`: the constants are those of Meijer & Sartakov, PRA 101, 042506 (2020),
+  Table 1, now cited with the fit uncertainties and the accuracy of the model (2-4 MHz
+  for J̃ = 1 against direct measurement, about 8 MHz for J′ ≥ 2). The sign of `H_const`
+  is no longer described as unresolved: -8.1(6)e-8 MHz is the fitted value of Norrgard
+  et al. (2017) and the unsigned entry in the 2020 table is a dropped sign.
+- `B_coupled_Omega/stark.py` quoted the X-state dipole (4.22 D) for the B state; it is
+  2.28 D.
+- `couplings/polarization.py` defines σ⁺/σ⁻ by the ΔmF they drive and states the vector
+  convention, in place of "left"/"right" circular.
 - The AGENTS.md recipe and performance defaults no longer pass
   `execution_mode="expanded_sparse"` to CPU solves. The packed D+S+U kernel has been the
   default since 0.3.1 and is 1.4-1.5x faster on the recipe, with photon numbers agreeing
@@ -168,24 +185,6 @@
   `h1_F`; the Zeeman notes describe the isolated Σ = 0 model. `BConstants.H_const` now
   documents the unresolved sign discrepancy between the 2017 fit (−8.1e-8 MHz, used
   here) and the 2020 table, and the dipole moment cites Clayburn et al. (2020).
-
-### Changed
-
-- `State.remove_small_components` compares with the built-in `abs` instead of `np.abs`. A
-  component whose amplitude is within one rounding step of the tolerance could in
-  principle be kept or dropped differently.
-- Wigner symbols with all angular momenta up to 40 now come from the Rust
-  implementation, so they differ from sympy's values in the last digit (5e-16 relative
-  up to J = 20, 5e-15 at J = 40). Everything built from the Python wrappers moves by the
-  same amount: dipole matrix elements, branching ratios, collapse matrices and the
-  off-diagonal elements of `H_symbolic` changed by at most 5e-16 relative on four test
-  systems, and field-grid strengths by 1.2e-15. `H_int`, level energies and purities are
-  bitwise unchanged; the X and B Hamiltonians already used Rust's Wigner code.
-- The function returned by `generate_coupled_hamiltonian_B_function` captures the sum of
-  the field-independent B terms when it is created. Changing those matrices on the
-  Hamiltonian object afterwards no longer affects an existing function; build a new one.
-- `generate_unitary_transformation_matrix` returns the identity for a Hamiltonian without
-  couplings instead of failing inside the solver.
 
 ## 0.4.0
 

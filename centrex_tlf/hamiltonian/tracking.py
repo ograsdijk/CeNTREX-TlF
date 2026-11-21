@@ -31,6 +31,7 @@ from scipy.linalg import eigh
 from scipy.optimize import linear_sum_assignment
 
 from centrex_tlf import states
+from centrex_tlf.constants import BConstants, XConstants
 from centrex_tlf.states import ElectronicState, QuantumSelector
 
 from .basis_transformations import generate_transform_matrix
@@ -99,16 +100,20 @@ def _readonly(M: npt.NDArray[Any]) -> npt.NDArray[Any]:
 
 
 @lru_cache(maxsize=8)
-def field_matrices_X(Jmin: int, Jmax: int) -> FieldMatrices:
+def field_matrices_X(
+    Jmin: int, Jmax: int, constants: XConstants = XConstants()
+) -> FieldMatrices:
     """X-state basis and field-free, Stark and Zeeman matrices in Hz.
 
     The matrices are built in the uncoupled basis and transformed to the
-    coupled basis `|J, F1, F, mF>`.
+    coupled basis `|J, F1, F, mF>`. `constants` defaults to the library X
+    constants; pass a modified `XConstants` to build with other values. The
+    cache is keyed on the constants as well as the J range.
     """
     Js = list(range(int(Jmin), int(Jmax) + 1))
     qn_uncoupled = list(states.generate_uncoupled_states_ground(Js=Js))
     qn_coupled = list(states.generate_coupled_states_ground(Js=Js))
-    H = generate_uncoupled_hamiltonian_X(qn_uncoupled)
+    H = generate_uncoupled_hamiltonian_X(qn_uncoupled, constants=constants)
     S = generate_transform_matrix(qn_uncoupled, qn_coupled)
 
     def to_coupled(M: npt.NDArray[Any]) -> npt.NDArray[Any]:
@@ -126,8 +131,15 @@ def field_matrices_X(Jmin: int, Jmax: int) -> FieldMatrices:
 
 
 @lru_cache(maxsize=8)
-def field_matrices_B(Jmin: int, Jmax: int) -> FieldMatrices:
-    """B-state basis (parity basis) and field-free, Stark and Zeeman matrices in Hz."""
+def field_matrices_B(
+    Jmin: int, Jmax: int, constants: BConstants = BConstants()
+) -> FieldMatrices:
+    """B-state basis (parity basis) and field-free, Stark and Zeeman matrices in Hz.
+
+    `constants` defaults to the library B constants; pass a modified
+    `BConstants` (for example `dataclasses.replace(BConstants(), q=1.83e6)`) to
+    build with other values. The cache is keyed on the constants as well.
+    """
     selector = QuantumSelector(
         J=np.arange(int(Jmin), int(Jmax) + 1),
         F1=None,
@@ -138,7 +150,7 @@ def field_matrices_B(Jmin: int, Jmax: int) -> FieldMatrices:
         Ω=1,
     )
     qn = list(states.generate_coupled_states_B(selector))
-    H = generate_coupled_hamiltonian_B(qn)
+    H = generate_coupled_hamiltonian_B(qn, constants=constants)
     H0 = H.Hrot + H.H_mhf_Tl + H.H_mhf_F + H.H_LD + H.H_cp1_Tl + H.H_c_Tl
     return FieldMatrices(
         electronic_state=ElectronicState.B,

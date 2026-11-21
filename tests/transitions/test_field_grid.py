@@ -426,3 +426,56 @@ def test_tracking_keeps_complex_eigenvectors_with_real_h0():
         tracked.energies_Hz[0, tracked.block(0).level_indices]
     )
     assert np.max(np.abs(residual)) < 1e-2
+
+
+def test_modified_constants_reach_matrices_grid_parameters_and_load(grid, tmp_path):
+    """B_constants passed to the grid build the same matrices as field_matrices_B,
+    move the J'=3 doublets as the Hamiltonian says, are recorded, and are checked
+    on load; library-valued constants leave the grid unchanged."""
+    import dataclasses
+
+    from centrex_tlf.constants import BConstants, XConstants
+
+    newB = dataclasses.replace(BConstants(), q=1.830e6)
+    assert not np.array_equal(field_matrices_B(1, 3).H0, field_matrices_B(1, 3, newB).H0)
+    np.testing.assert_array_equal(
+        field_matrices_B(1, 3).H0, field_matrices_B(1, 3, BConstants()).H0
+    )
+    np.testing.assert_array_equal(
+        field_matrices_X(0, 2).H0, field_matrices_X(0, 2, XConstants()).H0
+    )
+
+    modified = build_optical_field_grid(2, E_MAX, B_constants=newB)
+    assert modified.parameters["B_constants"] == {"q": 1.830e6}
+    assert "B_constants" not in grid.parameters
+
+    def doublet(g, F1, F):
+        d = g.at(0.0)
+        d = d[(d["J"] == 2) & (d["J'"] == 3) & (d["F1'"] == F1) & (d["F'"] == F)]
+        return (
+            d[d["P'"] == 1]["frequency_Hz"].mean() - d[d["P'"] == -1]["frequency_Hz"].mean()
+        ) / 1e6
+
+    # Independent reference: zero-field B-state eigenvalues of the same matrices.
+    def reference(constants, F1, F):
+        m = field_matrices_B(1, 5, constants)
+        w, v = np.linalg.eigh(m.H0)
+        out = {}
+        for k in range(len(w)):
+            s = m.basis[int(np.argmax(np.abs(v[:, k])))]
+            if s.J == 3 and s.F1 == F1 and s.F == F and s.mF == 0:
+                out[s.P] = w[k] / 1e6
+        return out[1] - out[-1]
+
+    for constants, g in ((BConstants(), grid), (newB, modified)):
+        assert doublet(g, 3.5, 4) == pytest.approx(reference(constants, 3.5, 4), abs=0.1)
+    assert doublet(modified, 3.5, 4) - doublet(grid, 3.5, 4) == pytest.approx(5.75, abs=0.1)
+
+    path = modified.save(tmp_path / "modified.npz")
+    loaded = TransitionFieldGrid.load(path, expected={"B_constants": {"q": 1.830e6}})
+    assert loaded.parameters["B_constants"] == {"q": 1.830e6}
+    with pytest.raises(ValueError, match="B_constants"):
+        TransitionFieldGrid.load(path, expected={"B_constants": {"q": 2.0e6}})
+
+    with pytest.raises(TypeError):
+        build_optical_field_grid(2, E_MAX, B_constants=XConstants())
